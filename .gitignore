@@ -1,0 +1,32 @@
+# Generated artifacts
+processed/
+chunks/
+store.lance/
+topics.yaml
+INDEX.md
+logs/
+
+# Raw mirror (kullanıcı kendi dosyalarını koyar)
+raw/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Editors
+.vscode/
+.idea/
+*.swp
