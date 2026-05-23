@@ -1,0 +1,76 @@
+CREATE Procedure [dbo].[Ekle_Siparis](
+@CariId Bigint,
+@Lokasyon Bigint=0,
+@ProjeId Bigint=0,
+@AdresId Bigint,
+@SevkAdresId Bigint=0,
+@BelgeNo NVarChar(50)='',
+@Tarih Datetime,
+@Aciklama NVarChar(200)='',
+@Onayli bit=1) As 
+Begin
+Declare @SipId Bigint
+Declare @IDTab Table(ID Bigint)
+	if @CariId Is Null Or @CariId=0 
+	Begin
+		Print 'Cari Id Girilmemiş'
+		return
+	End
+	if Not Exists(Select * From CARI WHERE ID=@CariId)
+	Begin
+		Print 'Belirtilen ID : ' + RTrim(Cast(@CariId as Char(20))) + ' Herhangi bir Cari Karta Ait Değil'
+		Return
+	End
+	if @Lokasyon Is Null Or @Lokasyon=0
+	Begin
+		Print 'Lokasyon Girilmemiş'
+		Return
+	End
+	if Not Exists(Select * From LOKASYON Where ID=@Lokasyon)
+	Begin
+		Print 'Belirtilen ID : ' + RTrim(Cast(@Lokasyon as Char(20))) + ' Herhangi bir Lokasyona Ait Değil'
+		Return		
+	End
+	if @AdresId Is Null Or @AdresId=0
+	Begin
+		Print 'Adres Girilmemiş'
+		Return
+	End
+	if Not Exists(Select * From CARI_ADRES Where ID=@AdresId And CARI=@CariId)
+	Begin
+		Print 'Belirtilen ID : ' + RTrim(Cast(@AdresId as Char(20))) + ' Cari Karta Ait Bir Adres Değil'
+		Return		
+	End
+	if @BelgeNo Is Null Or @BelgeNo=''
+	Begin
+		Print 'BelgeNo Boş Olamaz'
+		Return
+	End
+	if @Tarih Is Null
+	Begin
+		Print 'Tarih Boş Olamaz'
+		Return
+	End
+	if @SevkAdresId=0 Or @SevkAdresId Is Null Or Exists(SELECT ID FROM CARI_ADRES WHERE ID=@SevkAdresId)
+	Begin
+		Set @SevkAdresId=@AdresID
+	End 
+	if @ProjeId=0 Or @ProjeId Is Null Select TOP 1 @ProjeId=ID FROM PROJE
+
+	if Not Exists(Select ID FROM SIPARIS WHERE SIPARIS_TARIHI=@Tarih AND BELGENO=@BelgeNo)
+	Begin
+		DELETE FROM @IDTab
+		Insert Into @IDTab(ID) EXEC SEQUENS_VER @TABLO = N'SIPARIS',	@KOD_PC = 1000000
+		SELECT @SipId=ID FROM @IDTab
+		
+		Insert Into SIPARIS (ID,SIPARIS_TURU,LOKASYON,CARI,CARI_ADRES,PROJE,BELGENO,SIPARIS_TARIHI,TERMIN_TARIHI,ISLEM_TARIHI,VADE_TARIHI,DOVIZ_AD,DOVIZ_KUR,CARI_PERSONEL,KDV_TOPLAM,ACIKLAMA,GONDERIM_ADRESI,ONAYLI) 
+		VALUES (@SipId,2,@Lokasyon,@CariId,@AdresId,@ProjeId,@BelgeNo,@Tarih,@Tarih,@Tarih,Cast(@Tarih As DAte),1,1,0,0,@Aciklama,@SevkAdresId,@Onayli)
+		SELECT @SipId SIPARIS
+	End
+	Else
+	Begin
+		Select @SipId=ID FROM SIPARIS WHERE SIPARIS_TARIHI=@Tarih AND BELGENO=@BelgeNo
+		SELECT @SipId SIPARIS
+	End
+
+End
