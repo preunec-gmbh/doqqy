@@ -8,7 +8,7 @@ logs/
 
 # Raw mirror (kullanıcı kendi dosyalarını koyar)
 raw/
-testdocdatas/
+test_docs/
 
 # Secrets
 .env
