@@ -50,6 +50,8 @@ _TABLE_BLOCK_RE = re.compile(
     r"(?:^\|.+\|\s*\n)(?:^\|[\s:|-]+\|\s*\n)(?:^\|.+\|\s*\n?)+",
     re.MULTILINE,
 )
+# Tek satırda tamamen bold olan ifadeler: __Başlık__ veya **Başlık**
+_BOLD_HEADING_RE = re.compile(r"^(?:\*\*|__)(.+?)(?:\*\*|__)$", re.MULTILINE)
 
 
 @dataclass
@@ -145,6 +147,10 @@ def chunk_file(md_path: Path) -> list[Chunk]:
 
     source = fm.get("source", doc_id)
     doc_type = fm.get("type", "md")
+
+    # Tek satırda tamamen bold olan ifadeleri ## başlığa çevir (Word'de Heading stili yerine
+    # bold kullanan dokümanlar için: __A224. Toplantı__ → ## A224. Toplantı)
+    body = _BOLD_HEADING_RE.sub(r"## \1", body)
 
     splitter = MarkdownHeaderTextSplitter(_HEADERS_TO_SPLIT, strip_headers=False)
     raw_sections = splitter.split_text(body) if body.strip() else []

@@ -15,7 +15,10 @@ from docq.ingest.base import Document, IngestError, base_metadata, content_hash
 
 
 def _processed_path(source: Path) -> Path:
-    rel = source.relative_to(RAW_DIR)
+    try:
+        rel = source.resolve().relative_to(RAW_DIR.resolve())
+    except ValueError:
+        rel = Path(source.name)
     return (PROCESSED_DIR / rel).with_suffix(".md")
 
 

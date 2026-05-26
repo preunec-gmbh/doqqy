@@ -74,9 +74,9 @@ Harita section seviyesinde tutulur (her `##` / `###` için özet, kavramlar, ça
 ```
 src/ingest/
 ├── base.py          # Document dataclass + ortak interface
-├── md_ingest.py     # frontmatter merge, içerik koru
-├── docx_ingest.py   # pandoc çağrısı, fallback mammoth
-├── pdf_ingest.py    # docling çağrısı, fallback pymupdf4llm
+├── md_ingest.py     # frontmatter merge, içerik koru — _processed_path resolve() fix
+├── docx_ingest.py   # pandoc (auto-download) çağrısı, fallback mammoth — _processed_path resolve() fix
+├── pdf_ingest.py    # docling çağrısı, fallback pymupdf4llm — _processed_path resolve() fix
 └── router.py        # uzantıya göre delegasyon
 ```
 

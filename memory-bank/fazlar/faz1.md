@@ -4,27 +4,30 @@ Bu belge Faz 1'in tamamlanmış halini kayıt altına alır. Implementation sır
 
 ## 1. Durum Özeti
 
-**🟡 Faz 1 kod + kısmi smoke test tamam (2026-05-23). Tam smoke test (PDF/DOCX/TXT) bekliyor.**
+**🟢 Faz 1 TAMAM — tüm format smoke testleri tamamlandı (2026-05-26).**
 
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`, klasörler).
-- `docs/` → `raw/` kopyası (320 dosya, ama içinde docx ve düzgün .txt yok).
+- `raw/` altında gerçek PDF + DOCX + TXT + MD dosyalarıyla tam smoke test yapıldı.
 - `.venv/` Python 3.10 + tüm bağımlılıklar (torch 2.12 CPU, docling 2.95, FlagEmbedding 1.4, lancedb 0.30, pymupdf4llm, mammoth, pypandoc vb.).
-- 4 format için ingest katmanı (md, txt, pdf, docx) — **kodlandı**.
-- Header-aware chunking (kod/tablo atomik).
+- 4 format için ingest katmanı (md, txt, pdf, docx) — **kodlandı ve test edildi**.
+- Header-aware chunking (kod/tablo atomik) + bold-heading normalize.
 - bge-m3 dense embedding + LanceDB yazımı.
 - Cosine dense sorgu.
 - Typer CLI: `ingest`, `chunk`, `embed`, `query`, `info`.
 - Windows console UTF-8 + rich legacy renderer bypass (`cli.py`).
 
-**Smoke test sonuçları (5 MD dosyası):**
-- Ingest: 5/5 başarılı, <1 sn.
-- Chunk: 42 chunk → `chunks/chunks.parquet`.
-- Embed: bge-m3 ~2 GB indirme (tek seferlik) + 42 vektör → `store.lance/chunks/` (CPU'da ~66 sn).
-- Query: Türkçe sorgular doğru top-k chunk döndürüyor, kaynak + section path düzgün.
+**Smoke test sonuçları (4 format — 2026-05-26):**
+- Ingest: MD ✅ / PDF ✅ (docling) / DOCX ✅ (pandoc auto-download → mammoth fallback) / TXT ✅
+- Chunk: 160 chunk → `chunks/chunks.parquet`.
+- Embed: bge-m3 dense vektörler → `store.lance/`.
+- Query: Sorgular kaynak + section path ile doğru chunk'ları döndürüyor.
 
-**Smoke test eksik kısmı:** PDF/DOCX/TXT ingester'ları kodlandı ama gerçek dosyada **test edilmedi**. raw/'da DOCX yok, kullanılabilir TXT yok (PROCEDURES'taki .txt'ler stored procedure dump'ları — atlanmış sıralamada ilk 5'e girmedi). Kullanıcı internetten örnek dosyalar getirip o üçünü de test edecek.
+**2026-05-26 Günü Yapılan Düzeltmeler:**
+1. **`_processed_path` path hatası** — `source.relative_to(RAW_DIR)` relative/absolute karışımında `ValueError` fırlatıyordu. `source.resolve().relative_to(RAW_DIR.resolve())` + `try/except` ile düzeltildi. (`md_ingest.py`, `docx_ingest.py`, `pdf_ingest.py` üçünde de)
+2. **Pandoc auto-download** — Pandoc binary yoksa `pypandoc.get_pandoc_version()` → OSError yakalanıp `pypandoc.download_pandoc()` çağrılır. Terminal yeniden başlatmaya gerek kalmaz.
+3. **Bold-heading chunk fix** — Word'de "Heading" stili yerine bold kullanan tek satır başlıklar (`**A124. Başlık**`, `__A224. Başlık__`) artık `## Başlık` formatına normalize edilerek `MarkdownHeaderTextSplitter` tarafından kırılım noktası olarak tanınıyor.
 
-**Retrieval kalitesi gözlemi:** Sparse vektör + reranker yok → ilk sırada "yakın ama tam isabet değil" sonuçlar olabiliyor (örn. "PayTR odeme akisi" sorgusunda SEQUENCE.md'de tam karşılık var ama PRISMA.md skoru daha yüksek çıktı). Faz 2 ile düzelecek — beklenen davranış.
+**Retrieval kalitesi gözlemi:** Sparse vektör + reranker yok → ilk sırada "yakın ama tam isabet değil" sonuçlar olabiliyor. Faz 2 ile düzelecek — beklenen davranış.
 
 ## 2. Dosya Yapısı
 
@@ -293,31 +296,14 @@ app = typer.Typer(
 ### HuggingFace symlink uyarısı
 Windows Developer Mode kapalı → cache "degraded mode"da (duplicate dosya saklar). Fonksiyon etkilenmedi; disk biraz daha fazla. İstenirse Developer Mode açılabilir veya `HF_HUB_DISABLE_SYMLINKS_WARNING=1`.
 
-## 10. Sonraki Adım (ARA SONRASI — 2026-05-23'te ara verildi)
+## 10. Sonraki Adım
 
-**Hemen yapılacak:**
+**Faz 1 tamamlandı. Sıradaki: Faz 2 — Hibrit arama + reranker.**
 
-1. **Kullanıcı internetten örnek dosyalar indirir** (en az 1 PDF + 1 DOCX + 1 TXT). Türkçe içerikli olması bge-m3 + chunker'ı gerçek koşulda test eder.
-2. **Tam smoke test:**
-   ```powershell
-   mkdir raw-smoke
-   # raw-smoke/ klasörüne indirilen örnek dosyaları koy
-   docq ingest --source raw-smoke
-   docq chunk
-   docq embed
-   docq query "..."
-   ```
-   - **PDF:** docling'in çalıştığını gör. Başarısız olursa pymupdf4llm fallback otomatik devreye girer (frontmatter'da `parser: pymupdf4llm` yazar).
-   - **DOCX:** pandoc CLI kurulu olmadığı için OSError → mammoth fallback otomatik (frontmatter'da `parser: mammoth` yazar). Eğer kullanıcı `winget install pandoc` ile pandoc kurarsa, `parser: pandoc` görmeli.
-   - **TXT:** UTF-8 olarak okunup `# {filename}\n\n```\n{content}\n```` formatında markdown'a sarılmalı. Bozuk encoding'te latin-1 fallback olduğunu da test etmek için bir cp1254 dosyası iyi olur.
-3. Üçü de OK → Faz 1 tam kapanır → `progress.md`'deki üç checkbox işaretlenir.
-
-**Sonra:**
-
-4. **Tam korpus ingest** (opsiyonel) — `-n` limitini kaldır, 320 dosyalık tam pipeline. Tahmini süre: ingest ~30-60 dk (PDF docling yavaş), chunk <1 dk, embed CPU'da ~10-20 dk.
-5. **Faz 2 — Hibrit arama + reranker:**
+1. **Tam korpus ingest** (opsiyonel) — `raw/` altındaki 320 dosyayı tam pipeline'dan geçir. Tahmini süre: ingest ~30-60 dk (PDF docling yavaş), chunk <1 dk, embed CPU'da ~10-20 dk.
+2. **Faz 2 — Hibrit arama + reranker:**
    - `embed.py`'de `return_sparse=True` aç.
    - LanceDB schema'ya sparse kolonu ekle (lance v2.4+ destekler).
    - `query.py`'de RRF (Reciprocal Rank Fusion) — dense + sparse skorlarını birleştir.
    - `rerank.py` yeni modül: `bge-reranker-v2-m3` ile top-50 → top-5.
-6. **Eval set hazırlığı** — 15-20 test sorusu + recall@5 metriği.
+3. **Eval set hazırlığı** — 15-20 test sorusu + recall@5 metriği.

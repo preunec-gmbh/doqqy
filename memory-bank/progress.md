@@ -1,11 +1,9 @@
 # İlerleme
 
 ## Şu Anki Durum
-**🟡 Faz 1 kod + kısmi smoke test TAMAM, tam smoke test ARA VERİLDİ (2026-05-23).**
+**🟢 Faz 1 MVP TAMAM — tüm format smoke testleri tamamlandı (2026-05-26).**
 
 Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
-
-**Eksik:** Smoke test sadece **MD ingester'ında** çalıştırıldı. PDF/DOCX/TXT path'leri kodlandı ama gerçek dosyayla doğrulanmadı. Kullanıcı internetten örnek dosyalar indirip o üçünü de test edecek. Ondan sonra "Faz 1 tam bitti" → Faz 2'ye geçilecek.
 
 ## Çalışanlar
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`).
@@ -16,7 +14,7 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 
 ## Yapılacaklar
 
-### Faz 1: MVP — **🟡 KOD TAMAM, TAM SMOKE TEST ARA VERİLDİ**
+### Faz 1: MVP — **🟢 TAMAM**
 - [x] Proje iskeleti
   - [x] `pyproject.toml` (paket bağımlılıkları)
   - [x] Klasör yapısı (`raw/`, `processed/`, `chunks/`, `src/docq/`, `logs/`)
@@ -25,22 +23,24 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 - [x] Ingest katmanı
   - [x] `src/docq/ingest/base.py` — Document dataclass + IngestResult + helpers
   - [x] `src/docq/ingest/md_ingest.py` — .md + .txt
-  - [x] `src/docq/ingest/docx_ingest.py` — pandoc → mammoth fallback
+  - [x] `src/docq/ingest/docx_ingest.py` — pandoc (auto-download) → mammoth fallback
   - [x] `src/docq/ingest/pdf_ingest.py` — docling → pymupdf4llm fallback
   - [x] `src/docq/ingest/router.py`
+  - [x] `_processed_path` path hatası düzeltildi (resolve() ile relative/absolute sorun giderildi)
 - [x] Chunking
   - [x] `src/docq/chunk.py` — header-aware, kod/tablo atomik
+  - [x] Bold-heading normalize: `**Başlık**` / `__Başlık__` → `## Başlık` (Word DOCX uyumluluğu)
 - [x] Embedding
   - [x] `src/docq/embed.py` — bge-m3 dense + LanceDB yazımı
 - [x] Sorgu
   - [x] `src/docq/query.py` — cosine dense search
 - [x] CLI
   - [x] `src/docq/cli.py` — typer ile `ingest`, `chunk`, `embed`, `query`, `info`
-- [x] Bağımlılık kurulumu — `pip install -e .` (paket paket manuel halledildi)
-- [x] **Smoke test — MD path** (5 MD dosyası → 42 chunk → embed → query) başarılı
-- [ ] **Smoke test — PDF path** (kullanıcı örnek PDF indirecek; docling + fallback test)
-- [ ] **Smoke test — DOCX path** (kullanıcı örnek DOCX indirecek; pandoc yok → mammoth fallback test)
-- [ ] **Smoke test — TXT path** (kullanıcı örnek TXT indirecek; code-block sarma + UTF-8/latin-1 fallback test)
+- [x] Bağımlılık kurulumu — `pip install -e .`
+- [x] **Smoke test — MD path** başarılı
+- [x] **Smoke test — PDF path** (docling + pymupdf4llm fallback) başarılı
+- [x] **Smoke test — DOCX path** (pandoc auto-download + mammoth fallback) başarılı
+- [x] **Smoke test — TXT path** başarılı
 - [x] Windows console + Türkçe karakter fix (`cli.py`)
 
 ### Faz 2: Hibrit Arama + Rerank (yarım gün)

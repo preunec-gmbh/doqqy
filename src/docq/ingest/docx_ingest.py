@@ -15,13 +15,24 @@ _LOG = get_logger("docq.ingest.docx", log_file="ingest.log")
 
 
 def _processed_path(source: Path) -> Path:
-    rel = source.relative_to(RAW_DIR)
+    try:
+        rel = source.resolve().relative_to(RAW_DIR.resolve())
+    except ValueError:
+        rel = Path(source.name)
     return (PROCESSED_DIR / rel).with_suffix(".md")
 
 
 def _parse_with_pandoc(source: Path) -> str:
-    """pypandoc → markdown. pandoc binary'si yoksa OSError fırlatır."""
+    """pypandoc → markdown. Sistemde yoksa otomatik olarak pandoc'u pypandoc içine indirir."""
     import pypandoc  # type: ignore
+
+    try:
+        pypandoc.get_pandoc_version()
+    except OSError:
+        _LOG.info("pandoc binary bulunamadı, pypandoc.download_pandoc() ile otomatik indiriliyor...")
+        # Auto-download pandoc to the specific location pypandoc checks
+        pypandoc.download_pandoc()
+        _LOG.info("pandoc başarıyla indirildi.")
 
     # pandoc'un GFM çıktısı (tablo, kod blokları, başlıklar için iyi).
     return pypandoc.convert_file(

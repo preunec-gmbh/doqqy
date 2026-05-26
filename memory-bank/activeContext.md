@@ -1,46 +1,31 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
-**Faz 1 MVP kod + smoke test tamam; ARA VERİLDİ (2026-05-23).**
+**🟢 Faz 1 MVP TAMAM — PDF, DOCX, TXT smoke testleri tamamlandı (2026-05-26).**
 
 Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 
 **Mevcut hal:**
-- Tüm kaynak kod (`src/docq/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı.
+- Tüm kaynak kod (`src/docq/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı ve tam test edildi.
 - `.venv/` Python 3.10.11 + tüm bağımlılıklar kurulu (torch 2.12 CPU, docling 2.95, FlagEmbedding 1.4, lancedb 0.30, mammoth, pymupdf4llm vb.).
-- `docs/` → `raw/` kopyalandı (320 dosya, ama içinde docx ve düzgün .txt yok — kullanıcının ERP/PayTR materyalleri sadece md+pdf).
-- bge-m3 modeli HuggingFace cache'inde (~2 GB, `%USERPROFILE%\.cache\huggingface\`, model duplicate olarak saklanıyor symlink desteği yok diye).
-- LanceDB tablosu mevcut: **sadece ilk 5 MD dosyasından üretilmiş 42 chunk** indekslenmiş (smoke test için).
+- `raw/` altında gerçek PDF + DOCX + TXT + MD dosyalarıyla tam smoke test tamamlandı.
+- bge-m3 modeli HuggingFace cache'inde (~2 GB, `%USERPROFILE%\.cache\huggingface\`, symlink yok diye duplicate).
 - Windows-spesifik fix: `cli.py` UTF-8 stdout + `rich_markup_mode=None`.
 
-**ÖNEMLİ — smoke test eksik kısmı:**
-End-to-end test sadece MD ingester'ını kullandı. PDF/DOCX/TXT ingester'ları **kodlandı ama gerçek dosyada test edilmedi.** Kullanıcı internetten örnek .pdf/.docx/.txt dosyaları indirip o üçünü de doğrulayacak. Sonra "Faz 1 tam bitti" diyebileceğiz.
-
-## Kullanıcının Sıradaki Planı (ARA SONRASI)
-
-1. **İnternetten örnek dosyalar indir** → `raw-smoke/` veya benzeri ayrı klasör — en az 1 PDF + 1 DOCX + 1 TXT.
-2. **Üç ingester'ı da test et:**
-   ```powershell
-   docq ingest --source raw-smoke
-   docq chunk
-   docq embed
-   docq query "..."
-   ```
-   - PDF'te docling'in çalıştığını gör (başarısız olursa pymupdf4llm fallback'i doğrula).
-   - DOCX'te pandoc YOKKEN mammoth fallback'inin devreye girdiğini gör.
-   - TXT'in code-block sarmalı ile düzgün indekslendiğini gör.
-3. Üçü de OK olursa → Faz 1 tam kapanır.
-4. **Faz 2'ye geç:** hibrit arama + RRF + bge-reranker-v2-m3.
+**2026-05-26 Günü Yapılan Düzeltmeler:**
+1. **`_processed_path` path hatası** (`md_ingest.py`, `docx_ingest.py`, `pdf_ingest.py`): `source.relative_to(RAW_DIR)` relative/absolute karışımında `ValueError` fırlatıyordu. `source.resolve().relative_to(RAW_DIR.resolve())` + `try/except ValueError → Path(source.name)` ile düzeltildi.
+2. **Pandoc auto-download** (`docx_ingest.py`): Pandoc binary yoksa `pypandoc.get_pandoc_version()` → OSError yakalanıp `pypandoc.download_pandoc()` otomatik indirir. Artık `winget install pandoc` ve terminal yeniden başlatma gereksiz.
+3. **Bold-heading chunk fix** (`chunk.py`): `_BOLD_HEADING_RE` eklendi. Word'de "Heading" stili yerine bold kullanılmış tek satır başlıklar (`**A124. Başlık**`, `__A224. Başlık__`) artık `## A124. Başlık` şeklinde `##` başlığa çevrilerek `MarkdownHeaderTextSplitter` tarafından kırılım noktası olarak tanınıyor. DOCX dokümanlarında anlamlı chunk bölümlemesi için kritik.
 
 ## Son Konuşmada Verilen Tüm Kararlar
 
 | Konu | Karar | Gerekçe |
 |---|---|---|
-| Format desteği | md, pdf, docx — her biri ayrı pipeline | Format-spesifik problemler farklı |
+| Format desteği | md, pdf, docx, txt — her biri ayrı pipeline | Format-spesifik problemler farklı |
 | PDF parser | `docling` (ana), `pymupdf4llm` (basit fallback) | Layout / başlık hiyerarşisi en iyisi |
-| DOCX parser | `pandoc` (ana), `mammoth` (fallback) | Olgun, Heading stillerini doğru maple |
-| MD parser | `python-frontmatter` | Frontmatter merge, içeriği koru |
-| Chunking | `MarkdownHeaderTextSplitter` + recursive char fallback | Header-aware, kod blokları korunur |
+| DOCX parser | `pandoc` (ana, auto-download), `mammoth` (fallback) | Olgun, Heading stillerini doğru maple |
+| MD/TXT parser | `python-frontmatter` | Frontmatter merge, içeriği koru |
+| Chunking | `MarkdownHeaderTextSplitter` + bold-heading normalize + recursive char fallback | Header-aware, kod blokları korunur, Word bold başlıklar da yakalanır |
 | Embedding | `BAAI/bge-m3` **local, hybrid mode** | Türkçe iyi, dense + sparse aynı modelden |
 | Vector DB | LanceDB | Server'sız, dosya-bazlı, taşınabilir |
 | Reranker | `BAAI/bge-reranker-v2-m3` local | Multilingual, ücretsiz, hızlı |
@@ -58,23 +43,20 @@ End-to-end test sadece MD ingester'ını kullandı. PDF/DOCX/TXT ingester'ları 
 
 ## Sıradaki Adımlar
 
-### Faz 1 — MVP — **🟡 KOD + KISMI TEST TAMAM**
+### Faz 1 — MVP — **🟢 TAMAM**
 - [x] Proje iskeleti, ingest (4 format), chunk, embed, query, cli.
-- [x] `pip install -e .` — manuel paket paket indirme ile tamamlandı.
-- [x] Smoke test — MD path (5 dosya → 42 chunk → embed → query) başarılı.
-- [ ] **Smoke test — PDF/DOCX/TXT path'leri (kullanıcı örnek dosya getirecek).**
-
-### Sıradaki adımlar
-1. **Kullanıcı:** internetten 1 PDF + 1 DOCX + 1 TXT örneği indirir (`raw-smoke/` klasörü önerildi).
-2. **Test:** üç ingester'ı gerçek dosyada doğrula.
-3. (Opsiyonel) tam 320-dosya korpus ingest.
-4. **Faz 2'ye geç** — sparse + RRF + reranker.
+- [x] `pip install -e .` — tüm bağımlılıklar kurulu.
+- [x] Smoke test — MD path başarılı.
+- [x] Smoke test — PDF path (docling + pymupdf4llm fallback) başarılı.
+- [x] Smoke test — DOCX path (pandoc auto-download + mammoth fallback) başarılı.
+- [x] Smoke test — TXT path başarılı.
+- [x] Bold-heading chunking fix (`chunk.py`).
 
 ### Faz 2 — Hibrit Arama + Rerank (yarım gün)
-- bge-m3 sparse vektörü ekle.
-- LanceDB'de dense + sparse alanları.
-- Reciprocal Rank Fusion.
-- `bge-reranker-v2-m3` entegrasyonu.
+- [ ] bge-m3 sparse vektörü ekle.
+- [ ] LanceDB'de dense + sparse alanları.
+- [ ] Reciprocal Rank Fusion.
+- [ ] `bge-reranker-v2-m3` entegrasyonu.
 
 ### Faz 3 — Harita Üretimi — **Seçenek D (LLM + embedding bonus)**
 Üç pass:
@@ -91,29 +73,27 @@ End-to-end test sadece MD ingester'ını kullandı. PDF/DOCX/TXT ingester'ları 
 
 ## Aktif Düşünceler / Devam Eden Konular
 
-- **Smoke test'in MD-only oluşu:** Yukarıdaki gibi, PDF/DOCX/TXT path'leri kod olarak yazıldı ama gerçek dosyada hiç çalıştırılmadı. Risk: docling bazı PDF'lerde fail edebilir (fallback hazır), mammoth Türkçe karakterlerde garip davranabilir. Kullanıcı örnek dosyalar getirince anlaşılacak.
-- **Pandoc CLI kurulu değil:** Kullanıcı kurmadı. DOCX testi mammoth fallback üzerinden gidecek. İstenirse `winget install pandoc` ile pandoc-ana akış da test edilebilir.
-- **Retrieval kalitesi gözlemi (5-dosyalık küçük korpus):** Bazı sorgular doğru dosyayı 1. sırada vermedi (örn. "PayTR odeme akisi" → SEQUENCE.md'de tam akış olmasına rağmen PRISMA.md 1. çıktı). Bu Faz 2 reranker ile düzelmesi beklenen tipik dense-only davranış — kod kusuru değil.
+- **Retrieval kalitesi gözlemi:** Bazı sorgular doğru dosyayı 1. sırada vermedi (örn. "PayTR odeme akisi" → SEQUENCE.md yerine PRISMA.md 1. çıktı). Bu Faz 2 reranker ile düzelmesi beklenen tipik dense-only davranış — kod kusuru değil.
 - **HuggingFace symlink uyarısı:** Windows Developer Mode kapalı, cache duplicate dosya saklıyor. Disk biraz daha fazla, fonksiyon etkilenmiyor.
 - **Ağ problemi:** PyPI timeout sorunu vardı, pyarrow özellikle. Faz 2'de yeni paket gerekirse `--default-timeout=600 --retries=10` veya tek tek indirme.
-- **Kod örnekleri (.py/.php/.js vb.):** `SUPPORTED_EXTENSIONS` whitelist'inden çıkarıldı — embedding kalitesini kirletmesin.
 - **Eval set:** Faz 2 sonrası, 15-20 test sorusu + recall@5.
 - **Proje adı:** Şimdilik `docq`, daha iyi bir isim çıkarsa değişebilir.
 
 ## Önemli Pattern'ler ve Tercihler
 
-- **Idempotency:** Her pipeline aşaması yeniden çalıştırılabilir olmalı. (Faz 1'de tam rebuild, sonra inkremental.)
+- **Idempotency:** Her pipeline aşaması yeniden çalıştırılabilir olmalı.
 - **Format-agnostic core:** İngest aşamasından sonra her şey kanonik markdown'a indirgenir. Pipeline'ın geri kalanı format bilmiyor.
 - **Şeffaflık:** Kullanıcı her zaman orijinal metni görür. Sistem onun yerine yorum yapmaz.
 - **Local-first:** Embedding ve reranking local. Sadece harita üretiminde (tek seferlik) external LLM kullanılır.
 - **Pragmatik MVP:** Inkremental update, görsel işleme, MCP gibi "iyi olur ama gerekli değil" özellikler ilk versiyonda yok.
 
-## Bu Oturumda Öğrendiklerimiz (2026-05-23)
+## Öğrendiklerimiz
 
-- **Section-bazlı harita per-section çağrı yapsa ücretsiz tier'a sığmaz** (300+ çağrı, gün başına 100 limit). Çözüm: per-file batch — her dosyayı LLM'e tek seferde verip "her section için ayrı özet üret" demek. 30 dosya = 30 çağrı, 1 saatte biter.
-- **Gemini 2.5 Pro free tier datayı eğitime kullanabilir** — privacy hassasiyeti olan dokümanlar için Vertex AI (ücretli) veya local LLM gerekir. Mevcut proje için sorun değil.
-- **Türkçe için BM25 problemli** (agglutinative dil — "token", "tokenı", "tokenlar" hepsi farklı kelime sanılır). bge-m3 hybrid mode bunu doğal olarak çözüyor.
-- **Üç farklı LLM rolü var:** embedding (küçük, lokal), reranker (orta, lokal), generation (büyük, API). Bunları karıştırmamak gerek.
-- **Windows + Bash subprocess + Rich uyumsuzluğu:** Typer'ın help renderer'ı (`rich.legacy_windows_render`) TTY olmayan subprocess'lerde Türkçe karakterde çöküyor. Çözüm: `app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)` + `sys.stdout.reconfigure(encoding="utf-8")`. Gerçek interactive terminal'de zaten çalışıyordu; bu sadece subprocess senaryoları için.
-- **PyPI indirme timeout'ları Windows'ta sık:** Büyük paketler (pyarrow, torch, docling) için `--default-timeout=600 --retries=10` veya tek tek indirme şart. `pip install -e .` atomic olduğu için tek paket fail edince hepsi tekrar dener; sırayla `pip install torch && pip install pyarrow && pip install -e .` daha güvenli.
-- **bge-m3 CPU embedding hızı:** 42 chunk için ~66 sn (4 batch × 16 sn). 500 sayfa korpus için linear extrapolasyon ~15-30 dk doğru çıkıyor.
+- **Section-bazlı harita per-section çağrı yapsa ücretsiz tier'a sığmaz** (300+ çağrı, gün başına 100 limit). Çözüm: per-file batch — 30 dosya = 30 çağrı.
+- **Gemini 2.5 Pro free tier datayı eğitime kullanabilir** — privacy hassasiyeti olan dokümanlar için Vertex AI (ücretli) veya local LLM gerekir.
+- **Türkçe için BM25 problemli** (agglutinative dil). bge-m3 hybrid mode bunu doğal olarak çözüyor.
+- **Windows `pathlib.relative_to`** relative path verildiğinde absolute `RAW_DIR` ile karışıyor → her zaman `.resolve()` kullan.
+- **Pandoc PATH sorunu Windows'ta yaygın** — terminal yeniden başlatmak yerine `pypandoc.download_pandoc()` ile proje içine otomatik indirmek daha sağlam.
+- **Word dokümanlarında bold ≠ başlık** — kullanıcılar Heading stili yerine bold kullanırsa chunker atlar. `_BOLD_HEADING_RE` ile tek satır bold'ları `##` başlığa normalize etmek gerekiyor.
+- **bge-m3 CPU embedding hızı:** ~160 chunk → birkaç dakika. 320 dosyalık tam korpus için 15-30 dk arası beklenir.
+- **Windows + Bash subprocess + Rich uyumsuzluğu:** `rich_markup_mode=None` + `sys.stdout.reconfigure(encoding="utf-8")` ile çözüldü.

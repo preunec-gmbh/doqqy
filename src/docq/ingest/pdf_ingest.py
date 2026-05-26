@@ -11,7 +11,10 @@ _LOG = get_logger("docq.ingest.pdf", log_file="ingest.log")
 
 
 def _processed_path(source: Path) -> Path:
-    rel = source.relative_to(RAW_DIR)
+    try:
+        rel = source.resolve().relative_to(RAW_DIR.resolve())
+    except ValueError:
+        rel = Path(source.name)
     return (PROCESSED_DIR / rel).with_suffix(".md")
 
 
