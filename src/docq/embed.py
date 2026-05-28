@@ -1,10 +1,8 @@
-"""bge-m3 dense embedding + LanceDB yazımı.
-
-Faz 1: sadece dense vektör. Sparse + reranker Faz 2'de eklenecek.
-"""
+"""bge-m3 dense + sparse embedding + LanceDB yazımı."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Iterator
 
@@ -35,7 +33,6 @@ def _load_chunks() -> pd.DataFrame:
 
 
 def _load_model():
-    """FlagEmbedding BGEM3FlagModel — ilk çağrıda model indirilir (~2 GB)."""
     from FlagEmbedding import BGEM3FlagModel  # type: ignore
 
     device = detect_device()
@@ -49,8 +46,11 @@ def _batched(seq: list[str], n: int) -> Iterator[list[str]]:
         yield seq[i : i + n]
 
 
-def _embed_texts(model, texts: list[str]) -> np.ndarray:
-    vectors: list[np.ndarray] = []
+def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
+    """Dense vektörler + sparse vektörler (JSON string listesi) döner."""
+    dense_list: list[np.ndarray] = []
+    sparse_list: list[str] = []
+
     for batch in tqdm(
         list(_batched(texts, EMBEDDING_BATCH_SIZE)),
         desc="embed",
@@ -59,14 +59,21 @@ def _embed_texts(model, texts: list[str]) -> np.ndarray:
         out = model.encode(
             batch,
             batch_size=len(batch),
-            max_length=8192,
+            max_length=1024,
             return_dense=True,
-            return_sparse=False,
+            return_sparse=True,
             return_colbert_vecs=False,
         )
         dense = np.asarray(out["dense_vecs"], dtype=np.float32)
-        vectors.append(dense)
-    return np.vstack(vectors) if vectors else np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
+        dense_list.append(dense)
+
+        # sparse: list[dict[int, float]] → JSON string olarak sakla
+        for sparse_dict in out["lexical_weights"]:
+            # token id int olabilir, JSON key string olmalı
+            sparse_list.append(json.dumps({str(k): float(v) for k, v in sparse_dict.items()}))
+
+    dense_arr = np.vstack(dense_list) if dense_list else np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
+    return dense_arr, sparse_list
 
 
 def build_index(*, batch_size: int | None = None) -> int:
@@ -78,21 +85,29 @@ def build_index(*, batch_size: int | None = None) -> int:
 
     texts = df["content"].tolist()
     model = _load_model()
-    vectors = _embed_texts(model, texts)
-    if vectors.shape[0] != len(df):
+    dense_vecs, sparse_jsons = _embed_texts(model, texts)
+
+    if dense_vecs.shape[0] != len(df):
         raise RuntimeError(
-            f"embedding/satır uyumsuzluğu: {vectors.shape[0]} vs {len(df)}"
+            f"embedding/satır uyumsuzluğu: {dense_vecs.shape[0]} vs {len(df)}"
         )
-    if vectors.shape[1] != EMBEDDING_DIM:
+    if dense_vecs.shape[1] != EMBEDDING_DIM:
         _LOG.warning(
             "model %d boyut döndürdü, config EMBEDDING_DIM=%d.",
-            vectors.shape[1],
+            dense_vecs.shape[1],
             EMBEDDING_DIM,
         )
 
+    total_sparse_tokens = sum(len(json.loads(s)) for s in sparse_jsons)
+    _LOG.info(
+        "sparse vektörler: toplam %d token (ortalama %.1f/chunk)",
+        total_sparse_tokens,
+        total_sparse_tokens / len(sparse_jsons) if sparse_jsons else 0,
+    )
+
     df_out = df.copy()
-    df_out["vector"] = list(vectors)
-    # LanceDB list/object kolonlarda zorluk çıkarmasın diye string'leştir.
+    df_out["vector"] = list(dense_vecs)
+    df_out["sparse_vector"] = sparse_jsons
     df_out["section_path_str"] = df_out["section_path"].apply(lambda xs: " > ".join(xs))
 
     import lancedb  # type: ignore
@@ -101,7 +116,6 @@ def build_index(*, batch_size: int | None = None) -> int:
     if LANCE_TABLE in db.table_names():
         db.drop_table(LANCE_TABLE)
 
-    # Schema'yı pyarrow'a bırakmak için to_pandas yeterli; LanceDB list[float32]'i otomatik tanır.
     db.create_table(LANCE_TABLE, data=df_out, mode="overwrite")
     _LOG.info("LanceDB yazıldı: %s (%d satır).", STORE_DIR / LANCE_TABLE, len(df_out))
     return len(df_out)

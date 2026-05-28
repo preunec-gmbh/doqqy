@@ -37,11 +37,16 @@ CHUNK_MIN_MERGE_TOKENS: int = 100
 # Embedding
 EMBEDDING_MODEL: str = "BAAI/bge-m3"
 EMBEDDING_DIM: int = 1024
-EMBEDDING_BATCH_SIZE: int = 12
+EMBEDDING_BATCH_SIZE: int = 4
 LANCE_TABLE: str = "chunks"
 
 # Query
 DEFAULT_TOP_K: int = 5
+RETRIEVAL_TOP_K: int = 50  # dense + sparse her biri bu kadar getirir, RRF sonrası reranker'a gider
+
+# Reranker
+RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+RERANKER_BATCH_SIZE: int = 4
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 
