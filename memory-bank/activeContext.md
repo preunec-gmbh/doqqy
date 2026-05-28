@@ -1,9 +1,9 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
-**🟢 Faz 1 MVP TAMAM — PDF, DOCX, TXT smoke testleri tamamlandı (2026-05-26).**
+**🟢 Faz 2 TAMAM — Hibrit arama + reranker çalışıyor (2026-05-28).**
 
-Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
+Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Mevcut hal:**
 - Tüm kaynak kod (`src/docq/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı ve tam test edildi.
@@ -11,6 +11,14 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 - `raw/` altında gerçek PDF + DOCX + TXT + MD dosyalarıyla tam smoke test tamamlandı.
 - bge-m3 modeli HuggingFace cache'inde (~2 GB, `%USERPROFILE%\.cache\huggingface\`, symlink yok diye duplicate).
 - Windows-spesifik fix: `cli.py` UTF-8 stdout + `rich_markup_mode=None`.
+
+**2026-05-28 Günü Yapılan Değişiklikler (Faz 2):**
+1. **RAM fix:** `max_length` 8192→1024, `EMBEDDING_BATCH_SIZE` 12→4. Embed RAM kullanımı 28 GB→~6 GB. RAG kalitesine etkisi yok.
+2. **`embed.py`:** `return_sparse=True`, sparse çıktı JSON string olarak `sparse_vector` kolonuna yazılıyor.
+3. **`rerank.py` (yeni):** `transformers.AutoModelForSequenceClassification` ile `bge-reranker-v2-m3`. FlagEmbedding 1.4.0 tokenizer bug'ı nedeniyle bypass edildi.
+4. **`query.py`:** Dense top-50 + sparse top-50 → RRF (k=60) → reranker → top-5. `_safe_section_path()` numpy array fix.
+5. **`cli.py`:** `--no-rerank` flag, `dense_rank / sparse_rank / rrf / rerank` skor çıktısı.
+6. **`config.py`:** `RETRIEVAL_TOP_K=50`, `RERANKER_MODEL`, `RERANKER_BATCH_SIZE=4` eklendi.
 
 **2026-05-26 Günü Yapılan Düzeltmeler:**
 1. **`_processed_path` path hatası** (`md_ingest.py`, `docx_ingest.py`, `pdf_ingest.py`): `source.relative_to(RAW_DIR)` relative/absolute karışımında `ValueError` fırlatıyordu. `source.resolve().relative_to(RAW_DIR.resolve())` + `try/except ValueError → Path(source.name)` ile düzeltildi.
@@ -52,11 +60,11 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 - [x] Smoke test — TXT path başarılı.
 - [x] Bold-heading chunking fix (`chunk.py`).
 
-### Faz 2 — Hibrit Arama + Rerank (yarım gün)
-- [ ] bge-m3 sparse vektörü ekle.
-- [ ] LanceDB'de dense + sparse alanları.
-- [ ] Reciprocal Rank Fusion.
-- [ ] `bge-reranker-v2-m3` entegrasyonu.
+### Faz 2 — Hibrit Arama + Rerank — **🟢 TAMAM**
+- [x] bge-m3 sparse vektör + LanceDB `sparse_vector` kolonu (JSON string)
+- [x] Manuel python-side dot product (LanceDB FTS bge-m3 token ID'leriyle uyumsuz)
+- [x] RRF (k=60) + `bge-reranker-v2-m3` (transformers direkt, FlagEmbedding bypass)
+- [x] `--no-rerank` flag, aşama skorları çıktısı
 
 ### Faz 3 — Harita Üretimi — **Seçenek D (LLM + embedding bonus)**
 Üç pass:
@@ -89,7 +97,15 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 
 ## Öğrendiklerimiz
 
-- **Section-bazlı harita per-section çağrı yapsa ücretsiz tier'a sığmaz** (300+ çağrı, gün başına 100 limit). Çözüm: per-file batch — 30 dosya = 30 çağrı.
+### Faz 2 (2026-05-28)
+- **FlagEmbedding 1.4.0 + bge-reranker-v2-m3 uyumsuzluğu:** `FlagReranker` ve `FlagLLMReranker` ikisi de `XLMRobertaTokenizer.prepare_for_model` hatası veriyor. Bilinen bug. Çözüm: `transformers` direkt kullan.
+- **bge-m3 `max_length=8192` RAM tuzağı:** Model chunk 200 token olsa bile 8192 tokenlik attention matrisi ayırıyor. Her zaman gerçek max chunk boyutuna yakın değer ver (1024).
+- **LanceDB FTS + bge-m3 sparse uyumsuzluğu:** bge-m3 sparse çıktısı BM25 terimi değil, model vocab token ID'si. LanceDB FTS bunları index'leyemiyor. Çözüm: JSON string sakla, python-side dot product hesapla.
+- **LanceDB `section_path` numpy array döner:** `or []` operatörü numpy array'de `ValueError` fırlatır. `_safe_section_path()` helper zorunlu.
+- **bge-reranker-v2-m3 gerçek boyutu:** Dökümanlarda ~1.1 GB, gerçekte 2.27 GB. Windows'ta HuggingFace symlink yok, duplicate saklıyor.
+- **`test_docs/` klasörü:** Tam korpus yerine seçilmiş test dokümanlarıyla çalış. `raw/` dokunulmaz kalır.
+
+### Faz 1 (2026-05-26) (300+ çağrı, gün başına 100 limit). Çözüm: per-file batch — 30 dosya = 30 çağrı.
 - **Gemini 2.5 Pro free tier datayı eğitime kullanabilir** — privacy hassasiyeti olan dokümanlar için Vertex AI (ücretli) veya local LLM gerekir.
 - **Türkçe için BM25 problemli** (agglutinative dil). bge-m3 hybrid mode bunu doğal olarak çözüyor.
 - **Windows `pathlib.relative_to`** relative path verildiğinde absolute `RAW_DIR` ile karışıyor → her zaman `.resolve()` kullan.

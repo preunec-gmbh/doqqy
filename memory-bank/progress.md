@@ -1,9 +1,9 @@
 # İlerleme
 
 ## Şu Anki Durum
-**🟢 Faz 1 MVP TAMAM — tüm format smoke testleri tamamlandı (2026-05-26).**
+**🟢 Faz 2 TAMAM — Hibrit arama + reranker çalışıyor (2026-05-28).**
 
-Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
+Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 ## Çalışanlar
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`).
@@ -43,12 +43,17 @@ Detaylı implementation notları: [fazlar/faz1.md](fazlar/faz1.md).
 - [x] **Smoke test — TXT path** başarılı
 - [x] Windows console + Türkçe karakter fix (`cli.py`)
 
-### Faz 2: Hibrit Arama + Rerank (yarım gün)
-- [ ] bge-m3 sparse vektör eklemesi (FlagEmbedding hybrid mode)
-- [ ] LanceDB schema'sına sparse alan
-- [ ] Reciprocal Rank Fusion
-- [ ] `bge-reranker-v2-m3` entegrasyonu
-- [ ] Top-50 → rerank → top-5
+### Faz 2: Hibrit Arama + Rerank — **🟢 TAMAM (2026-05-28)**
+- [x] bge-m3 sparse vektör eklemesi (`return_sparse=True`, JSON string olarak LanceDB'ye)
+- [x] LanceDB schema'sına `sparse_vector` kolonu
+- [x] Manuel python-side dot product sparse arama (LanceDB FTS uyumsuz)
+- [x] Reciprocal Rank Fusion (k=60)
+- [x] `bge-reranker-v2-m3` — transformers direkt (FlagEmbedding 1.4.0 bug bypass)
+- [x] Top-50 → rerank → top-5, sigmoid normalize skor
+- [x] `--no-rerank` flag + aşama skorları çıktısı
+- [x] RAM fix: `max_length` 8192→1024, `EMBEDDING_BATCH_SIZE` 12→4
+- [x] `_safe_section_path()` — numpy array uyumsuzluk fix
+- [x] Test: "PayTR odeme akisi" + "JWT_REFRESH_SECRET" sorguları başarılı
 
 ### Faz 3: Harita Üretimi — **Seçenek D** (LLM + embedding bonus)
 - [ ] `src/docq/map_gen.py` — Gemini 2.5 Pro client (ana), Claude Opus 4.7 fallback hazır

@@ -44,7 +44,7 @@
 - `pandas = "*"` — chunks dataframe
 
 ### Reranker
-- `FlagEmbedding` (yukarıdaki) — `bge-reranker-v2-m3` aynı paket altında.
+- `transformers` — `AutoModelForSequenceClassification` ile `bge-reranker-v2-m3` direkt. FlagEmbedding 1.4.0 tokenizer bug'ı nedeniyle FlagEmbedding kullanılmıyor.
 
 ### LLM (Harita Üretimi)
 - `google-genai = "*"` — Gemini 2.5 Pro (ana)
@@ -61,8 +61,10 @@
 
 ### bge-reranker-v2-m3 (Reranker)
 - **HuggingFace:** `BAAI/bge-reranker-v2-m3`
-- **Boyut:** ~600 MB
-- **Tip:** Cross-encoder, multilingual.
+- **Gerçek boyut:** ~2.27 GB (dökümanlarda ~1.1 GB yazıyordu, gerçek daha büyük)
+- **Tip:** Cross-encoder, multilingual, XLM-RoBERTa tabanlı.
+- **Kullanım:** `transformers.AutoModelForSequenceClassification` ile direkt — FlagEmbedding 1.4.0'da tokenizer bug var.
+- **Skor:** Logit → sigmoid → 0-1 normalize.
 
 ### Gemini 2.5 Pro (Harita LLM, Ana Seçenek)
 - **Context:** 2M token

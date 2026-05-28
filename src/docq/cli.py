@@ -92,19 +92,35 @@ def query(
     text: str = typer.Argument(..., help="Sorgu metni."),
     k: int = typer.Option(DEFAULT_TOP_K, "--top-k", "-k", help="Kaç sonuç döndürülecek."),
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
+    no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
 ) -> None:
-    """Dense vektör ile arama: top-k chunk + kaynak."""
+    """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from docq.query import search
 
-    hits = search(text, k=k)
+    hits = search(text, k=k, rerank=not no_rerank)
     if not hits:
         typer.echo("Sonuç yok.")
         raise typer.Exit(code=1)
 
     for i, hit in enumerate(hits, 1):
         path = " > ".join(hit.section_path) if hit.section_path else "(başlıksız)"
-        typer.echo(f"\n[{i}] score={hit.score:.3f}  {hit.source}")
+        typer.echo(f"\n[{i}] {hit.source}")
         typer.echo(f"    {path}")
+
+        # Aşama skorlarını göster
+        ex = hit.extra
+        score_parts = []
+        if ex.get("dense_rank") is not None:
+            score_parts.append(f"dense_rank={ex['dense_rank']}")
+        if ex.get("sparse_rank") is not None:
+            score_parts.append(f"sparse_rank={ex['sparse_rank']}")
+        if ex.get("rrf_score") is not None:
+            score_parts.append(f"rrf={ex['rrf_score']:.4f}")
+        if ex.get("rerank_score") is not None:
+            score_parts.append(f"rerank={ex['rerank_score']:.3f}")
+        if score_parts:
+            typer.echo(f"    [{' | '.join(score_parts)}]")
+
         body = hit.content if full else hit.content[:400].rstrip()
         typer.echo(_indent(body, "    "))
         if not full and len(hit.content) > 400:
