@@ -1,8 +1,8 @@
 # docq
 
-Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir.
+Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir. **bge-m3 embedding cosine benzerliği** ile dokümanlar arası otomatik harita (`topics.yaml` + `INDEX.md`) üretir.
 
-LLM cevap sentezi **yapmaz** — sorgunun karşılığında ham chunk + kaynak (dosya yolu, başlık hiyerarşisi) döner. Kullanıcı her zaman orijinal metni görür.
+LLM çağrısı **yapmaz** — ne sorgularda ne de harita üretiminde. Ham chunk + kaynak döner, harita embedding matematiğiyle kurulur.
 
 ## Hızlı başlangıç
 
@@ -14,12 +14,15 @@ pip install -e .
 
 # 2. Dokümanları raw/ altına koy (PDF, MD, DOCX, TXT)
 
-# 3. Pipeline'ı çalıştır
-docq ingest        # raw/ → processed/ (markdown)
+# docq ingest        # raw/ → processed/ (markdown)
 docq chunk         # processed/ → chunks.parquet
 docq embed         # → store.lance/  (bge-m3 dense + sparse vektör)
 
-# 4. Sor
+# 4. Harita üret
+docq map           # processed/*.md → topics.yaml (regex + embedding cosine)
+docq index         # topics.yaml → processed/INDEX.md
+
+# 5. Sor
 docq query "JWT refresh nasıl çalışıyor?"
 docq query "fatura iade akışı" --top-k 10
 docq query "İade süreci" --no-rerank # Reranker'ı devre dışı bırakıp saf hibrit sonuçlara bak
@@ -37,6 +40,7 @@ puroje/
 ├── processed/               # AŞAMA 1 ÇIKTI — kanonik markdown (gitignore'da)
 ├── chunks/                  # AŞAMA 2 ÇIKTI — chunks.parquet (gitignore'da)
 ├── store.lance/             # AŞAMA 3 ÇIKTI — LanceDB vector store (gitignore'da)
+├── topics.yaml              # AŞAMA 4 ÇIKTI — harita verisi (gitignore'da)
 ├── logs/                    # ingest hata logları (gitignore'da)
 │
 ├── src/docq/                # KAYNAK KOD
@@ -45,7 +49,9 @@ puroje/
 │   ├── chunk.py             # header-aware chunking
 │   ├── embed.py             # bge-m3 dense+sparse LanceDB yazımı
 │   ├── query.py             # Hibrit arama (Dense + Sparse) & RRF Birleşimi
-│   ├── rerank.py            # bge-reranker-v2-m3 (cross-encoder test)
+│   ├── rerank.py            # bge-reranker-v2-m3 (cross-encoder)
+│   ├── map_gen.py           # Pass 1 (regex) + Pass 2 (cosine) → topics.yaml
+│   ├── index_gen.py         # topics.yaml → INDEX.md
 │   └── ingest/              # format-spesifik parser'lar
 │
 ├── documentation/           # İNSANLAR İÇİN BELGELER
@@ -74,22 +80,22 @@ puroje/
 
 ## Geçerli durum
 
-Faz 1 (MVP) ve Faz 2 tamamlandı; Testlerden başarıyla geçti. Mevcut özellikler:
+Faz 1, Faz 2 ve Faz 3 tamamlandı. Mevcut özellikler:
 
 - ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback)
-- ✅ Header-aware chunking (kod blokları ve tablolar atomik, Word bold testleri optimize)
-- ✅ bge-m3 ile dense ve sparse embedding üretimi + JSON formatında LanceDB uyumu
+- ✅ Header-aware chunking (kod blokları ve tablolar atomik, Word bold başlıklar optimize)
+- ✅ bge-m3 ile dense ve sparse embedding üretimi + LanceDB
 - ✅ RAM Optimizasyonu (Embedding Batch Size:4 / Max Length: 1024)
-- ✅ Hibrit Arama: Dense Arama + Manuel Python-side Sparse Hesaplama 
-- ✅ RRF (Reciprocal Rank Fusion) puanı füzyon mekanizması (k=60)
-- ✅ bge-reranker-v2-m3 (Transformers tabanlı Cross-encoder entegrasyonu)
-- ✅ Typer CLI genişletilmiş parametreleri (`--no-rerank` ve detaylı RRF/Sigmoid skor analizleri)
+- ✅ Hibrit Arama: Dense + Sparse (Manuel Python-side dot product) + RRF (k=60)
+- ✅ bge-reranker-v2-m3 (Transformers tabanlı Cross-encoder)
+- ✅ Harita üretimi: Pass 1 (regex explicit referanslar) + Pass 2 (embedding cosine tematik komşuluk) → `topics.yaml`
+- ✅ `INDEX.md` üretimi — Obsidian vault giriş noktası
+- ✅ Typer CLI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `info`
 
-Sonraki fazlarda gelecek:
+Sonraki fazda gelecek:
 
-- ⏳ **Faz 3:** Statik harita üretimi (Gemini 2.5 Pro ile `topics.yaml` + `INDEX.md`, Explicit/Thematic ilişkilendirme)
-- ⏳ **Faz 4:** Obsidian vault polish (`[[wiki-link]]` enjeksiyonu, graph view)
+- ⏳ **Faz 4:** Obsidian vault polish (`[[wiki-link]]` enjeksiyonu, graph view dolacak)
 
 ## Lisans / Gizlilik
 
-Local-first: sorgu zamanında **hiçbir** veri internet'e gönderilmez. Embedding ve reranker modelleri **tamamen lokal CPU/GPU gücünüzle çalışır**. Sadece Faz 3 statik harita üretimi external LLM (örn. Gemini 2.5) kullanır (kullanıcı kontrollü, tek seferlik opsiyoneldir).
+Local-first: sorgu zamanında **hiçbir** veri internet'e gönderilmez. Embedding, reranker ve harita üretimi **tamamen lokal CPU/GPU gücünüzle çalışır**. Dış API çağrısı yoktur.

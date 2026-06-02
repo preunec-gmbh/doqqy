@@ -10,8 +10,11 @@ import typer
 
 from docq.config import (
     DEFAULT_TOP_K,
+    MAP_COSINE_THRESHOLD,
+    MAP_TOP_N_NEIGHBORS,
     PROCESSED_DIR,
     RAW_DIR,
+    TOPICS_YAML,
     ensure_dirs,
 )
 
@@ -129,6 +132,60 @@ def query(
 
 def _indent(text: str, prefix: str) -> str:
     return "\n".join(prefix + line for line in text.splitlines())
+
+
+@app.command()
+def map(
+    processed_dir: Optional[Path] = typer.Option(
+        None, "--processed", "-p", help="processed/ klasörü (varsayılan: processed/)."
+    ),
+    pass1_only: bool = typer.Option(False, "--pass1", help="Sadece regex pass çalıştır."),
+    pass2_only: bool = typer.Option(False, "--pass2", help="Sadece embedding cosine pass çalıştır."),
+    threshold: float = typer.Option(
+        MAP_COSINE_THRESHOLD, "--threshold", "-t", help="Cosine benzerlik eşiği (Pass 2)."
+    ),
+    top_n: int = typer.Option(
+        MAP_TOP_N_NEIGHBORS, "--top-n", "-n", help="Section başına max komşu (Pass 2)."
+    ),
+) -> None:
+    """processed/*.md → topics.yaml (regex referanslar + embedding cosine)."""
+    from docq.map_gen import generate_map
+
+    ensure_dirs()
+    src = processed_dir or PROCESSED_DIR
+
+    do_pass1 = not pass2_only
+    do_pass2 = not pass1_only
+
+    out = generate_map(
+        processed_dir=src,
+        pass1=do_pass1,
+        pass2=do_pass2,
+        cosine_threshold=threshold,
+        top_n=top_n,
+        output=TOPICS_YAML,
+    )
+    typer.echo(f"OK: {out}")
+
+
+@app.command()
+def index(
+    topics: Optional[Path] = typer.Option(
+        None, "--topics", help="topics.yaml yolu (varsayılan: proje kökü)."
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="INDEX.md yazılacak klasör (varsayılan: processed/)."
+    ),
+) -> None:
+    """topics.yaml → processed/INDEX.md (Obsidian giriş noktası)."""
+    from docq.index_gen import generate_index
+
+    ensure_dirs()
+    out = generate_index(
+        topics_path=topics or TOPICS_YAML,
+        output_dir=output_dir or PROCESSED_DIR,
+    )
+    typer.echo(f"OK: {out}")
 
 
 @app.command()
