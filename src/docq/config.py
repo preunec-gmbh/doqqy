@@ -48,6 +48,11 @@ RETRIEVAL_TOP_K: int = 50  # dense + sparse her biri bu kadar getirir, RRF sonra
 RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 RERANKER_BATCH_SIZE: int = 4
 
+# Map generation (Faz 3)
+TOPICS_YAML: Path = PROJECT_ROOT / "topics.yaml"
+MAP_COSINE_THRESHOLD: float = 0.75   # Pass 2 minimum cosine benzerliği
+MAP_TOP_N_NEIGHBORS: int = 5         # Her section için max komşu sayısı
+
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 

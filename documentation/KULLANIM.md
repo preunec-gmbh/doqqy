@@ -96,7 +96,51 @@ docq embed
 
 Çıktı: `store.lance/chunks/` — LanceDB tablosu. GPU varsa otomatik kullanır (`DOCQ_DEVICE=cpu` ile zorlayabilirsin).
 
-## 4. Sorgu
+## 4. Harita üretimi (Faz 3)
+
+Dokümanlar arasındaki ilişkileri keşfedip `topics.yaml` ve `INDEX.md` üretir. LLM çağrısı yok — tamamen local.
+
+```powershell
+docq map          # Pass 1 (regex) + Pass 2 (embedding cosine) → topics.yaml
+docq map --pass1  # Sadece regex explicit referanslar
+docq map --pass2  # Sadece embedding cosine tematik komşuluk
+docq index        # topics.yaml → processed/INDEX.md
+```
+
+### `docq map`
+
+```powershell
+docq map                        # tüm processed/*.md, varsayılan eşik 0.75
+docq map --threshold 0.80       # daha az ama daha güvenilir tematik bağlantı
+docq map --top-n 10             # section başına maksimum 10 komşu (varsayılan 5)
+docq map --processed path/to/   # farklı klasör
+```
+
+**Pass 1 — Regex:** `bkz.`, `bkz:`, `see section`, `see also`, parantez içi `(DOSYA.md)`, `[[WikiLink]]` kalıplarını yakalar. Bulduğu referansı bilinen dosya adlarıyla normalize eder.
+
+**Pass 2 — Embedding cosine:** LanceDB'deki mevcut dense vektörlerden her section için bir centroid hesaplar, farklı dosyalardaki en yakın section'ları bulur. Eşik üstündekiler `might_be_related` olarak kaydedilir.
+
+Çıktı: `topics.yaml` (proje kökünde):
+```yaml
+sections:
+  - id: "PAYTR_REQUIREMENTS_odeme-akisi"
+    file: "PAYTR_REQUIREMENTS.md"
+    section: "## Ödeme Akışı"
+    explicit_related: [...]     # regex ile bulunan
+    might_be_related: [...]     # cosine benzerlikle bulunan, skorlu
+```
+
+### `docq index`
+
+```powershell
+docq index                              # topics.yaml → processed/INDEX.md
+docq index --topics path/topics.yaml    # farklı topics dosyası
+docq index --output path/to/vault/      # farklı çıktı klasörü
+```
+
+`processed/INDEX.md` Obsidian vault'unun giriş noktasıdır. Her dosyanın bağlantılı section'larını 📌 (explicit) ve 💡 (tematik) kategorilerde listeler.
+
+## 5. Sorgu
 
 ```powershell
 docq query "JWT refresh nasıl çalışıyor?"
@@ -121,7 +165,7 @@ Flags:
 - `-k, --top-k N` — kaç sonuç (varsayılan 5)
 - `--full` — chunk'ı kesmeden tam göster (varsayılan ilk 400 karakter)
 
-## 5. Tipik akışlar
+## 6. Tipik akışlar
 
 ### Yeni dokümanlar geldi
 Şu an inkremental update yok — tam rebuild:
@@ -154,7 +198,7 @@ $env:DOCQ_DEVICE = "cpu"
 docq embed
 ```
 
-## 6. Sık karşılaşılan sorunlar
+## 8. Sık karşılaşılan sorunlar
 
 ### "ReadTimeoutError" — pip install'da
 Ağ yavaş veya dengesiz. Çözüm:
@@ -189,7 +233,7 @@ chcp 65001  # UTF-8 code page
 ### "encoding error" .txt ingest'inde
 UTF-8 decode başarısız olursa otomatik latin-1 fallback var. Yine de bozuk çıkarsa dosyanın gerçek encoding'ini bul (Notepad++ veya `chardet`) ve `md_ingest.py:ingest_txt`'i geçici olarak güncelle.
 
-## 7. Veri saklama
+## 9. Veri saklama
 
 | Klasör | İçerik | Yedeklenmeli mi? |
 |---|---|---|
@@ -197,19 +241,25 @@ UTF-8 decode başarısız olursa otomatik latin-1 fallback var. Yine de bozuk ç
 | `processed/` | Ingest çıktısı | hayır (yeniden üretilebilir) |
 | `chunks/` | Parquet | hayır |
 | `store.lance/` | Vector store | hayır |
+| `topics.yaml` | Harita verisi | hayır (yeniden üretilebilir) |
 | `logs/` | Hata logları | hayır |
 
 `raw/` ve `src/` versiyon kontrolünde olmalı. Geri kalan `.gitignore`'da.
 
-## 8. Faz 1 sınırlamaları
+## 10. Mevcut sınırlamalar
 
 Bu MVP. Şu özellikler **henüz yok**:
 
 - Inkremental update — değişen dosyaları tespit etme yok, her seferinde tam rebuild
 - Hibrit arama — sadece dense vektör (sparse + reranker Faz 2'de gelecek)
-- Statik harita — `INDEX.md` ve `topics.yaml` üretimi Faz 3'te
+## 10. Mevcut sınırlamalar
+
+Şu özellikler **henüz yok**:
+
+- Inkremental update — değişen dosyaları tespit etme yok, her seferinde tam rebuild
 - Wiki-link enjeksiyonu — Obsidian graph view Faz 4'te
 - PDF görselleri — yoksayılıyor (caption üretimi ileride)
 - MCP server — Claude Code entegrasyonu sistemler stabilleştikten sonra
+- Çoklu korpus filtresi — `--project` parametresi henüz yok (PayTR / ERP12 karışık corpus)
 
 Tam roadmap için [memory-bank/progress.md](../memory-bank/progress.md).

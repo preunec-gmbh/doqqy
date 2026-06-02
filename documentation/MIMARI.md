@@ -18,15 +18,25 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                                                             │ store.lance/   │
                                                             │ chunks tablosu │
                                                             │ (vec + meta)   │
-                                                            └────────┬───────┘
-                                                                     │
-                                                            docq query "..."
-                                                                     ▼
-                                                            ┌────────────────┐
-                                                            │ top-k hits     │
-                                                            │ ham chunk +    │
-                                                            │ kaynak yolu    │
-                                                            └────────────────┘
+                                                            └──────┬─────────┘
+                                                                   │
+                               ┌───────────────────────────────────┤
+                               │                                   │
+                          docq map                           docq query "..."
+                               ▼                                   ▼
+                      ┌────────────────┐                  ┌────────────────┐
+                      │ topics.yaml    │                  │ top-k hits     │
+                      │ explicit_rel.  │                  │ ham chunk +    │
+                      │ might_be_rel.  │                  │ kaynak yolu    │
+                      └───────┬────────┘                  └────────────────┘
+                              │
+                         docq index
+                              ▼
+                      ┌────────────────┐
+                      │ INDEX.md       │
+                      │ Obsidian vault │
+                      │ giriş noktası  │
+                      └────────────────┘
 ```
 
 **Anahtar fikir:** Her aşama bağımsız çalıştırılabilir ve **deterministik**. `docq ingest`'i baştan çalıştırırsan `processed/`'i baştan yazar. Yeniden chunk'lamak istersen sadece `docq chunk`. Tam rebuild = sırayla 4 komut.
@@ -83,7 +93,33 @@ Akış:
 
 Faz 2'de sparse vektör de eklenecek; şu an sadece dense.
 
-### 2.4 Query (`docq query "..."`)
+### 2.4 Map (`docq map`)
+
+**Girdi:** `processed/*.md` + `store.lance/` (mevcut dense vektörler).
+**Çıktı:** `topics.yaml` (proje kökünde).
+
+İki pass, LLM çağrısı yok:
+
+**Pass 1 — Regex (Explicit Referanslar):**
+1. Her `processed/*.md` dosyası okunur, section sınırları (`#`–`####` başlıkları) tespit edilir.
+2. Her section body'sinde `bkz.` / `bkz:` / `see section` / `see also` / `([[WikiLink]])` / `(DOSYA.md)` kalıpları aranır.
+3. Bulunan hedef, bilinen dosya adlarıyla normalize edilir (büyük/küçük harf + `.md` suffix toleranslı).
+4. Çıktı: `explicit_related` — kesin referanslar, kaynak satır numarasıyla.
+
+**Pass 2 — Embedding Cosine (Tematik Komşular):**
+1. LanceDB'deki tüm chunk vektörleri belleğe alınır (`to_pandas()`).
+2. Her section için o section'a ait chunk'ların dense vektörleri ortalaması = **section centroid**.
+3. Farklı dosyalardaki centroid'lerle cosine benzerlik hesaplanır.
+4. `MAP_COSINE_THRESHOLD` (0.75) üstündeki en yakın `MAP_TOP_N_NEIGHBORS` (5) komşu `might_be_related` olarak kaydedilir.
+
+### 2.5 Index (`docq index`)
+
+**Girdi:** `topics.yaml`.
+**Çıktı:** `processed/INDEX.md`.
+
+`topics.yaml`'daki bağlantıları dosya → section hiyerarşisinde listeler. Her satır 📌 (explicit) veya 💡 (tematik, skoru ile) kategorisinde gösterilir. Obsidian vault'unda giriş noktası olarak kullanılır.
+
+### 2.6 Query (`docq query "..."`)
 
 **Girdi:** Doğal dilli sorgu metni.
 **Çıktı:** Top-k chunk + skor + kaynak yolu + section path.
@@ -156,11 +192,14 @@ Chunk dataclass'ının tüm alanları + iki ek:
 src/docq/
 ├── __init__.py            # version
 ├── __main__.py            # python -m docq → cli.app
-├── cli.py                 # typer komutları (ingest, chunk, embed, query, info)
+├── cli.py                 # typer komutları (ingest, chunk, embed, map, index, query, info)
 ├── config.py              # yollar, sabitler, GPU detect, logger fabrikası
 ├── chunk.py               # MarkdownHeaderTextSplitter + atomik blok packing
 ├── embed.py               # bge-m3 yükleme + LanceDB yazımı
-├── query.py               # cosine arama + SearchHit dataclass
+├── query.py               # hibrit arama (dense+sparse → RRF → reranker) + SearchHit
+├── rerank.py              # bge-reranker-v2-m3 (transformers tabanlı cross-encoder)
+├── map_gen.py             # Pass 1 (regex) + Pass 2 (cosine) → topics.yaml
+├── index_gen.py           # topics.yaml → INDEX.md
 └── ingest/
     ├── __init__.py
     ├── base.py            # Document, IngestResult, content_hash, base_metadata
@@ -179,9 +218,11 @@ src/docq/
 | Header-aware chunking | Section sınırları semantik sınırlardır; ortadan bölmek bağlamı kaybettirir. |
 | Kod blokları + tablolar atomik | Bir SQL sorgusunu ortadan bölmek = anlamsız iki yarım. |
 | `prev_chunk`/`next_chunk` bağlantısı | Bir chunk bulundu, ama yeterli bağlam vermiyorsa komşuları çekebilirsin. |
-| LLM cevap sentezi YOK | Kullanıcı dokümanı **anlamak** istiyor, "özet" değil. Şeffaflık + ücretsiz + anlık. |
-| Local-first embedding | Sorgu zamanında internet bağımlılığı yok; gizlilik bonus. |
+| LLM harita üretiminde yok | Embedding zaten tematik ilişkiyi biliyor; LLM gereksiz maliyet ve dış bağımlılık. |
+| LLM sorgu cevabında yok | Kullanıcı dokümanı **anlamak** istiyor, "özet" değil. Şeffaflık + ücretsiz + anlık. |
+| Local-first embedding + reranking | Sorgu zamanında internet bağımlılığı yok; gizlilik bonus. |
 | LanceDB (server'sız) | Dosya bazlı, taşınabilir, kurulum gerektirmez. |
+| Pass 1 regex + Pass 2 cosine | İki bağımsız kaynak: birincisi kesin (explicit), ikincisi olasılıksal (tematik). Ayrı kategorilerde izlenebilir. |
 
 Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-bank/systemPatterns.md`.
 
@@ -199,6 +240,4 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 
 ## 7. Sonraki faz nelerini değiştirir?
 
-- **Faz 2** — sparse vektör eklenecek (`vector_sparse` kolonu), reranker top-50 → top-5 daraltacak. `query.py` Reciprocal Rank Fusion uygulayacak.
-- **Faz 3** — Yeni bir `map.py` modülü; LLM çağrısı ile her dosya için section özetleri + cross-reference üretecek → `topics.yaml` + `INDEX.md`.
-- **Faz 4** — `topics.yaml`'daki ilişkiler `processed/*.md` içine `[[wiki-link]]` olarak enjekte edilecek → Obsidian graph view.
+- **Faz 4** — `topics.yaml`'daki ilişkiler `processed/*.md` içine `[[wiki-link]]` olarak enjekte edilecek (`wikilink_inject.py`) → Obsidian graph view dolacak.

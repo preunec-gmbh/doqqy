@@ -1,9 +1,10 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
-**🟢 Faz 2 TAMAM — Hibrit arama + reranker çalışıyor (2026-05-28).**
+**🟢 Faz 3 TAMAM — Harita üretimi çalışıyor (2026-06-02).**
 
-Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
+Detaylı implementation notları: [fazlar/faz3.md](fazlar/faz3.md).
+Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Mevcut hal:**
 - Tüm kaynak kod (`src/docq/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı ve tam test edildi.
@@ -11,6 +12,12 @@ Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 - `raw/` altında gerçek PDF + DOCX + TXT + MD dosyalarıyla tam smoke test tamamlandı.
 - bge-m3 modeli HuggingFace cache'inde (~2 GB, `%USERPROFILE%\.cache\huggingface\`, symlink yok diye duplicate).
 - Windows-spesifik fix: `cli.py` UTF-8 stdout + `rich_markup_mode=None`.
+
+**2026-06-02 Günü Yapılan Değişiklikler (Faz 3):**
+1. **`map_gen.py` (yeni):** Pass 1 (regex explicit referanslar) + Pass 2 (LanceDB dense vektör cosine komşuluk) → `topics.yaml`. 10 dosya, 213 section, 788 tematik bağlantı üretildi.
+2. **`index_gen.py` (yeni):** `topics.yaml` → `processed/INDEX.md`. 📌 explicit + 💡 might_be kategorileri.
+3. **`cli.py`:** `docq map` (--pass1/--pass2/--threshold/--top-n) + `docq index` komutları eklendi.
+4. **`config.py`:** `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`, `TOPICS_YAML` sabitleri eklendi.
 
 **2026-05-28 Günü Yapılan Değişiklikler (Faz 2):**
 1. **RAM fix:** `max_length` 8192→1024, `EMBEDDING_BATCH_SIZE` 12→4. Embed RAM kullanımı 28 GB→~6 GB. RAG kalitesine etkisi yok.
@@ -38,10 +45,10 @@ Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 | Vector DB | LanceDB | Server'sız, dosya-bazlı, taşınabilir |
 | Reranker | `BAAI/bge-reranker-v2-m3` local | Multilingual, ücretsiz, hızlı |
 | BM25 | **Kullanılmayacak** | bge-m3 sparse zaten lexical role oynuyor + TR agglutinative dil için BM25 problematik |
-| Harita LLM | Gemini 2.5 Pro free (ilk dene), Claude Opus 4.7 (fallback) | Ücretsiz başla, kalite yetmezse yükselt |
-| Harita granülaritesi | **Section seviyesi** (her `##` / `###` ayrı işlenir) | Daha kaliteli; per-file batch ile maliyet kontrol altında |
-| Harita üretim stratejisi | **Per-file batch** (dosya başına 1 LLM çağrısı) | 300 çağrı yerine 30 çağrı → free tier'a sığar |
-| Harita ilişki kaynağı | **Seçenek D — LLM + embedding bonus** (2026-05-23) | LLM tam haritayı kursun (özet, kavram, explicit + thematic ilişki). Embedding ek katman olarak "might_be_related" üretsin. İkisinin agreement'ı en güçlü sinyal. |
+| Harita LLM | **Kullanılmayacak** (2026-06-01 kararı) | Embedding zaten tematik ilişkiyi biliyor; LLM gereksiz maliyet ve complexity |
+| Harita granülaritesi | **Section seviyesi** (her `##` / `###` ayrı işlenir) | Daha kaliteli |
+| Harita üretim stratejisi | **Regex + embedding cosine** — API yok, tamamen local | Sıfır maliyet, sıfır dış bağımlılık |
+| Harita ilişki kaynağı | **Regex (explicit) + embedding cosine (might_be)** — iki kategori | LLM sentezi yok; orijinal referanslar + semantik komşuluk yeterli |
 | Sorgu cevabı | **Ham chunk + kaynak**, LLM sentezi yok | Şeffaflık, ücretsiz, anlık |
 | Görseller | **İşlenmez** — placeholder bırakılır | MVP basit kalsın |
 | Inkremental update | **Yok** — her seferinde tam rebuild | MVP basit kalsın |
@@ -66,17 +73,22 @@ Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 - [x] RRF (k=60) + `bge-reranker-v2-m3` (transformers direkt, FlagEmbedding bypass)
 - [x] `--no-rerank` flag, aşama skorları çıktısı
 
-### Faz 3 — Harita Üretimi — **Seçenek D (LLM + embedding bonus)**
-Üç pass:
-- **Pass 1 — Per-file LLM (30 çağrı):** Her section için summary + concepts + explicit_related (regex destekli) + thematic_related (LLM yorumu).
-- **Pass 2 — Meta LLM (1 çağrı):** Tüm dosya özetleri birden, "hangi çiftler tematik olarak güçlü bağlı?" — pass 1'deki thematic_related'ı zenginleştir.
-- **Pass 3 — Embedding (LLM yok):** Her section için LanceDB'den top-N cosine neighbor → `might_be_related` (skorlu).
-- **Birleştirme:** `topics.yaml` yaz. LLM ve embedding aynı section'ı işaret ediyorsa `llm_also_listed: true` flag'i ile "agreement" sinyali. Üç kategori (explicit/thematic/might_be) ayrı tutulur.
-- `src/docq/map_gen.py` — Gemini 2.5 Pro client (ana), Claude Opus 4.7 fallback.
-- `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md` (üç kategori farklı render edilir).
+### Faz 3 — Harita Üretimi — **🟢 TAMAM (2026-06-02)**
 
-### Faz 4 — Obsidian Polish (yarım gün)
-- `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti.
+> **Karar (2026-06-01):** Orijinal Seçenek D (LLM + embedding) iptal edildi. LLM çağrısı gereksiz maliyet ve complexity getiriyor; embedding zaten tematik ilişkiyi biliyor.
+
+İki pass, LLM yok:
+- [x] **Pass 1 — Regex:** Her `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`.
+- [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu).
+- [x] **Birleştirme:** `topics.yaml` yaz (iki kategori: explicit / might_be).
+- [x] `src/docq/map_gen.py` — tamamen local, API anahtarı gerektirmez.
+- [x] `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md`.
+- [x] `docq map` + `docq index` CLI komutları.
+
+**Test sonuçları:** 10 dosya, 213 section, 1 explicit + 788 tematik bağlantı. 172/213 section bağlı.
+
+### Faz 4 — Obsidian Polish — **⏳ BEKLEMEDE**
+- `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/docq/wikilink_inject.py`).
 - Obsidian'da vault testi, graph view doğrulaması.
 
 ## Aktif Düşünceler / Devam Eden Konular

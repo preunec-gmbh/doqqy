@@ -1,9 +1,9 @@
 # İlerleme
 
 ## Şu Anki Durum
-**🟢 Faz 2 TAMAM — Hibrit arama + reranker çalışıyor (2026-05-28).**
+**🟢 Faz 3 TAMAM — Harita üretimi çalışıyor (2026-06-02).**
 
-Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
+Detaylı implementation notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 ## Çalışanlar
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`).
@@ -55,16 +55,18 @@ Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 - [x] `_safe_section_path()` — numpy array uyumsuzluk fix
 - [x] Test: "PayTR odeme akisi" + "JWT_REFRESH_SECRET" sorguları başarılı
 
-### Faz 3: Harita Üretimi — **Seçenek D** (LLM + embedding bonus)
-- [ ] `src/docq/map_gen.py` — Gemini 2.5 Pro client (ana), Claude Opus 4.7 fallback hazır
-- [ ] **Pass 1 — Per-file LLM prompt template** (summary + concepts + explicit_related + thematic_related)
-- [ ] **Pass 1 yardımcı: explicit_related için regex ön-filtre** (`bkz`, `see section`, dosya adı pattern'leri)
-- [ ] **Pass 2 — Meta LLM çağrısı** (tüm özetler birden → thematic_related zenginleştir)
-- [ ] **Pass 3 — Embedding cosine top-N** (LanceDB üzerinden, LLM yok) → `might_be_related`
-- [ ] **Birleştirme + agreement hesabı** (`llm_also_listed: true` flag'i)
-- [ ] `topics.yaml` schema + writer (üç kategori ayrı: explicit_related, thematic_related, might_be_related)
-- [ ] `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md` (üç kategori farklı render: 📌 / 🔗 / 💡 + skor)
-- [ ] 5 dosyalı küçük korpusta harita kalitesi gözden geçirme (önce LLM'in tematik kalitesi yeterli mi gör)
+### Faz 3: Harita Üretimi — **🟢 TAMAM (2026-06-02)**
+
+> Orijinal plan (Seçenek D: LLM + embedding) iptal edildi. Embedding zaten tematik ilişkiyi biliyor; LLM gereksiz maliyet ve complexity getiriyordu.
+
+- [x] `src/docq/map_gen.py` — tamamen local, API anahtarı yok
+- [x] **Pass 1 — Regex:** `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`
+- [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu)
+- [x] `topics.yaml` schema + writer (iki kategori: `explicit_related`, `might_be_related`)
+- [x] `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md`
+- [x] `docq map` + `docq index` CLI komutları (`--pass1`, `--pass2`, `--threshold`, `--top-n`)
+- [x] `config.py` sabitleri: `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`
+- [x] Test: 10 dosya, 213 section, 788 tematik bağlantı, 172/213 section bağlı
 
 ### Faz 4: Obsidian Polish (yarım gün)
 - [ ] `src/docq/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte
@@ -79,6 +81,7 @@ Detaylı implementation notları: [fazlar/faz2.md](fazlar/faz2.md).
 - [ ] MCP server (Claude Code entegrasyonu)
 - [ ] Görsel caption üretimi (vision LLM)
 - [ ] (Belki) Web arayüz
+- [ ] **Çoklu korpus / proje filtresi:** Korpus tek bir proje veya konuya ait olmayabilir (örn. PayTR + ERP12 + GENEL karışık). `docq map` ve `docq query` komutlarına `--project` veya `--corpus` parametresi eklenebilir; harita ve arama belirli bir alt kümeye kısıtlanır. Detay için konuşulacak.
 
 ## Bilinen Sorunlar / Riskler
 

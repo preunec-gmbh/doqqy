@@ -122,7 +122,7 @@ bge-m3 sparse çıktısı BM25 terimi değil, model vocab token ID'si. LanceDB F
 - ENVIRONMENT.md hem dense hem sparse rank=1 — mükemmel lexical eşleşme.
 - Login akışı chunk'ı (JWT içeriyor ama alakasız) reranker tarafından 0.030'a düşürüldü. Gürültü temizlendi.
 
-**Faz 3 — Harita Üretimi (Seçenek D):**
-- Per-file LLM çağrısı (Gemini 2.5 Pro) → summary + concepts + explicit/thematic ilişkiler
-- Embedding cosine → `might_be_related`
-- `topics.yaml` + `INDEX.md` üretimi
+**Faz 3 — Harita Üretimi (LLM yok, 2026-06-01 kararı):**
+- Regex pass → `explicit_related` (bkz. / see section / dosya adı referansları)
+- Embedding cosine (LanceDB) → `might_be_related`
+- `topics.yaml` + `INDEX.md` üretimi — tamamen local, API anahtarı yok
