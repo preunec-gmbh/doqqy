@@ -211,6 +211,6 @@ docq ingest
 - **Faz 2 — Reranker:** `src/docq/rerank.py` yeni dosya, `bge-reranker-v2-m3` ile cross-encoder. `query.py` retrieval sonrasına entegre.
 - **Faz 2 — Sparse:** `embed.py`'de `return_sparse=True` zaten parametre olarak hazır. LanceDB schema'sına sparse kolon ekle.
 - **Faz 3 — Harita:** `src/docq/map_gen.py` yeni modül. Gemini client + per-file prompt template + `topics.yaml` writer + meta-call (cross-reference).
-- **Faz 4 — Obsidian:** `src/docq/wikilink_inject.py` yeni script. `topics.yaml`'dan `processed/*.md` içine `[[...]]` enjeksiyon.
+- **Faz 4 — Wikilink Enjeksiyon:** `src/docq/wikilink_inject.py` yeni modül. `topics.yaml`'dan `processed/*.md` içine `<!-- docq:links:start/end -->` marker bloklu `[[...]]` enjeksiyonu. `cli.py`'ye `docq inject` komutu eklenir (`--dry-run`, `--topics` flags).
 
 Her faz başlamadan önce `memory-bank/fazlar/fazN.md` yaz; bittiğinde `progress.md` ve `activeContext.md`'yi güncelle.

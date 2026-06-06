@@ -140,7 +140,23 @@ docq index --output path/to/vault/      # farklı çıktı klasörü
 
 `processed/INDEX.md` Obsidian vault'unun giriş noktasıdır. Her dosyanın bağlantılı section'larını 📌 (explicit) ve 💡 (tematik) kategorilerde listeler.
 
-## 5. Sorgu
+## 5. Wikilink Enjeksiyonu (Faz 4)
+
+`topics.yaml`'daki bağlantıları `processed/*.md` dosyalarına `[[wikilink]]` olarak enjekte eder. Obsidian graph view bu linklerle otomatik dolar.
+
+```powershell
+docq inject                              # topics.yaml → processed/*.md enjekte et
+docq inject --dry-run                    # Neyin enjekte edileceğini göster, dosyaları değiştirme
+docq inject --topics path/topics.yaml   # Farklı topics dosyası
+```
+
+**Önce `docq map` çalıştırılmış olmalı** — `topics.yaml` yoksa inject çalışmaz.
+
+`inject` idempotent çalışır: her çalıştırmada önceki enjeksiyonu temizleyip yeniden yazar. `raw/` dosyaları asla değişmez.
+
+Enjeksiyondan sonra `processed/` klasörünü Obsidian'da vault olarak aç — graph view dosyalar arası bağlantıları gösterir.
+
+## 6. Sorgu
 
 ```powershell
 docq query "JWT refresh nasıl çalışıyor?"
@@ -165,7 +181,7 @@ Flags:
 - `-k, --top-k N` — kaç sonuç (varsayılan 5)
 - `--full` — chunk'ı kesmeden tam göster (varsayılan ilk 400 karakter)
 
-## 6. Tipik akışlar
+## 7. Tipik akışlar
 
 ### Yeni dokümanlar geldi
 Şu an inkremental update yok — tam rebuild:
@@ -198,7 +214,19 @@ $env:DOCQ_DEVICE = "cpu"
 docq embed
 ```
 
-## 8. Sık karşılaşılan sorunlar
+## 8. Tam pipeline (ilk kurulum)
+
+```powershell
+docq ingest        # 1. Markdown'a dönüştür
+docq chunk         # 2. Header-aware böl
+docq embed         # 3. Vektöre dönüştür + indeksle
+docq map           # 4. Harita üret → topics.yaml
+docq index         # 5. topics.yaml → INDEX.md
+docq inject        # 6. [[wikilink]] enjekte et → Obsidian graph view dolar
+docq query "..."   # Sor
+```
+
+## 9. Sık karşılaşılan sorunlar
 
 ### "ReadTimeoutError" — pip install'da
 Ağ yavaş veya dengesiz. Çözüm:
@@ -251,13 +279,6 @@ UTF-8 decode başarısız olursa otomatik latin-1 fallback var. Yine de bozuk ç
 Bu MVP. Şu özellikler **henüz yok**:
 
 - Inkremental update — değişen dosyaları tespit etme yok, her seferinde tam rebuild
-- Hibrit arama — sadece dense vektör (sparse + reranker Faz 2'de gelecek)
-## 10. Mevcut sınırlamalar
-
-Şu özellikler **henüz yok**:
-
-- Inkremental update — değişen dosyaları tespit etme yok, her seferinde tam rebuild
-- Wiki-link enjeksiyonu — Obsidian graph view Faz 4'te
 - PDF görselleri — yoksayılıyor (caption üretimi ileride)
 - MCP server — Claude Code entegrasyonu sistemler stabilleştikten sonra
 - Çoklu korpus filtresi — `--project` parametresi henüz yok (PayTR / ERP12 karışık corpus)

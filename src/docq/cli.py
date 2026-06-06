@@ -189,6 +189,32 @@ def index(
 
 
 @app.command()
+def inject(
+    topics: Optional[Path] = typer.Option(
+        None, "--topics", help="topics.yaml yolu (varsayılan: proje kökü)."
+    ),
+    processed_dir: Optional[Path] = typer.Option(
+        None, "--processed", "-p", help="processed/ klasörü (varsayılan: processed/)."
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Dosyaları değiştirmeden neyin enjekte edileceğini göster."),
+) -> None:
+    """topics.yaml → processed/*.md içine [[wikilink]] enjekte et (Obsidian graph view)."""
+    from docq.wikilink_inject import inject_links
+
+    ensure_dirs()
+    result = inject_links(
+        topics_path=topics or TOPICS_YAML,
+        processed_dir=processed_dir or PROCESSED_DIR,
+        dry_run=dry_run,
+    )
+    prefix = "[dry-run] " if result.dry_run else ""
+    typer.echo(
+        f"{prefix}OK: {result.updated} dosya güncellendi, "
+        f"{result.skipped} atlandı, toplam {result.total_links} link enjekte edildi."
+    )
+
+
+@app.command()
 def info() -> None:
     """Mevcut pipeline durumunu özetle."""
     from docq.config import CHUNKS_PARQUET, STORE_DIR

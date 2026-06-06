@@ -238,6 +238,25 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 
 İlk `docq embed` ekstra ~2 GB model indirme (tek seferlik, sonra cache'ten).
 
-## 7. Sonraki faz nelerini değiştirir?
+## 7. Faz 4: Wikilink Enjeksiyonu (`docq inject`)
 
-- **Faz 4** — `topics.yaml`'daki ilişkiler `processed/*.md` içine `[[wiki-link]]` olarak enjekte edilecek (`wikilink_inject.py`) → Obsidian graph view dolacak.
+**Girdi:** `topics.yaml` + `processed/*.md`.
+**Çıktı:** Her `processed/*.md` dosyasının sonuna enjekte edilmiş `[[wikilink]]` bloğu.
+
+`topics.yaml`'daki her dosyanın `explicit_related` ve `might_be_related` linkleri bir marker blok içinde markdown dosyasına yazılır:
+
+```markdown
+<!-- docq:links:start -->
+## Bağlantılar
+
+### 📌 Explicit Referanslar
+- [[SEQUENCE]] → Ödeme Akışı
+
+### 🔗 Tematik Bağlantılar
+- [[PRISMA]] → Payment Model (0.83)
+<!-- docq:links:end -->
+```
+
+`wikilink_inject.py` idempotent çalışır: her çalıştırmada önceki marker bloğunu silip yeniden yazar. `raw/` dosyaları hiç değişmez, yalnızca `processed/` güncellenir.
+
+Obsidian, markdown içindeki `[[...]]`'yi otomatik olarak graph view'da edge'e dönüştürür — manuel işlem gerekmez.

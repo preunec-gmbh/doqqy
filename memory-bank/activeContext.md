@@ -1,9 +1,10 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
-**🟢 Faz 3 TAMAM — Harita üretimi çalışıyor (2026-06-02).**
+**⏳ Faz 4 BEKLEMEDE — Faz 3 tamamlandı (2026-06-02), Faz 4 planlandı (2026-06-06).**
 
-Detaylı implementation notları: [fazlar/faz3.md](fazlar/faz3.md).
+Detaylı implementation notları: [fazlar/faz4.md](fazlar/faz4.md).
+Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Mevcut hal:**
@@ -87,7 +88,10 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Test sonuçları:** 10 dosya, 213 section, 1 explicit + 788 tematik bağlantı. 172/213 section bağlı.
 
-### Faz 4 — Obsidian Polish — **⏳ BEKLEMEDE**
+### Faz 4 — Obsidian Polish — **⏳ BEKLEMEDE (2026-06-06 planlandı)**
+
+Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
+
 - `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/docq/wikilink_inject.py`).
 - Obsidian'da vault testi, graph view doğrulaması.
 

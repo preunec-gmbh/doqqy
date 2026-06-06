@@ -1,9 +1,10 @@
 # İlerleme
 
 ## Şu Anki Durum
-**🟢 Faz 3 TAMAM — Harita üretimi çalışıyor (2026-06-02).**
+**⏳ Faz 4 BEKLEMEDE — Faz 3 tamamlandı (2026-06-02), Faz 4 planlandı (2026-06-06).**
 
-Detaylı implementation notları: [fazlar/faz3.md](fazlar/faz3.md).
+Detaylı implementation notları: [fazlar/faz4.md](fazlar/faz4.md).
+Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 ## Çalışanlar
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`).
@@ -68,12 +69,16 @@ Detaylı implementation notları: [fazlar/faz3.md](fazlar/faz3.md).
 - [x] `config.py` sabitleri: `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`
 - [x] Test: 10 dosya, 213 section, 788 tematik bağlantı, 172/213 section bağlı
 
-### Faz 4: Obsidian Polish (yarım gün)
-- [ ] `src/docq/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte
-- [ ] Üç kategori için ayrı render: `📌 [[X]]` (explicit), `🔗 [[Y]]` (thematic), `💡 [[Z]] (0.84 ✓)` (might_be + agreement)
-- [ ] `processed/` klasörünü Obsidian'da vault olarak test
-- [ ] Graph view doğrulaması — agreement edge'leri farklı görünüyor mu
+### Faz 4: Obsidian Polish — **⏳ BEKLEMEDE (2026-06-06 planlandı)**
+
+Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
+
+- [ ] `src/docq/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte (marker blok, idempotent)
+- [ ] `docq inject` CLI komutu (`--dry-run`, `--topics` flags)
+- [ ] `processed/` klasörünü Obsidian'da vault olarak aç
+- [ ] Graph view doğrulaması — edge'ler görünüyor mu
 - [ ] `INDEX.md`'den dosyalara navigasyon testi
+- [ ] Smoke test: `docq inject --dry-run` önce, sonra gerçek çalıştır
 
 ### Faz Sonrası (gelecek, sırasız)
 - [ ] Eval set: 15-20 test sorusu + recall@5 metriği
