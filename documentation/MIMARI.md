@@ -31,11 +31,19 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                       └───────┬────────┘                  └────────────────┘
                               │
                          docq index
-                              ▼
-                      ┌────────────────┐
+                              │
+                      ┌───────▼────────┐
                       │ INDEX.md       │
                       │ Obsidian vault │
                       │ giriş noktası  │
+                      └───────┬────────┘
+                              │
+                        docq inject
+                              ▼
+                      ┌────────────────┐
+                      │ processed/*.md │
+                      │ (güncellenir)  │
+                      │ [[wikilinks]]  │
                       └────────────────┘
 ```
 
