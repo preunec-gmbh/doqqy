@@ -28,7 +28,7 @@ Bir bölümü okuduğumda onunla bağlantılı diğer bölümleri kolayca bulmak
 - Dokümanların tamamı **section seviyesinde** özetlenmiş.
 - Konu kümeleri çıkarılmış (Auth, API, Deployment vb.).
 - Section'lar arası çapraz referanslar üretilmiş.
-- Çıktı: gezilebilir `INDEX.md` + makine-okur `topics.yaml` + Obsidian graph view.
+- Çıktı: gezilebilir `INDEX.md` + makine-okur `.doqqy/topics.yaml` + Obsidian graph view.
 
 ### Katman 2: Sorgu (Dinamik, Sürekli)
 - Doğal dilli sorgu → top-5 ilgili bölüm.

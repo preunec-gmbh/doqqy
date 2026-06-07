@@ -66,7 +66,7 @@ doqqy ingest -n 5                  # ilk 5 dosya (smoke test)
 
 Çıktı: `processed/<aynı yapı>/<dosya>.md`. Her dosyaya YAML frontmatter eklenir (kaynak, parser, hash vs.).
 
-Hatalı dosyalar atlanır ve `logs/ingest.log`'a yazılır. Sonunda özet basılır:
+Hatalı dosyalar atlanır ve `.doqqy/logs/ingest.log`'a yazılır. Sonunda özet basılır:
 ```
 OK: 318 başarılı, 2 başarısız, toplam 320.
 
@@ -81,9 +81,9 @@ doqqy chunk
 doqqy chunk --processed path/to/processed  # başka bir kaynaktan
 ```
 
-Çıktı: `chunks/chunks.parquet`. Parquet'i incelemek istersen:
+Çıktı: `.doqqy/chunks/chunks.parquet`. Parquet'i incelemek istersen:
 ```powershell
-python -c "import pandas as pd; print(pd.read_parquet('chunks/chunks.parquet').head())"
+python -c "import pandas as pd; print(pd.read_parquet('.doqqy/chunks/chunks.parquet').head())"
 ```
 
 ### `doqqy embed`
@@ -94,17 +94,17 @@ doqqy embed
 
 **İlk çalıştırma:** HuggingFace'ten `BAAI/bge-m3` modeli iner (~2 GB, cache: `%USERPROFILE%\.cache\huggingface\`). Sonraki çalıştırmalar cache'ten okur.
 
-Çıktı: `store.lance/chunks/` — LanceDB tablosu. GPU varsa otomatik kullanır (`DOQQY_DEVICE=cpu` ile zorlayabilirsin).
+Çıktı: `.doqqy/store.lance/chunks/` — LanceDB tablosu. GPU varsa otomatik kullanır (`DOQQY_DEVICE=cpu` ile zorlayabilirsin).
 
 ## 4. Harita üretimi (Faz 3)
 
-Dokümanlar arasındaki ilişkileri keşfedip `topics.yaml` ve `INDEX.md` üretir. LLM çağrısı yok — tamamen local.
+Dokümanlar arasındaki ilişkileri keşfedip `.doqqy/topics.yaml` ve `INDEX.md` üretir. LLM çağrısı yok — tamamen local.
 
 ```powershell
-doqqy map          # Pass 1 (regex) + Pass 2 (embedding cosine) → topics.yaml
+doqqy map          # Pass 1 (regex) + Pass 2 (embedding cosine) → .doqqy/topics.yaml
 doqqy map --pass1  # Sadece regex explicit referanslar
 doqqy map --pass2  # Sadece embedding cosine tematik komşuluk
-doqqy index        # topics.yaml → processed/INDEX.md
+doqqy index        # .doqqy/topics.yaml → processed/INDEX.md
 ```
 
 ### `doqqy map`
@@ -120,7 +120,7 @@ doqqy map --processed path/to/   # farklı klasör
 
 **Pass 2 — Embedding cosine:** LanceDB'deki mevcut dense vektörlerden her section için bir centroid hesaplar, farklı dosyalardaki en yakın section'ları bulur. Eşik üstündekiler `might_be_related` olarak kaydedilir.
 
-Çıktı: `topics.yaml` (proje kökünde):
+Çıktı: `.doqqy/topics.yaml` (proje kökünde):
 ```yaml
 sections:
   - id: "PAYTR_REQUIREMENTS_odeme-akisi"
@@ -133,8 +133,8 @@ sections:
 ### `doqqy index`
 
 ```powershell
-doqqy index                              # topics.yaml → processed/INDEX.md
-doqqy index --topics path/topics.yaml    # farklı topics dosyası
+doqqy index                              # .doqqy/topics.yaml → processed/INDEX.md
+doqqy index --topics path/.doqqy/topics.yaml    # farklı topics dosyası
 doqqy index --output path/to/vault/      # farklı çıktı klasörü
 ```
 
@@ -142,15 +142,15 @@ doqqy index --output path/to/vault/      # farklı çıktı klasörü
 
 ## 5. Wikilink Enjeksiyonu (Faz 4)
 
-`topics.yaml`'daki bağlantıları `processed/*.md` dosyalarına `[[wikilink]]` olarak enjekte eder. Obsidian graph view bu linklerle otomatik dolar.
+`.doqqy/topics.yaml`'daki bağlantıları `processed/*.md` dosyalarına `[[wikilink]]` olarak enjekte eder. Obsidian graph view bu linklerle otomatik dolar.
 
 ```powershell
-doqqy inject                              # topics.yaml → processed/*.md enjekte et
+doqqy inject                              # .doqqy/topics.yaml → processed/*.md enjekte et
 doqqy inject --dry-run                    # Neyin enjekte edileceğini göster, dosyaları değiştirme
-doqqy inject --topics path/topics.yaml   # Farklı topics dosyası
+doqqy inject --topics path/.doqqy/topics.yaml   # Farklı topics dosyası
 ```
 
-**Önce `doqqy map` çalıştırılmış olmalı** — `topics.yaml` yoksa inject çalışmaz.
+**Önce `doqqy map` çalıştırılmış olmalı** — `.doqqy/topics.yaml` yoksa inject çalışmaz.
 
 `inject` idempotent çalışır: her çalıştırmada önceki enjeksiyonu temizleyip yeniden yazar. `raw/` dosyaları asla değişmez.
 
@@ -231,8 +231,8 @@ doqqy embed    # yeni chunk'lar için vektör üret
 
 ### Bir dosyada parser sorunu var
 ```powershell
-# logs/ingest.log'a bak
-Get-Content logs/ingest.log -Tail 50
+# .doqqy/logs/ingest.log'a bak
+Get-Content .doqqy/logs/ingest.log -Tail 50
 
 # Dosya bazlı dene
 python -c "from doqqy.ingest import ingest_file; from pathlib import Path; print(ingest_file(Path('raw/.../sorunlu.pdf')))"
@@ -250,8 +250,8 @@ doqqy embed
 doqqy ingest        # 1. Markdown'a dönüştür
 doqqy chunk         # 2. Header-aware böl
 doqqy embed         # 3. Vektöre dönüştür + indeksle
-doqqy map           # 4. Harita üret → topics.yaml
-doqqy index         # 5. topics.yaml → INDEX.md
+doqqy map           # 4. Harita üret → .doqqy/topics.yaml
+doqqy index         # 5. .doqqy/topics.yaml → INDEX.md
 doqqy inject        # 6. [[wikilink]] enjekte et → Obsidian graph view dolar
 doqqy tags          # 7. Hangi tag'ler (klasör/proje) var? listele
 doqqy query "..."   # Sor (opsiyonel: --tag ile filtrele)
@@ -274,7 +274,7 @@ pip install -e .
 ### "No pandoc was found"
 `.docx` ingest sırasında çıkar. **Hata değil — uyarı.** Otomatik olarak mammoth'a düşer. İstersen `winget install pandoc` ile daha iyi kaliteye geç.
 
-### "store.lance yok — önce `doqqy embed` çalıştır"
+### ".doqqy/store.lance yok — önce `doqqy embed` çalıştır"
 `doqqy query` sırasında. Açıklayıcı: pipeline'ı sırayla yürütmemişsin. Önce `ingest → chunk → embed`.
 
 ### "chunks.parquet yok — önce `doqqy chunk` çalıştır"
@@ -299,9 +299,9 @@ UTF-8 decode başarısız olursa otomatik latin-1 fallback var. Yine de bozuk ç
 | `raw/` | Orijinal dosyalar | **EVET** (kaynak gerçeği) |
 | `processed/` | Ingest çıktısı | hayır (yeniden üretilebilir) |
 | `chunks/` | Parquet | hayır |
-| `store.lance/` | Vector store | hayır |
-| `topics.yaml` | Harita verisi | hayır (yeniden üretilebilir) |
-| `logs/` | Hata logları | hayır |
+| `.doqqy/store.lance/` | Vector store | hayır |
+| `.doqqy/topics.yaml` | Harita verisi | hayır (yeniden üretilebilir) |
+| `.doqqy/logs/` | Hata logları | hayır |
 
 `raw/` ve `src/` versiyon kontrolünde olmalı. Geri kalan `.gitignore`'da.
 

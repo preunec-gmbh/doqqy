@@ -15,8 +15,8 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 - Windows-spesifik fix: `cli.py` UTF-8 stdout + `rich_markup_mode=None`.
 
 **2026-06-02 Günü Yapılan Değişiklikler (Faz 3):**
-1. **`map_gen.py` (yeni):** Pass 1 (regex explicit referanslar) + Pass 2 (LanceDB dense vektör cosine komşuluk) → `topics.yaml`. 10 dosya, 213 section, 788 tematik bağlantı üretildi.
-2. **`index_gen.py` (yeni):** `topics.yaml` → `processed/INDEX.md`. 📌 explicit + 💡 might_be kategorileri.
+1. **`map_gen.py` (yeni):** Pass 1 (regex explicit referanslar) + Pass 2 (LanceDB dense vektör cosine komşuluk) → `.doqqy/topics.yaml`. 10 dosya, 213 section, 788 tematik bağlantı üretildi.
+2. **`index_gen.py` (yeni):** `.doqqy/topics.yaml` → `processed/INDEX.md`. 📌 explicit + 💡 might_be kategorileri.
 3. **`cli.py`:** `doqqy map` (--pass1/--pass2/--threshold/--top-n) + `doqqy index` komutları eklendi.
 4. **`config.py`:** `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`, `TOPICS_YAML` sabitleri eklendi.
 
@@ -55,6 +55,7 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 | Inkremental update | **Yok** — her seferinde tam rebuild | MVP basit kalsın |
 | Eval set | MVP sonrası | Önce çalıştır, sonra ölç |
 | Arayüz | Obsidian (vault) + CLI sorgu | Local, ücretsiz, hazır UX |
+| CLI / İlerleme | **`rich` kullanılacak** | `tqdm` veya standart print çıktıları yerine `rich.progress` ile modern ve bilgilendirici Terminal UI süreci sağlanacak (Faz 6). |
 | MCP entegrasyonu | İleride, sistem stabilleştiğinde | Önce temel çalışsın |
 
 ## Sıradaki Adımlar
@@ -81,9 +82,9 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 İki pass, LLM yok:
 - [x] **Pass 1 — Regex:** Her `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`.
 - [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu).
-- [x] **Birleştirme:** `topics.yaml` yaz (iki kategori: explicit / might_be).
+- [x] **Birleştirme:** `.doqqy/topics.yaml` yaz (iki kategori: explicit / might_be).
 - [x] `src/doqqy/map_gen.py` — tamamen local, API anahtarı gerektirmez.
-- [x] `src/doqqy/index_gen.py` — `topics.yaml` → `INDEX.md`.
+- [x] `src/doqqy/index_gen.py` — `.doqqy/topics.yaml` → `INDEX.md`.
 - [x] `doqqy map` + `doqqy index` CLI komutları.
 
 **Test sonuçları:** 10 dosya, 213 section, 1 explicit + 788 tematik bağlantı. 172/213 section bağlı.
@@ -100,7 +101,7 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 
-- [x] `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/doqqy/wikilink_inject.py`).
+- [x] `.doqqy/topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/doqqy/wikilink_inject.py`).
 - [x] `doqqy inject` CLI komutu (`--dry-run`, idempotent).
 - [x] Obsidian vault testi, graph view doğrulaması.
 

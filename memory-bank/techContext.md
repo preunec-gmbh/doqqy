@@ -22,9 +22,10 @@
 ### Core
 - `python = ">=3.10"`
 - `typer = "*"` — CLI framework
+- `rich = "*"` — Terminal UI (Progress bars, spinner'lar, renkli çıktı)
 - `python-dotenv = "*"` — `.env` yükleme
-- `tqdm = "*"` — progress bar
-- `pyyaml = "*"` — `topics.yaml`
+- `tqdm = "*"` — progress bar (Mevcut bağımlılık, `rich` lehine refactor edilecek)
+- `pyyaml = "*"` — `.doqqy/topics.yaml`
 
 ### Ingest
 - `docling = "*"` — PDF (ana parser, IBM)
@@ -125,8 +126,8 @@ python -m doqqy related auth/jwt-flow#3.2
 
 ### Logging
 
-- `logs/ingest.log` — ingest hataları (parse fail, vs.)
-- `logs/map.log` — LLM çağrı logları (request / response özetleri, token sayıları, gecikme)
+- `.doqqy/logs/ingest.log` — ingest hataları (parse fail, vs.)
+- `.doqqy/logs/map.log` — LLM çağrı logları (request / response özetleri, token sayıları, gecikme)
 - `tqdm` ile interactive progress; gerçek loglar stderr'e Python `logging` modülü ile.
 
 ### Gitignore
@@ -135,8 +136,8 @@ python -m doqqy related auth/jwt-flow#3.2
 # Generated artifacts
 processed/
 chunks/
-store.lance/
-topics.yaml
+.doqqy/store.lance/
+.doqqy/topics.yaml
 logs/
 
 # Secrets

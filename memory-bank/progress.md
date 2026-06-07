@@ -63,8 +63,8 @@ Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 - [x] `src/doqqy/map_gen.py` — tamamen local, API anahtarı yok
 - [x] **Pass 1 — Regex:** `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`
 - [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu)
-- [x] `topics.yaml` schema + writer (iki kategori: `explicit_related`, `might_be_related`)
-- [x] `src/doqqy/index_gen.py` — `topics.yaml` → `INDEX.md`
+- [x] `.doqqy/topics.yaml` schema + writer (iki kategori: `explicit_related`, `might_be_related`)
+- [x] `src/doqqy/index_gen.py` — `.doqqy/topics.yaml` → `INDEX.md`
 - [x] `doqqy map` + `doqqy index` CLI komutları (`--pass1`, `--pass2`, `--threshold`, `--top-n`)
 - [x] `config.py` sabitleri: `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`
 - [x] Test: 10 dosya, 213 section, 788 tematik bağlantı, 172/213 section bağlı
@@ -73,7 +73,7 @@ Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 
-- [x] `src/doqqy/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte (marker blok, idempotent)
+- [x] `src/doqqy/wikilink_inject.py` — `.doqqy/topics.yaml` → `processed/*.md` içine `[[link]]` enjekte (marker blok, idempotent)
 - [x] `doqqy inject` CLI komutu (`--dry-run`, `--topics`, `--processed` flags)
 - [x] `processed/` klasörünü Obsidian'da vault olarak aç
 - [x] Graph view doğrulaması — edge'ler görünüyor mu (evet)
@@ -87,6 +87,12 @@ Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 - [x] `doqqy tags` komutunun eklenmesi (Mevcut indekslenmiş tüm etiketleri/klasör tiplerini çıkartır).
 - [x] `doqqy query` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (LanceDB seviyesinde SQL filtering yaparak arama sonuçlarını izole eder).
 - [x] `doqqy map` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (Pass 2'deki vektörel cosine benzerlik aramasını sadece ilgili tag altındakilerle sınırlandırır).
+
+### Faz 6: CLI UX İyileştirmesi ve Progress Barlar (Planlandı)
+- [ ] `rich` kütüphanesinin projeye dahil edilmesi
+- [ ] `doqqy ingest` süreci için interaktif ilerleme durumu / barlarının (parser ve document bazında) uygulanması
+- [ ] `doqqy embed` süreci için batch ve chunk aktarımı sırasında ilerleme göstergesinin güncellenmesi
+- [ ] Terminal komut hatalarının formatlı şekilde şeffaf bir Terminal UX tasarımıyla yönetilmesi
 
 ### Faz Sonrası (gelecek, sırasız)
 - [ ] Inkremental update (content hash bazlı diff)
@@ -134,5 +140,5 @@ Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 - Orijinal plan (A): LLM hem özet hem ilişki üretsin (explicit + thematic, meta pass dahil).
 - Alternatif (B): LLM sadece özet/kavram, ilişkileri embedding cosine versin (şeffaf, halüsinasyonsuz).
 - Alternatif (C): Harita yok, sadece arama.
-- **Seçilen: D (A + embedding bonus)** — LLM tam haritayı kursun (özet + kavram + explicit + thematic), embedding ek katman olarak `might_be_related` üretsin. Üç kategori `topics.yaml`'da ayrı tutulur. LLM ve embedding aynı section'ı işaretliyorsa `llm_also_listed: true` → agreement sinyali (en güçlü bağlantı).
+- **Seçilen: D (A + embedding bonus)** — LLM tam haritayı kursun (özet + kavram + explicit + thematic), embedding ek katman olarak `might_be_related` üretsin. Üç kategori `.doqqy/topics.yaml`'da ayrı tutulur. LLM ve embedding aynı section'ı işaretliyorsa `llm_also_listed: true` → agreement sinyali (en güçlü bağlantı).
 - **Gerekçe:** LLM tematik yorum üretmede güçlü (kullanıcı sezgisi). Embedding zaten Faz 1'de ücretsiz olarak elimizde, eklemek maliyet getirmiyor. İki bağımsız kaynağın agreement'ı manuel halüsinasyon kontrolü işlevi görüyor. Üç kategori ayrı render edilince kullanıcı şüpheli olduğunda kaynağına bakabiliyor.

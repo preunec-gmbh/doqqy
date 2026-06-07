@@ -3,7 +3,7 @@
 ## Genel Mimari
 
 ```
-raw/  →  processed/  →  chunks/  →  [store.lance + topics.yaml]  →  Obsidian / CLI
+raw/  →  processed/  →  chunks/  →  [.doqqy/store.lance + .doqqy/topics.yaml]  →  Obsidian / CLI
  │         │             │             │
  │         │             │             └─→ INDEX.md (generate edilir)
  │         │             │
@@ -19,10 +19,10 @@ raw/  →  processed/  →  chunks/  →  [store.lance + topics.yaml]  →  Obsi
 Her aşama **deterministik ve tekrar çalıştırılabilir**. Sıralama:
 
 1. **Ingest:** `raw/*` → `processed/*.md` (+ metadata frontmatter)
-2. **Chunk:** `processed/*.md` → `chunks/chunks.parquet`
-3. **Embed:** chunks → `store.lance` (dense + sparse vektör)
-4. **Map:** `processed/*` → `topics.yaml` → `INDEX.md` (LLM ile, tek seferlik)
-5. **Wiki-link enjeksiyonu:** `topics.yaml` → `processed/*.md` içine `[[link]]` ekle
+2. **Chunk:** `processed/*.md` → `.doqqy/chunks/chunks.parquet`
+3. **Embed:** chunks → `.doqqy/store.lance` (dense + sparse vektör)
+4. **Map:** `processed/*` → `.doqqy/topics.yaml` → `INDEX.md` (LLM ile, tek seferlik)
+5. **Wiki-link enjeksiyonu:** `.doqqy/topics.yaml` → `processed/*.md` içine `[[link]]` ekle
 
 Aşamalar bağımsız CLI komutu olarak çalıştırılabilir.
 
@@ -48,7 +48,7 @@ Harita section seviyesinde tutulur (her `##` / `###` için özet, kavramlar, ça
 - Maliyet: dosya seviyesi (30 çağrı, ücretsiz tier'a sığar)
 
 ### Üç Kaynaklı İlişki Modeli (Seçenek D)
-İlişkiler **üç ayrı kanaldan** üretilir ve `topics.yaml`'da ayrı kategoriler olarak tutulur. Tek havuza karıştırılmaz çünkü her birinin güven derecesi ve "neden ilgili" cevabı farklı.
+İlişkiler **üç ayrı kanaldan** üretilir ve `.doqqy/topics.yaml`'da ayrı kategoriler olarak tutulur. Tek havuza karıştırılmaz çünkü her birinin güven derecesi ve "neden ilgili" cevabı farklı.
 
 | Kategori | Kaynak | Güven | Anlamı |
 |---|---|---|---|
@@ -59,13 +59,16 @@ Harita section seviyesinde tutulur (her `##` / `###` için özet, kavramlar, ça
 **Agreement sinyali:** Bir section hem LLM tarafından `thematic_related` deniyorsa hem embedding'in top-N'inde varsa → `llm_also_listed: true` flag'iyle işaretlenir. Bu **en güçlü** bağlantı sinyali (iki bağımsız yöntem aynı şeyi söylüyor).
 
 ### Wiki-Link Tabanlı İlişkiler
-`topics.yaml`'daki üç kategori, `processed/` altındaki markdown dosyalarına `[[link]]` olarak enjekte edilir. Obsidian graph view ilişkileri otomatik gösterir. Render kuralları:
+`.doqqy/topics.yaml`'daki üç kategori, `processed/` altındaki markdown dosyalarına `[[link]]` olarak enjekte edilir. Obsidian graph view ilişkileri otomatik gösterir. Render kuralları:
 
 - **`explicit_related`** → kalın edge / 📌 prefix
 - **`thematic_related`** → normal edge / 🔗 prefix
 - **`might_be_related`** → kesik çizgi edge / 💡 prefix + skor (✓ = LLM ile agreement)
 
 Üç tip görsel olarak ayrılır ki kullanıcı şüpheli olduğunda hangi kanaldan geldiğini bilsin.
+
+### Arayüz ve UX Mimarisi (CLI)
+CLI, kullanıcının ana iletişim noktasıdır. Uygulamanın uzun süren süreçleri (`ingest`, `embed` gibi PDF parse etme veya lokal HuggingFace operasyonları) doğrudan terminal kullanıcısına **progress barlar** ve **spinner**'lar yordamıyla (`rich` modülü odaklı) sunularak süreç şeffaflığı sağlanır. Hatalar yine `rich` ve standart log dosyaları aracılığıyla sakince yönetilir.
 
 ## Bileşen İlişkileri
 
@@ -107,7 +110,7 @@ class Chunk:
     next_chunk: str | None
 ```
 
-### topics.yaml Şeması (Seçenek D)
+### .doqqy/topics.yaml Şeması (Seçenek D)
 
 ```yaml
 sections:
@@ -140,7 +143,7 @@ sections:
 
 ### Ingest'te Hata Yönetimi
 Bir dosya parse edilemezse:
-1. Hatayı `logs/ingest.log`'a yaz (dosya yolu + hata + stack trace).
+1. Hatayı `.doqqy/logs/ingest.log`'a yaz (dosya yolu + hata + stack trace).
 2. Pipeline'ı **durdurma** — diğer dosyalarla devam et.
 3. Başarısız dosyaları sonda raporla (özet tablo).
 
@@ -172,7 +175,7 @@ Tüm dosyaların özetleri birden LLM'e verilir:
 Faz 1'de üretilmiş dense vektörler kullanılır. Her section için LanceDB'den top-N cosine neighbor çekilir → `might_be_related` (skorlu).
 
 **Birleştirme:**
-- Üç kategori `topics.yaml`'a ayrı yazılır.
+- Üç kategori `.doqqy/topics.yaml`'a ayrı yazılır.
 - Pass 3 listesinde her item için pass 2 thematic listesinde de varsa `llm_also_listed: true` → **agreement sinyali**.
 - Üç kategori farklı render edilir (kalın/normal/kesik çizgi edge'ler, emoji prefix'leri).
 

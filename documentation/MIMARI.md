@@ -15,7 +15,7 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                                                             doqqy embed
                                                                      ▼
                                                             ┌────────────────┐
-                                                            │ store.lance/   │
+                                                            │ .doqqy/store.lance/   │
                                                             │ chunks tablosu │
                                                             │ (vec + meta)   │
                                                             └──────┬─────────┘
@@ -25,7 +25,7 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                           doqqy map                           doqqy query "..."
                                ▼                                   ▼
                       ┌────────────────┐                  ┌────────────────┐
-                      │ topics.yaml    │                  │ top-k hits     │
+                      │ .doqqy/topics.yaml    │                  │ top-k hits     │
                       │ explicit_rel.  │                  │ ham chunk +    │
                       │ might_be_rel.  │                  │ kaynak yolu    │
                       └───────┬────────┘                  └────────────────┘
@@ -60,7 +60,7 @@ Akış:
 1. `ingest/router.py` dosya uzantısına bakar, doğru parser'ı çağırır.
 2. Parser, formata özgü yöntemle markdown üretir.
 3. Sonucu YAML frontmatter (kaynak, tip, ingested_at, content_hash, parser) + body olarak yazar.
-4. Bir dosya hata verirse pipeline **durmaz** — `logs/ingest.log`'a yazıp diğer dosyalarla devam eder. Sonuçta bir özet tablo basılır.
+4. Bir dosya hata verirse pipeline **durmaz** — `.doqqy/logs/ingest.log`'a yazıp diğer dosyalarla devam eder. Sonuçta bir özet tablo basılır.
 
 Parser eşlemesi:
 
@@ -76,7 +76,7 @@ Pandoc CLI kurulu değilse `.docx` otomatik mammoth'a düşer (saf Python). PDF'
 ### 2.2 Chunk (`doqqy chunk`)
 
 **Girdi:** `processed/**/*.md`.
-**Çıktı:** `chunks/chunks.parquet` (her satır bir `Chunk` kaydı).
+**Çıktı:** `.doqqy/chunks/chunks.parquet` (her satır bir `Chunk` kaydı).
 
 Akış:
 1. Her markdown dosyası açılır, frontmatter ayrılır.
@@ -90,8 +90,8 @@ Akış:
 
 ### 2.3 Embed (`doqqy embed`)
 
-**Girdi:** `chunks/chunks.parquet`.
-**Çıktı:** `store.lance/chunks/` (LanceDB tablosu, vector + meta).
+**Girdi:** `.doqqy/chunks/chunks.parquet`.
+**Çıktı:** `.doqqy/store.lance/chunks/` (LanceDB tablosu, vector + meta).
 
 Akış:
 1. `BAAI/bge-m3` modeli yüklenir (ilk çalıştırmada HuggingFace'ten ~2 GB iner, sonra cache'ten).
@@ -103,8 +103,8 @@ Faz 2'de sparse vektör de eklenecek; şu an sadece dense.
 
 ### 2.4 Map (`doqqy map`)
 
-**Girdi:** `processed/*.md` + `store.lance/` (mevcut dense vektörler).
-**Çıktı:** `topics.yaml` (proje kökünde).
+**Girdi:** `processed/*.md` + `.doqqy/store.lance/` (mevcut dense vektörler).
+**Çıktı:** `.doqqy/topics.yaml` (proje kökünde).
 
 İki pass, LLM çağrısı yok:
 
@@ -122,10 +122,10 @@ Faz 2'de sparse vektör de eklenecek; şu an sadece dense.
 
 ### 2.5 Index (`doqqy index`)
 
-**Girdi:** `topics.yaml`.
+**Girdi:** `.doqqy/topics.yaml`.
 **Çıktı:** `processed/INDEX.md`.
 
-`topics.yaml`'daki bağlantıları dosya → section hiyerarşisinde listeler. Her satır 📌 (explicit) veya 💡 (tematik, skoru ile) kategorisinde gösterilir. Obsidian vault'unda giriş noktası olarak kullanılır.
+`.doqqy/topics.yaml`'daki bağlantıları dosya → section hiyerarşisinde listeler. Her satır 📌 (explicit) veya 💡 (tematik, skoru ile) kategorisinde gösterilir. Obsidian vault'unda giriş noktası olarak kullanılır.
 
 ### 2.6 Query (`doqqy query "..."`)
 
@@ -179,7 +179,7 @@ class Chunk:
 
 `tags` alanı `ingest/base.py:base_metadata` tarafından `raw/` altındaki klasör kırılımından otomatik doldurulur. Örnek: `raw/bulut-saha/genel/dosya.pdf` → `tags: ["bulut-saha", "genel"]`.
 
-### 3.3 LanceDB tablo şeması (`store.lance/chunks/`)
+### 3.3 LanceDB tablo şeması (`.doqqy/store.lance/chunks/`)
 
 Chunk dataclass'ının tüm alanları + üç ek:
 
@@ -214,8 +214,8 @@ src/doqqy/
 ├── embed.py               # bge-m3 yükleme + LanceDB yazımı
 ├── query.py               # hibrit arama (dense+sparse → RRF → reranker) + SearchHit
 ├── rerank.py              # bge-reranker-v2-m3 (transformers tabanlı cross-encoder)
-├── map_gen.py             # Pass 1 (regex) + Pass 2 (cosine) → topics.yaml
-├── index_gen.py           # topics.yaml → INDEX.md
+├── map_gen.py             # Pass 1 (regex) + Pass 2 (cosine) → .doqqy/topics.yaml
+├── index_gen.py           # .doqqy/topics.yaml → INDEX.md
 └── ingest/
     ├── __init__.py
     ├── base.py            # Document, IngestResult, content_hash, base_metadata
@@ -256,10 +256,10 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 
 ## 7. Faz 4: Wikilink Enjeksiyonu (`doqqy inject`)
 
-**Girdi:** `topics.yaml` + `processed/*.md`.
+**Girdi:** `.doqqy/topics.yaml` + `processed/*.md`.
 **Çıktı:** Her `processed/*.md` dosyasının sonuna enjekte edilmiş `[[wikilink]]` bloğu.
 
-`topics.yaml`'daki her dosyanın `explicit_related` ve `might_be_related` linkleri bir marker blok içinde markdown dosyasına yazılır:
+`.doqqy/topics.yaml`'daki her dosyanın `explicit_related` ve `might_be_related` linkleri bir marker blok içinde markdown dosyasına yazılır:
 
 ```markdown
 <!-- doqqy:links:start -->

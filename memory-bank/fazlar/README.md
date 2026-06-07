@@ -9,6 +9,7 @@ Her faz için implementation sonrası yazılan **detaylı not**. Plan değil —
 | Faz 3 — Harita üretimi | [faz3.md](faz3.md) | 🟢 Tamamlandı |
 | Faz 4 — Obsidian polish | [faz4.md](faz4.md) | 🟢 Tamamlandı |
 | Faz 5 — Çoklu korpus / tag filtreleme | [faz5.md](faz5.md) | 🟢 Tamamlandı |
+| Faz 6 — CLI UX / Progress Bar (Rich) | [faz6.md](faz6.md) | 🎯 Planlandı |
 
 ## Bu klasör neden var?
 

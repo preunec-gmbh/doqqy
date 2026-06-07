@@ -18,8 +18,8 @@ Bu belge Faz 1'in tamamlanmış halini kayıt altına alır. Implementation sır
 
 **Smoke test sonuçları (4 format — 2026-05-26):**
 - Ingest: MD ✅ / PDF ✅ (docling) / DOCX ✅ (pandoc auto-download → mammoth fallback) / TXT ✅
-- Chunk: 160 chunk → `chunks/chunks.parquet`.
-- Embed: bge-m3 dense vektörler → `store.lance/`.
+- Chunk: 160 chunk → `.doqqy/chunks/chunks.parquet`.
+- Embed: bge-m3 dense vektörler → `.doqqy/store.lance/`.
 - Query: Sorgular kaynak + section path ile doğru chunk'ları döndürüyor.
 
 **2026-05-26 Günü Yapılan Düzeltmeler:**
@@ -38,9 +38,9 @@ puroje/
 ├── .gitignore                  # generated klasörler + .env + .venv
 ├── raw/                        # docs/'tan kopya, ingest girdisi (gitignore'da)
 ├── processed/                  # ingest çıktısı, kanonik markdown (gitignore'da)
-├── chunks/chunks.parquet       # chunker çıktısı (gitignore'da)
-├── store.lance/                # LanceDB tablosu (gitignore'da)
-├── logs/                       # ingest.log vb. (gitignore'da)
+├── .doqqy/chunks/chunks.parquet       # chunker çıktısı (gitignore'da)
+├── .doqqy/store.lance/                # LanceDB tablosu (gitignore'da)
+├── .doqqy/logs/                       # ingest.log vb. (gitignore'da)
 ├── memory-bank/                # bu klasör
 └── src/doqqy/
     ├── __init__.py
@@ -68,10 +68,10 @@ raw/<her şey>
 processed/<aynı dizin>/<orijinal>.md     (frontmatter + body)
    │
    ▼ doqqy chunk          (MarkdownHeaderTextSplitter + atomik kod/tablo)
-chunks/chunks.parquet                     (Chunk dataclass'ları, prev/next bağlı)
+.doqqy/chunks/chunks.parquet                     (Chunk dataclass'ları, prev/next bağlı)
    │
    ▼ doqqy embed          (bge-m3 dense, batch=12)
-store.lance/chunks/                       (LanceDB tablosu, vector + meta)
+.doqqy/store.lance/chunks/                       (LanceDB tablosu, vector + meta)
    │
    ▼ doqqy query "..."    (cosine, top-k=5)
 stdout                                    (score + source + section_path + content)
@@ -139,7 +139,7 @@ Memory-bank planına uygun.
 ### 4.6 `ingest/router.py`
 - `_DISPATCH` — `{".md": ingest_md, ".pdf": ingest_pdf, ...}` haritası.
 - `ingest_file(path)` — tek dosya, uzantıya göre delege eder.
-- `ingest_directory(root, limit=None)` — `tqdm` ile ilerleme, **bir dosya hata verirse durmaz**, `IngestResult.failed` listesine ekler ve `logs/ingest.log`'a yazar. `limit` argümanı test için ilk N dosya.
+- `ingest_directory(root, limit=None)` — `tqdm` ile ilerleme, **bir dosya hata verirse durmaz**, `IngestResult.failed` listesine ekler ve `.doqqy/logs/ingest.log`'a yazar. `limit` argümanı test için ilk N dosya.
 
 ### 4.7 `chunk.py`
 İki aşamalı chunking:
@@ -167,12 +167,12 @@ class Chunk:
     next_chunk: str | None    # aynı dokümandaki bir sonraki chunk_id
 ```
 
-Çıktı: `chunks/chunks.parquet` (pandas → parquet, hızlı + sıkıştırılmış).
+Çıktı: `.doqqy/chunks/chunks.parquet` (pandas → parquet, hızlı + sıkıştırılmış).
 
 **MVP'de yapılmayan**: kısa section merge (memory-bank "<100 token ise birleştir" diyor, atlandı), token bazlı bölme (gerçek tokenizer Faz 2'de).
 
 ### 4.8 `embed.py`
-1. `chunks/chunks.parquet` okunur.
+1. `.doqqy/chunks/chunks.parquet` okunur.
 2. `BGEM3FlagModel(EMBEDDING_MODEL, use_fp16=(device=="cuda"), device=device)` — GPU varsa fp16.
 3. Batch'ler halinde dense vektör üretilir (`return_dense=True, return_sparse=False`). Sparse Faz 2.
 4. Vektörler `df["vector"]`'a list olarak konur.
@@ -195,7 +195,7 @@ Typer ile 5 komut:
 |---|---|---|
 | `doqqy ingest [-s DIR] [-n N]` | raw/ → processed/ | `-n` test için ilk N dosya |
 | `doqqy chunk [-p DIR]` | processed/ → chunks.parquet | |
-| `doqqy embed` | chunks → store.lance | İlk çağrıda model iner (~2 GB) |
+| `doqqy embed` | chunks → .doqqy/store.lance | İlk çağrıda model iner (~2 GB) |
 | `doqqy query "..." [-k 5] [--full]` | dense arama, top-k göster | `--full` chunk'ı tam göster |
 | `doqqy info` | pipeline durumu özeti | |
 

@@ -19,7 +19,7 @@ Faz 2 sonunda elimizde güçlü bir arama motoru var ama **harita yok**:
 - Obsidian graph view boş — dosyalar arası hiç link yok
 - `INDEX.md` yok — başlangıç noktası yok
 
-Faz 3 bu boşluğu dolduruyor: `processed/*.md` dosyaları arasındaki ilişkileri iki yöntemle keşfedip `topics.yaml` + `INDEX.md` üretiyor.
+Faz 3 bu boşluğu dolduruyor: `processed/*.md` dosyaları arasındaki ilişkileri iki yöntemle keşfedip `.doqqy/topics.yaml` + `INDEX.md` üretiyor.
 
 ## 3. İki Pass, LLM Yok
 
@@ -35,7 +35,7 @@ Faz 3 bu boşluğu dolduruyor: `processed/*.md` dosyaları arasındaki ilişkile
 
 **Çıktı:** Her section için `explicit_related` listesi — hedef dosya + hedef section (varsa) + kaynak satır numarası.
 
-**Not:** Bu ilişkiler asimetrik olabilir (A → B ama B → A yok). Her ikisi de `topics.yaml`'a yazılır, `wikilink_inject.py` her iki yönde de link oluşturur.
+**Not:** Bu ilişkiler asimetrik olabilir (A → B ama B → A yok). Her ikisi de `.doqqy/topics.yaml`'a yazılır, `wikilink_inject.py` her iki yönde de link oluşturur.
 
 ### Pass 2 — Embedding Cosine (Tematik Komşular)
 
@@ -52,7 +52,7 @@ LanceDB'de zaten her chunk'ın dense vektörü var. Her section için:
 
 ## 4. Çıktı Formatları
 
-### `topics.yaml`
+### `.doqqy/topics.yaml`
 
 ```yaml
 sections:
@@ -87,37 +87,37 @@ sections:
 
 | Dosya | Açıklama |
 |---|---|
-| `src/doqqy/map_gen.py` | Pass 1 (regex) + Pass 2 (embedding cosine) → `topics.yaml` |
-| `src/doqqy/index_gen.py` | `topics.yaml` → `INDEX.md` |
+| `src/doqqy/map_gen.py` | Pass 1 (regex) + Pass 2 (embedding cosine) → `.doqqy/topics.yaml` |
+| `src/doqqy/index_gen.py` | `.doqqy/topics.yaml` → `INDEX.md` |
 | `src/doqqy/cli.py` | `doqqy map` ve `doqqy index` komutları eklenir |
-| `topics.yaml` | Proje kökünde üretilir (gitignore'a eklenebilir) |
+| `.doqqy/topics.yaml` | Proje kökünde üretilir (gitignore'a eklenebilir) |
 | `processed/INDEX.md` | `processed/` klasörüne yazılır (Obsidian vault'un giriş noktası) |
 
 ## 6. CLI Komutları
 
 ```
-doqqy map          # Pass 1 + Pass 2 → topics.yaml üret
+doqqy map          # Pass 1 + Pass 2 → .doqqy/topics.yaml üret
 doqqy map --pass1  # Sadece regex pass
 doqqy map --pass2  # Sadece embedding pass
-doqqy index        # topics.yaml → INDEX.md üret
+doqqy index        # .doqqy/topics.yaml → INDEX.md üret
 ```
 
 ## 7. Görev Listesi
 
-- [ ] `src/doqqy/map_gen.py` oluştur
-  - [ ] **Pass 1:** `processed/*.md` okuma + regex pattern'leri
-  - [ ] **Pass 1:** Section boundary tespiti (başlık satırları)
-  - [ ] **Pass 1:** Pattern eşleştirme + hedef normalizasyonu
-  - [ ] **Pass 2:** Her section için chunk vektörlerini LanceDB'den çek
-  - [ ] **Pass 2:** Section centroid hesabı (ortalama vektör)
-  - [ ] **Pass 2:** Cosine top-N sorgu (farklı dosya filtresi + eşik)
-  - [ ] **Birleştirme:** `topics.yaml` schema + yazımı
-- [ ] `src/doqqy/index_gen.py` oluştur
-  - [ ] `topics.yaml` okuma
-  - [ ] `INDEX.md` template + yazımı (📌 explicit, 💡 might_be)
-- [ ] `src/doqqy/cli.py` — `doqqy map` + `doqqy index` komutları ekle
-- [ ] 5 dosyalık test korpusunda (`test_docs/`) çalıştır, çıktı kalitesini gözden geçir
-- [ ] `processed/` klasörüne `INDEX.md` yaz, Obsidian'da aç
+- \[x\] `src/doqqy/map_gen.py` oluştur
+  - \[x\] **Pass 1:** `processed/*.md` okuma + regex pattern'leri
+  - \[x\] **Pass 1:** Section boundary tespiti (başlık satırları)
+  - \[x\] **Pass 1:** Pattern eşleştirme + hedef normalizasyonu
+  - \[x\] **Pass 2:** Her section için chunk vektörlerini LanceDB'den çek
+  - \[x\] **Pass 2:** Section centroid hesabı (ortalama vektör)
+  - \[x\] **Pass 2:** Cosine top-N sorgu (farklı dosya filtresi + eşik)
+  - \[x\] **Birleştirme:** `.doqqy/topics.yaml` schema + yazımı
+- \[x\] `src/doqqy/index_gen.py` oluştur
+  - \[x\] `.doqqy/topics.yaml` okuma
+  - \[x\] `INDEX.md` template + yazımı (📌 explicit, 💡 might_be)
+- \[x\] `src/doqqy/cli.py` — `doqqy map` + `doqqy index` komutları ekle
+- \[x\] 5 dosyalık test korpusunda (`test_docs/`) çalıştır, çıktı kalitesini gözden geçir
+- \[x\] `processed/` klasörüne `INDEX.md` yaz, Obsidian'da aç
 
 ## 8. Riskler
 
@@ -140,7 +140,7 @@ doqqy index        # topics.yaml → INDEX.md üret
 
 ## 10. Faz 4 ile İlişki
 
-Faz 3 çıktısı (`topics.yaml`) Faz 4'ün tek girdisi:
+Faz 3 çıktısı (`.doqqy/topics.yaml`) Faz 4'ün tek girdisi:
 - `wikilink_inject.py`: Her `processed/*.md` dosyasına ilgili section'lardan `[[link]]` enjekte eder
 - Obsidian graph view bu linkleri görsel ağ olarak gösterir
 - Faz 3 kaliteli çıktı üretmezse Faz 4'ün değeri düşer — küçük korpusta test zorunlu

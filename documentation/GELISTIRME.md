@@ -134,18 +134,24 @@ def search_with_context(query: str, k: int = 5):
 
 `src/doqqy/cli.py`:
 
+Yeni komutlar yazarken terminalde zengin bir UX deneyimi ve ilerleme barları göstermek istersen `rich` kütüphanesini kullan.
+
 ```python
 @app.command()
 def stats() -> None:
     """Chunk istatistikleri (uzunluk dağılımı, top dokümanlar, vs.)."""
     import pandas as pd
     from doqqy.config import CHUNKS_PARQUET
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
     df = pd.read_parquet(CHUNKS_PARQUET)
-    typer.echo(f"toplam chunk: {len(df)}")
-    typer.echo(f"ortalama karakter: {df['char_count'].mean():.0f}")
-    typer.echo(f"medyan karakter: {df['char_count'].median():.0f}")
-    typer.echo("\nEn çok chunk üretilen dokümanlar:")
-    typer.echo(df['source'].value_counts().head(10).to_string())
+    
+    console.print(f"[bold green]Toplam Chunk:[/bold green] {len(df)}")
+    console.print(f"[bold blue]Ortalama Karakter:[/bold blue] {df['char_count'].mean():.0f}")
+    
+    # Detaylar tablosu vs eklenebilir.
 ```
 
 ## 6. Test yazmak
@@ -210,7 +216,7 @@ doqqy ingest
 
 - **Faz 2 — Reranker:** `src/doqqy/rerank.py` yeni dosya, `bge-reranker-v2-m3` ile cross-encoder. `query.py` retrieval sonrasına entegre.
 - **Faz 2 — Sparse:** `embed.py`'de `return_sparse=True` zaten parametre olarak hazır. LanceDB schema'sına sparse kolon ekle.
-- **Faz 3 — Harita:** `src/doqqy/map_gen.py` yeni modül. Gemini client + per-file prompt template + `topics.yaml` writer + meta-call (cross-reference).
-- **Faz 4 — Wikilink Enjeksiyon:** `src/doqqy/wikilink_inject.py` yeni modül. `topics.yaml`'dan `processed/*.md` içine `<!-- doqqy:links:start/end -->` marker bloklu `[[...]]` enjeksiyonu. `cli.py`'ye `doqqy inject` komutu eklenir (`--dry-run`, `--topics` flags).
+- **Faz 3 — Harita:** `src/doqqy/map_gen.py` yeni modül. Gemini client + per-file prompt template + `.doqqy/topics.yaml` writer + meta-call (cross-reference).
+- **Faz 4 — Wikilink Enjeksiyon:** `src/doqqy/wikilink_inject.py` yeni modül. `.doqqy/topics.yaml`'dan `processed/*.md` içine `<!-- doqqy:links:start/end -->` marker bloklu `[[...]]` enjeksiyonu. `cli.py`'ye `doqqy inject` komutu eklenir (`--dry-run`, `--topics` flags).
 
 Her faz başlamadan önce `memory-bank/fazlar/fazN.md` yaz; bittiğinde `progress.md` ve `activeContext.md`'yi güncelle.

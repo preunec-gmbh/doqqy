@@ -27,7 +27,7 @@ Faz 1'de gözlemlenen sorun: dense-only retrieval bazı sorgularda doğru dosyay
 
 - [x] `encode()` çağrısında `return_sparse=True` ekle
 - [x] LanceDB schema'ya `sparse_vector` kolonu ekle (JSON string formatı: `{"token_id": weight}`)
-- [x] Mevcut `store.lance` tablosunu yeni schema ile yeniden oluştur (tam rebuild)
+- [x] Mevcut `.doqqy/store.lance` tablosunu yeni schema ile yeniden oluştur (tam rebuild)
 - [x] `doqqy embed` komutu sonunda kaç sparse token üretildiğini log'a yaz
 
 ### 3.2 Hybrid Query (`query.py`)
@@ -125,4 +125,4 @@ bge-m3 sparse çıktısı BM25 terimi değil, model vocab token ID'si. LanceDB F
 **Faz 3 — Harita Üretimi (LLM yok, 2026-06-01 kararı):**
 - Regex pass → `explicit_related` (bkz. / see section / dosya adı referansları)
 - Embedding cosine (LanceDB) → `might_be_related`
-- `topics.yaml` + `INDEX.md` üretimi — tamamen local, API anahtarı yok
+- `.doqqy/topics.yaml` + `INDEX.md` üretimi — tamamen local, API anahtarı yok
