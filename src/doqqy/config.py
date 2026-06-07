@@ -9,14 +9,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-def _find_project_root(start: Path) -> Path:
-    for parent in [start, *start.parents]:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    return start
-
-
-PROJECT_ROOT: Path = _find_project_root(Path(__file__).resolve())
+# Çalıştırılan komutun bulunduğu klasörü (CWD) proje kökü kabul et.
+PROJECT_ROOT: Path = Path.cwd()
 
 DOQQY_STATE_DIR: Path = PROJECT_ROOT / ".doqqy"
 
