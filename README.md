@@ -1,6 +1,6 @@
 # doqqy
 
-Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir. **bge-m3 embedding cosine benzerliği** ile dokümanlar arası otomatik harita (`topics.yaml` + `INDEX.md`) üretir.
+Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir. **bge-m3 embedding cosine benzerliği** ile dokümanlar arası otomatik harita (`.doqqy/topics.yaml` + `INDEX.md`) üretir.
 
 LLM çağrısı **yapmaz** — ne sorgularda ne de harita üretiminde. Ham chunk + kaynak döner, harita embedding matematiğiyle kurulur.
 
@@ -18,12 +18,12 @@ pip install -e .
 # 3. Pipeline
 doqqy ingest        # raw/ → processed/ (markdown)
 doqqy chunk         # processed/ → chunks.parquet
-doqqy embed         # → store.lance/  (bge-m3 dense + sparse vektör)
+doqqy embed         # → .doqqy/store.lance/  (bge-m3 dense + sparse vektör)
 
 # 4. Harita üret
-doqqy map           # processed/*.md → topics.yaml (regex + embedding cosine)
-doqqy index         # topics.yaml → processed/INDEX.md
-doqqy inject        # topics.yaml → processed/*.md içine [[wikilink]] enjekte et
+doqqy map           # processed/*.md → .doqqy/topics.yaml (regex + embedding cosine)
+doqqy index         # .doqqy/topics.yaml → processed/INDEX.md
+doqqy inject        # .doqqy/topics.yaml → processed/*.md içine [[wikilink]] enjekte et
 
 # 5. Sor
 doqqy query "JWT refresh nasıl çalışıyor?"
@@ -43,9 +43,9 @@ puroje/
 ├── raw/                     # GİRDİ — orijinal dosyalar (gitignore'da)
 ├── processed/               # AŞAMA 1 ÇIKTI — kanonik markdown (gitignore'da)
 ├── chunks/                  # AŞAMA 2 ÇIKTI — chunks.parquet (gitignore'da)
-├── store.lance/             # AŞAMA 3 ÇIKTI — LanceDB vector store (gitignore'da)
-├── topics.yaml              # AŞAMA 4 ÇIKTI — harita verisi (gitignore'da)
-├── logs/                    # ingest hata logları (gitignore'da)
+├── .doqqy/store.lance/             # AŞAMA 3 ÇIKTI — LanceDB vector store (gitignore'da)
+├── .doqqy/topics.yaml              # AŞAMA 4 ÇIKTI — harita verisi (gitignore'da)
+├── .doqqy/logs/                    # ingest hata logları (gitignore'da)
 │
 ├── src/doqqy/                # KAYNAK KOD
 │   ├── cli.py               # typer komutları
@@ -54,8 +54,8 @@ puroje/
 │   ├── embed.py             # bge-m3 dense+sparse LanceDB yazımı
 │   ├── query.py             # Hibrit arama (Dense + Sparse) & RRF Birleşimi
 │   ├── rerank.py            # bge-reranker-v2-m3 (cross-encoder)
-│   ├── map_gen.py           # Pass 1 (regex) + Pass 2 (cosine) → topics.yaml
-│   ├── index_gen.py         # topics.yaml → INDEX.md
+│   ├── map_gen.py           # Pass 1 (regex) + Pass 2 (cosine) → .doqqy/topics.yaml
+│   ├── index_gen.py         # .doqqy/topics.yaml → INDEX.md
 │   └── ingest/              # format-spesifik parser'lar
 │
 ├── documentation/           # İNSANLAR İÇİN BELGELER
@@ -92,11 +92,12 @@ Faz 1–5 tamamlandı. Mevcut özellikler:
 - ✅ RAM Optimizasyonu (Embedding Batch Size:4 / Max Length: 1024)
 - ✅ Hibrit Arama: Dense + Sparse (Manuel Python-side dot product) + RRF (k=60)
 - ✅ bge-reranker-v2-m3 (Transformers tabanlı Cross-encoder)
-- ✅ Harita üretimi: Pass 1 (regex explicit referanslar) + Pass 2 (embedding cosine tematik komşuluk) → `topics.yaml`
+- ✅ Harita üretimi: Pass 1 (regex explicit referanslar) + Pass 2 (embedding cosine tematik komşuluk) → `.doqqy/topics.yaml`
 - ✅ `INDEX.md` üretimi — Obsidian vault giriş noktası
-- ✅ Wikilink enjeksiyonu: `topics.yaml` → `processed/*.md` içine `[[link]]` (idempotent, `doqqy inject`)
+- ✅ Wikilink enjeksiyonu: `.doqqy/topics.yaml` → `processed/*.md` içine `[[link]]` (idempotent, `doqqy inject`)
 - ✅ Çoklu korpus / tag filtreleme: `raw/` klasör yapısından otomatik tag üretimi, `doqqy query --tag` ve `doqqy map --tag` ile izole arama
 - ✅ Typer CLI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info`
+- 🎯 **Planlanan (Faz 6):** `rich` entegrasyonu ile terminal arayüzünde (CLI) UI/UX (progress bar ve geri bildirim) iyileştirmesi.
 
 ## Lisans / Gizlilik
 
