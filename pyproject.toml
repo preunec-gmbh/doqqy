@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "docq"
+name = "doqqy"
 version = "0.1.0"
 description = "Yerel doküman bilgi sistemi — hibrit semantik+lexical arama + harita üretimi."
 requires-python = ">=3.10"
@@ -40,10 +40,10 @@ llm = [
 ]
 
 [project.scripts]
-docq = "docq.cli:app"
+doqqy = "doqqy.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"docq" = ["py.typed"]
+"doqqy" = ["py.typed"]

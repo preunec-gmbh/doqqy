@@ -8,7 +8,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from docq.config import (
+from doqqy.config import (
     DEFAULT_TOP_K,
     EMBEDDING_MODEL,
     LANCE_TABLE,
@@ -18,7 +18,7 @@ from docq.config import (
     get_logger,
 )
 
-_LOG = get_logger("docq.query")
+_LOG = get_logger("doqqy.query")
 
 RRF_K = 60
 
@@ -56,7 +56,7 @@ def _table():
     import lancedb  # type: ignore
 
     if not STORE_DIR.exists():
-        raise FileNotFoundError(f"{STORE_DIR} yok — önce `docq embed` çalıştır.")
+        raise FileNotFoundError(f"{STORE_DIR} yok — önce `doqqy embed` çalıştır.")
     db = lancedb.connect(STORE_DIR)
     if LANCE_TABLE not in db.table_names():
         raise RuntimeError(f"tablo bulunamadı: {LANCE_TABLE}")
@@ -76,14 +76,14 @@ def _embed_query(text: str) -> tuple[np.ndarray, dict[str, float]]:
     return dense, sparse
 
 
-def _dense_search(qvec: np.ndarray, k: int) -> list[dict]:
-    rows = (
-        _table()
-        .search(qvec)
-        .metric("cosine")
-        .limit(k)
-        .to_list()
-    )
+def _dense_search(qvec: np.ndarray, k: int, filter_tag: str | None = None) -> list[dict]:
+    query_builder = _table().search(qvec).metric("cosine")
+
+    if filter_tag:
+        # Array'i string olarak kaydettiğimiz formatta arıyoruz
+        query_builder = query_builder.where(f"tags_str LIKE '%,{filter_tag},%'")
+
+    rows = query_builder.limit(k).to_list()
     results = []
     for r in rows:
         dist = float(r.get("_distance", 0.0))
@@ -91,9 +91,14 @@ def _dense_search(qvec: np.ndarray, k: int) -> list[dict]:
     return results
 
 
-def _sparse_search(query_sparse: dict[str, float], k: int) -> list[dict]:
+def _sparse_search(query_sparse: dict[str, float], k: int, filter_tag: str | None = None) -> list[dict]:
     """Tüm chunk'ların sparse vektörleriyle dot product hesapla, top-k döndür."""
-    rows = _table().to_pandas()
+    table = _table()
+    if filter_tag:
+        rows = table.search().where(f"tags_str LIKE '%,{filter_tag},%'").to_pandas()
+    else:
+        rows = table.to_pandas()
+
     if "sparse_vector" not in rows.columns:
         _LOG.warning("sparse_vector kolonu yok — sadece dense kullanılıyor.")
         return []
@@ -141,15 +146,15 @@ def _rrf(
     return sorted(by_id.values(), key=lambda x: x.get("rrf_score", 0.0), reverse=True)
 
 
-def search(query: str, k: int = DEFAULT_TOP_K, rerank: bool = True) -> list[SearchHit]:
+def search(query: str, k: int = DEFAULT_TOP_K, rerank: bool = True, tag: str | None = None) -> list[SearchHit]:
     dense_vec, sparse_vec = _embed_query(query)
 
-    dense_rows = _dense_search(dense_vec, RETRIEVAL_TOP_K)
-    sparse_rows = _sparse_search(sparse_vec, RETRIEVAL_TOP_K)
+    dense_rows = _dense_search(dense_vec, RETRIEVAL_TOP_K, filter_tag=tag)
+    sparse_rows = _sparse_search(sparse_vec, RETRIEVAL_TOP_K, filter_tag=tag)
     fused = _rrf(dense_rows, sparse_rows)[:RETRIEVAL_TOP_K]
 
     if rerank and fused:
-        from docq.rerank import rerank as do_rerank
+        from doqqy.rerank import rerank as do_rerank
         candidates = [{"content": r.get("content", ""), **r} for r in fused]
         reranked = do_rerank(query, candidates, top_k=k)
         hits = []

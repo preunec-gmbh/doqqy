@@ -7,9 +7,9 @@ from functools import lru_cache
 
 import torch
 
-from docq.config import RERANKER_BATCH_SIZE, RERANKER_MODEL, get_logger
+from doqqy.config import RERANKER_BATCH_SIZE, RERANKER_MODEL, get_logger
 
-_LOG = get_logger("docq.rerank")
+_LOG = get_logger("doqqy.rerank")
 
 
 @lru_cache(maxsize=1)

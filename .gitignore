@@ -1,10 +1,7 @@
 # Generated artifacts
 processed/
-chunks/
-store.lance/
-topics.yaml
 INDEX.md
-logs/
+.doqqy/
 
 # Raw mirror (kullanıcı kendi dosyalarını koyar)
 raw/

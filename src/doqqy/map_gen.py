@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 import yaml
 
-from docq.config import (
+from doqqy.config import (
     LANCE_TABLE,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
@@ -24,7 +24,7 @@ from docq.config import (
     get_logger,
 )
 
-_LOG = get_logger("docq.map_gen")
+_LOG = get_logger("doqqy.map_gen")
 
 # ---------------------------------------------------------------------------
 # Veri yapıları
@@ -169,7 +169,7 @@ def _pass1(processed_dir: Path, known_files: set[str]) -> dict[str, list[Explici
 def _load_table():
     import lancedb  # type: ignore
     if not STORE_DIR.exists():
-        raise FileNotFoundError(f"{STORE_DIR} yok — önce `docq embed` çalıştır.")
+        raise FileNotFoundError(f"{STORE_DIR} yok — önce `doqqy embed` çalıştır.")
     db = lancedb.connect(STORE_DIR)
     if LANCE_TABLE not in db.table_names():
         raise RuntimeError(f"tablo bulunamadı: {LANCE_TABLE}")
@@ -188,10 +188,14 @@ def _pass2(
     sections_meta: list[SectionEntry],
     top_n: int = MAP_TOP_N_NEIGHBORS,
     threshold: float = MAP_COSINE_THRESHOLD,
+    filter_tag: str | None = None,
 ) -> dict[str, list[ThematicRef]]:
     """LanceDB'den vektörleri çek, her section için cosine komşuları bul."""
     table = _load_table()
-    df = table.to_pandas()
+    if filter_tag:
+        df = table.search().where(f"tags_str LIKE '%,{filter_tag},%'").to_pandas()
+    else:
+        df = table.to_pandas()
 
     if "vector" not in df.columns:
         _LOG.warning("'vector' kolonu yok — Pass 2 atlanıyor.")
@@ -310,6 +314,7 @@ def generate_map(
     cosine_threshold: float = MAP_COSINE_THRESHOLD,
     top_n: int = MAP_TOP_N_NEIGHBORS,
     output: Path = TOPICS_YAML,
+    tag: str | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Dönen değer: yazılan dosya yolu."""
     md_files = sorted(f for f in processed_dir.glob("*.md") if f.name != "INDEX.md")
@@ -343,8 +348,10 @@ def generate_map(
     # Pass 2
     thematic_map: dict[str, list[ThematicRef]] = {}
     if pass2:
-        _LOG.info("Pass 2 — embedding cosine benzerlik...")
-        thematic_map = _pass2(processed_dir, all_sections, top_n=top_n, threshold=cosine_threshold)
+        _LOG.info(f"Pass 2 — embedding cosine benzerlik... (tag filter: {tag or 'yok'})")
+        thematic_map = _pass2(
+            processed_dir, all_sections, top_n=top_n, threshold=cosine_threshold, filter_tag=tag
+        )
         total_th = sum(len(v) for v in thematic_map.values())
         _LOG.info(f"Pass 2 tamam: {total_th} tematik bağlantı bulundu.")
 

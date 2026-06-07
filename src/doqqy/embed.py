@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from docq.config import (
+from doqqy.config import (
     CHUNKS_PARQUET,
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_DIM,
@@ -21,13 +21,13 @@ from docq.config import (
     get_logger,
 )
 
-_LOG = get_logger("docq.embed")
+_LOG = get_logger("doqqy.embed")
 
 
 def _load_chunks() -> pd.DataFrame:
     if not CHUNKS_PARQUET.exists():
         raise FileNotFoundError(
-            f"{CHUNKS_PARQUET} yok — önce `docq chunk` çalıştır."
+            f"{CHUNKS_PARQUET} yok — önce `doqqy chunk` çalıştır."
         )
     return pd.read_parquet(CHUNKS_PARQUET)
 
@@ -109,6 +109,10 @@ def build_index(*, batch_size: int | None = None) -> int:
     df_out["vector"] = list(dense_vecs)
     df_out["sparse_vector"] = sparse_jsons
     df_out["section_path_str"] = df_out["section_path"].apply(lambda xs: " > ".join(xs))
+    # Array olan tags alanını LanceDB'nin kolay filtreleyebilmesi için
+    # string (virgülle ayrılmış değerler) formatına çevirelim.
+    # Örn: ["bulut-saha", "x"] -> ",bulut-saha,x,"
+    df_out["tags_str"] = df_out["tags"].apply(lambda ts: f",{','.join(ts)}," if ts else "")
 
     import lancedb  # type: ignore
 

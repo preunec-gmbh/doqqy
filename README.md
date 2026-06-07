@@ -1,4 +1,4 @@
-# docq
+# doqqy
 
 Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir. **bge-m3 embedding cosine benzerliği** ile dokümanlar arası otomatik harita (`topics.yaml` + `INDEX.md`) üretir.
 
@@ -13,19 +13,23 @@ python -m venv .venv
 pip install -e .
 
 # 2. Dokümanları raw/ altına koy (PDF, MD, DOCX, TXT)
+#    Klasör yapısı otomatik olarak tag'e dönüşür: raw/proje-a/... → tag: "proje-a"
 
-# docq ingest        # raw/ → processed/ (markdown)
-docq chunk         # processed/ → chunks.parquet
-docq embed         # → store.lance/  (bge-m3 dense + sparse vektör)
+# 3. Pipeline
+doqqy ingest        # raw/ → processed/ (markdown)
+doqqy chunk         # processed/ → chunks.parquet
+doqqy embed         # → store.lance/  (bge-m3 dense + sparse vektör)
 
 # 4. Harita üret
-docq map           # processed/*.md → topics.yaml (regex + embedding cosine)
-docq index         # topics.yaml → processed/INDEX.md
+doqqy map           # processed/*.md → topics.yaml (regex + embedding cosine)
+doqqy index         # topics.yaml → processed/INDEX.md
+doqqy inject        # topics.yaml → processed/*.md içine [[wikilink]] enjekte et
 
 # 5. Sor
-docq query "JWT refresh nasıl çalışıyor?"
-docq query "fatura iade akışı" --top-k 10
-docq query "İade süreci" --no-rerank # Reranker'ı devre dışı bırakıp saf hibrit sonuçlara bak
+doqqy query "JWT refresh nasıl çalışıyor?"
+doqqy query "fatura iade akışı" --top-k 10
+doqqy query "iade süreci" --tag erp12        # sadece erp12 klasöründe ara
+doqqy tags                                   # hangi tag'ler var?
 ```
 
 ## Proje yapısı
@@ -43,7 +47,7 @@ puroje/
 ├── topics.yaml              # AŞAMA 4 ÇIKTI — harita verisi (gitignore'da)
 ├── logs/                    # ingest hata logları (gitignore'da)
 │
-├── src/docq/                # KAYNAK KOD
+├── src/doqqy/                # KAYNAK KOD
 │   ├── cli.py               # typer komutları
 │   ├── config.py            # yollar, sabitler, RAM/Model configleri
 │   ├── chunk.py             # header-aware chunking
@@ -80,7 +84,7 @@ puroje/
 
 ## Geçerli durum
 
-Faz 1, Faz 2 ve Faz 3 tamamlandı. Mevcut özellikler:
+Faz 1–5 tamamlandı. Mevcut özellikler:
 
 - ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback)
 - ✅ Header-aware chunking (kod blokları ve tablolar atomik, Word bold başlıklar optimize)
@@ -90,11 +94,9 @@ Faz 1, Faz 2 ve Faz 3 tamamlandı. Mevcut özellikler:
 - ✅ bge-reranker-v2-m3 (Transformers tabanlı Cross-encoder)
 - ✅ Harita üretimi: Pass 1 (regex explicit referanslar) + Pass 2 (embedding cosine tematik komşuluk) → `topics.yaml`
 - ✅ `INDEX.md` üretimi — Obsidian vault giriş noktası
-- ✅ Typer CLI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `info`
-
-Sonraki fazda gelecek:
-
-- ⏳ **Faz 4:** Obsidian vault polish (`[[wiki-link]]` enjeksiyonu, graph view dolacak)
+- ✅ Wikilink enjeksiyonu: `topics.yaml` → `processed/*.md` içine `[[link]]` (idempotent, `doqqy inject`)
+- ✅ Çoklu korpus / tag filtreleme: `raw/` klasör yapısından otomatik tag üretimi, `doqqy query --tag` ve `doqqy map --tag` ile izole arama
+- ✅ Typer CLI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info`
 
 ## Lisans / Gizlilik
 
