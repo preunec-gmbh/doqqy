@@ -1,6 +1,6 @@
 """Faz 4 — Obsidian Wikilink Enjeksiyonu: topics.yaml → processed/*.md.
 
-Her processed/*.md dosyasının sonuna <!-- docq:links:start/end --> marker bloğu
+Her processed/*.md dosyasının sonuna <!-- doqqy:links:start/end --> marker bloğu
 içinde [[wikilink]] satırları enjekte eder. İdempotent: tekrar çalıştırmak
 önceki bloğu temizleyip yeniden yazar.
 """
@@ -14,12 +14,12 @@ from typing import Optional
 
 import yaml
 
-from docq.config import PROCESSED_DIR, TOPICS_YAML, get_logger
+from doqqy.config import PROCESSED_DIR, TOPICS_YAML, get_logger
 
-_LOG = get_logger("docq.wikilink_inject")
+_LOG = get_logger("doqqy.wikilink_inject")
 
-MARKER_START = "<!-- docq:links:start -->"
-MARKER_END = "<!-- docq:links:end -->"
+MARKER_START = "<!-- doqqy:links:start -->"
+MARKER_END = "<!-- doqqy:links:end -->"
 
 _MARKER_BLOCK_RE = re.compile(
     r"\n?" + re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END) + r"\n?",
@@ -136,7 +136,7 @@ def _build_block(fl: FileLinks) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _strip_marker_block(content: str) -> str:
-    """Mevcut docq marker bloğunu içerikten temizle."""
+    """Mevcut doqqy marker bloğunu içerikten temizle."""
     return _MARKER_BLOCK_RE.sub("", content).rstrip()
 
 
@@ -166,7 +166,7 @@ def inject_links(
 ) -> InjectionResult:
     """topics.yaml → processed/*.md wikilink enjeksiyonu."""
     if not topics_path.exists():
-        raise FileNotFoundError(f"{topics_path} yok — önce `docq map` çalıştır.")
+        raise FileNotFoundError(f"{topics_path} yok — önce `doqqy map` çalıştır.")
 
     _LOG.info(f"topics.yaml okunuyor: {topics_path}")
     file_links = _load_file_links(topics_path)

@@ -87,24 +87,24 @@ sections:
 
 | Dosya | Açıklama |
 |---|---|
-| `src/docq/map_gen.py` | Pass 1 (regex) + Pass 2 (embedding cosine) → `topics.yaml` |
-| `src/docq/index_gen.py` | `topics.yaml` → `INDEX.md` |
-| `src/docq/cli.py` | `docq map` ve `docq index` komutları eklenir |
+| `src/doqqy/map_gen.py` | Pass 1 (regex) + Pass 2 (embedding cosine) → `topics.yaml` |
+| `src/doqqy/index_gen.py` | `topics.yaml` → `INDEX.md` |
+| `src/doqqy/cli.py` | `doqqy map` ve `doqqy index` komutları eklenir |
 | `topics.yaml` | Proje kökünde üretilir (gitignore'a eklenebilir) |
 | `processed/INDEX.md` | `processed/` klasörüne yazılır (Obsidian vault'un giriş noktası) |
 
 ## 6. CLI Komutları
 
 ```
-docq map          # Pass 1 + Pass 2 → topics.yaml üret
-docq map --pass1  # Sadece regex pass
-docq map --pass2  # Sadece embedding pass
-docq index        # topics.yaml → INDEX.md üret
+doqqy map          # Pass 1 + Pass 2 → topics.yaml üret
+doqqy map --pass1  # Sadece regex pass
+doqqy map --pass2  # Sadece embedding pass
+doqqy index        # topics.yaml → INDEX.md üret
 ```
 
 ## 7. Görev Listesi
 
-- [ ] `src/docq/map_gen.py` oluştur
+- [ ] `src/doqqy/map_gen.py` oluştur
   - [ ] **Pass 1:** `processed/*.md` okuma + regex pattern'leri
   - [ ] **Pass 1:** Section boundary tespiti (başlık satırları)
   - [ ] **Pass 1:** Pattern eşleştirme + hedef normalizasyonu
@@ -112,10 +112,10 @@ docq index        # topics.yaml → INDEX.md üret
   - [ ] **Pass 2:** Section centroid hesabı (ortalama vektör)
   - [ ] **Pass 2:** Cosine top-N sorgu (farklı dosya filtresi + eşik)
   - [ ] **Birleştirme:** `topics.yaml` schema + yazımı
-- [ ] `src/docq/index_gen.py` oluştur
+- [ ] `src/doqqy/index_gen.py` oluştur
   - [ ] `topics.yaml` okuma
   - [ ] `INDEX.md` template + yazımı (📌 explicit, 💡 might_be)
-- [ ] `src/docq/cli.py` — `docq map` + `docq index` komutları ekle
+- [ ] `src/doqqy/cli.py` — `doqqy map` + `doqqy index` komutları ekle
 - [ ] 5 dosyalık test korpusunda (`test_docs/`) çalıştır, çıktı kalitesini gözden geçir
 - [ ] `processed/` klasörüne `INDEX.md` yaz, Obsidian'da aç
 
@@ -132,8 +132,8 @@ docq index        # topics.yaml → INDEX.md üret
 ## 9. Gelecekte Konuşulacak: Çoklu Korpus / Proje Filtresi
 
 > **Not (2026-06-01):** Korpus tek bir proje veya konuya ait olmayabilir. Örneğin `raw/` altında PayTR + ERP12 + ERIMELEKTRONIK + GENEL belgeler karışık duruyor. Bu durumda:
-> - `docq map --project paytr` → sadece PayTR dokümanlarının haritasını çıkar
-> - `docq query "..." --project erp12` → sadece ERP12 chunk'larında ara
+> - `doqqy map --project paytr` → sadece PayTR dokümanlarının haritasını çıkar
+> - `doqqy query "..." --project erp12` → sadece ERP12 chunk'larında ara
 > - Harita üretirken farklı projeler arası ilişkileri ayrı kategoride göster ya da filtrele
 >
 > Nasıl yapılacağı (klasör bazlı mı, metadata bazlı mı, prefix bazlı mı) daha sonra konuşulacak ve Faz 3 görev listesine eklenecek.

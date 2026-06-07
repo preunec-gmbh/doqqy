@@ -21,8 +21,8 @@ Faz 4 bu boşluğu dolduruyor:
 | Karar | Gerekçe |
 |---|---|
 | Linkler dosya sonuna enjekte edilir (section sonuna değil) | Simpler implementation, Obsidian her dosyadaki tüm `[[...]]`'yi graph'a ekler — nerede olduğu önemli değil |
-| Orijinal `processed/*.md` **yerinde güncellenir** (overwrite) | Idempotency: `docq inject` her çalıştırmada önceki enjeksiyonu temizleyip yeniden yazar |
-| Marker blok kullanılır | `<!-- docq:links:start -->` / `<!-- docq:links:end -->` arasına yazılır — idempotent silme/yeniden yazma kolaylaşır |
+| Orijinal `processed/*.md` **yerinde güncellenir** (overwrite) | Idempotency: `doqqy inject` her çalıştırmada önceki enjeksiyonu temizleyip yeniden yazar |
+| Marker blok kullanılır | `<!-- doqqy:links:start -->` / `<!-- doqqy:links:end -->` arasına yazılır — idempotent silme/yeniden yazma kolaylaşır |
 | Üç link kategorisi ayrı gösterilir | `📌` explicit, `🔗` tematik (might_be) — kullanıcı güven seviyesini hemen görür |
 | Sadece `processed/` değişir, `raw/` dokunulmaz | raw/ kaynak gerçeği, hiçbir zaman değiştirilmemeli |
 
@@ -31,7 +31,7 @@ Faz 4 bu boşluğu dolduruyor:
 Her `processed/*.md` dosyasının **sonuna** aşağıdaki blok eklenir:
 
 ```markdown
-<!-- docq:links:start -->
+<!-- doqqy:links:start -->
 ## Bağlantılar
 
 ### 📌 Explicit Referanslar
@@ -42,7 +42,7 @@ Her `processed/*.md` dosyasının **sonuna** aşağıdaki blok eklenir:
 - [[PRISMA]] → Payment Model (0.83)
 - [[WEBHOOK]] → Callback Handler (0.79)
 - [[ENVIRONMENT]] → JWT Config (0.76)
-<!-- docq:links:end -->
+<!-- doqqy:links:end -->
 ```
 
 **Kurallar:**
@@ -54,7 +54,7 @@ Her `processed/*.md` dosyasının **sonuna** aşağıdaki blok eklenir:
 ## 5. Modül: `wikilink_inject.py`
 
 ```
-src/docq/wikilink_inject.py
+src/doqqy/wikilink_inject.py
 ```
 
 **Sorumluluklar:**
@@ -62,7 +62,7 @@ src/docq/wikilink_inject.py
 1. `topics.yaml` oku → tüm section bağlantılarını bir lookup dict'e dönüştür: `{file: {explicit: [...], tematic: [...]}}`
 2. `processed/*.md` dosyalarını tara
 3. Her dosya için:
-   a. Önceki `<!-- docq:links:start -->...<!-- docq:links:end -->` bloğu varsa sil
+   a. Önceki `<!-- doqqy:links:start -->...<!-- doqqy:links:end -->` bloğu varsa sil
    b. Toplanan linkleri dedupe et ve sırala
    c. Link varsa yeni bloğu dosya sonuna yaz
 4. Özet bas: kaç dosya güncellendi, kaç link enjekte edildi
@@ -83,9 +83,9 @@ def inject_links(
 ## 6. CLI Komutu
 
 ```
-docq inject          # topics.yaml → processed/*.md içine [[link]] enjekte et
-docq inject --dry-run  # Neyin enjekte edileceğini göster, dosyaları değiştirme
-docq inject --topics path/to/topics.yaml  # Farklı topics dosyası
+doqqy inject          # topics.yaml → processed/*.md içine [[link]] enjekte et
+doqqy inject --dry-run  # Neyin enjekte edileceğini göster, dosyaları değiştirme
+doqqy inject --topics path/to/topics.yaml  # Farklı topics dosyası
 ```
 
 ## 7. Obsidian Vault Testi
@@ -102,42 +102,42 @@ docq inject --topics path/to/topics.yaml  # Farklı topics dosyası
 
 | Dosya | Değişiklik |
 |---|---|
-| `src/docq/wikilink_inject.py` | **YENİ** — `topics.yaml` → `processed/*.md` enjeksiyon |
-| `src/docq/cli.py` | `docq inject` komutu eklenir |
-| `src/docq/config.py` | Gerekirse yeni sabit (marker string) |
+| `src/doqqy/wikilink_inject.py` | **YENİ** — `topics.yaml` → `processed/*.md` enjeksiyon |
+| `src/doqqy/cli.py` | `doqqy inject` komutu eklenir |
+| `src/doqqy/config.py` | Gerekirse yeni sabit (marker string) |
 | `processed/*.md` | Runtime'da güncellenir (kaynak kodu değil) |
 
 ## 9. Görev Listesi
 
-- [ ] `src/docq/wikilink_inject.py` oluştur
+- [ ] `src/doqqy/wikilink_inject.py` oluştur
   - [ ] `topics.yaml` okuma + file→links lookup dict üretimi
   - [ ] Marker blok silme (idempotent temizlik)
   - [ ] Explicit + tematik linkleri dedupe + sırala
   - [ ] Dosya sonuna blok enjeksiyonu
   - [ ] `--dry-run` modu
   - [ ] `InjectionResult` (güncellenen dosya sayısı, toplam link sayısı)
-- [ ] `src/docq/cli.py` — `docq inject` komutu ekle (`--dry-run`, `--topics`)
+- [ ] `src/doqqy/cli.py` — `doqqy inject` komutu ekle (`--dry-run`, `--topics`)
 - [ ] `processed/` klasörünü Obsidian'da vault olarak aç
 - [ ] Graph view doğrulaması (edge'ler görünüyor mu)
 - [ ] `INDEX.md`'den navigasyon testi
-- [ ] Smoke test: `docq inject --dry-run` önce, sonra gerçek çalıştır
+- [ ] Smoke test: `doqqy inject --dry-run` önce, sonra gerçek çalıştır
 
 ## 10. Riskler
 
 | Risk | Olasılık | Çözüm |
 |---|---|---
-| Marker blok silme regex'i frontmatter veya kod bloğuyla çakışır | Düşük | Marker string'i yeterince unique tut (`<!-- docq:links:start -->`) |
+| Marker blok silme regex'i frontmatter veya kod bloğuyla çakışır | Düşük | Marker string'i yeterince unique tut (`<!-- doqqy:links:start -->`) |
 | Aynı hedef dosyaya birden fazla section'dan link → tekrar | Orta | Set-based dedupe, ilk occurrence'ı koru |
 | `topics.yaml`'da section ID → dosya adı eşlemesi bozulur | Düşük | ID formatı `FILENAME_section-slug` — `_` ile split, ilk parça dosya adı |
 | Obsidian `[[LINK]]` büyük/küçük harf duyarlıysa | Düşük | Dosya adlarını uppercase olarak sakla (zaten öyle) |
-| `docq inject` sonrası `docq map` tekrar çalışırsa eski enjeksiyonla çakışır | Orta | `docq inject` her çalışmada markerlı bloğu önce temizler — idempotent |
+| `doqqy inject` sonrası `doqqy map` tekrar çalışırsa eski enjeksiyonla çakışır | Orta | `doqqy inject` her çalışmada markerlı bloğu önce temizler — idempotent |
 
 ## 11. Faz Sonrası (Faz 4+ / Roadmap)
 
 Faz 4 tamamlandıktan sonra sıradaki konular (öncelik sırası belirlenmedi):
 
 - **Eval set:** 15-20 test sorusu + recall@5 metriği — retrieval kalitesini ölçmek için
-- **Çoklu korpus / proje filtresi:** `--project paytr` ile sadece belirli alt kümeyi işle (`docq map`, `docq query`, `docq inject`)
+- **Çoklu korpus / proje filtresi:** `--project paytr` ile sadece belirli alt kümeyi işle (`doqqy map`, `doqqy query`, `doqqy inject`)
 - **Inkremental update:** Content hash bazlı diff — sadece değişen dosyaları yeniden işle
-- **MCP server:** Claude Code entegrasyonu için docq'u MCP sunucusu olarak sun
+- **MCP server:** Claude Code entegrasyonu için doqqy'u MCP sunucusu olarak sun
 - **Görsel caption üretimi:** Vision LLM ile PDF görsellerinden açıklama üret

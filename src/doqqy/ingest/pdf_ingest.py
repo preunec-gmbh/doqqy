@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docq.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR, get_logger
-from docq.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR, get_logger
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
 
-_LOG = get_logger("docq.ingest.pdf", log_file="ingest.log")
+_LOG = get_logger("doqqy.ingest.pdf", log_file="ingest.log")
 
 
 def _processed_path(source: Path) -> Path:

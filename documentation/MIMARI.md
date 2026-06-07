@@ -5,14 +5,14 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
 ## 1. Üst düzey görüntü
 
 ```
-┌──────────┐   docq ingest   ┌─────────────┐   docq chunk   ┌────────────────┐
+┌──────────┐   doqqy ingest   ┌─────────────┐   doqqy chunk   ┌────────────────┐
 │  raw/    │ ──────────────► │ processed/  │ ─────────────► │ chunks/        │
 │ .pdf .md │  format-spesifik│ kanonik .md │  header-aware  │ chunks.parquet │
 │ .docx    │  parser'lar     │ + frontmtr  │  bölme         │ (pandas df)    │
 │ .txt     │                 │             │                │                │
 └──────────┘                 └─────────────┘                └────────┬───────┘
                                                                      │
-                                                            docq embed
+                                                            doqqy embed
                                                                      ▼
                                                             ┌────────────────┐
                                                             │ store.lance/   │
@@ -22,7 +22,7 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                                                                    │
                                ┌───────────────────────────────────┤
                                │                                   │
-                          docq map                           docq query "..."
+                          doqqy map                           doqqy query "..."
                                ▼                                   ▼
                       ┌────────────────┐                  ┌────────────────┐
                       │ topics.yaml    │                  │ top-k hits     │
@@ -30,7 +30,7 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                       │ might_be_rel.  │                  │ kaynak yolu    │
                       └───────┬────────┘                  └────────────────┘
                               │
-                         docq index
+                         doqqy index
                               │
                       ┌───────▼────────┐
                       │ INDEX.md       │
@@ -38,7 +38,7 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                       │ giriş noktası  │
                       └───────┬────────┘
                               │
-                        docq inject
+                        doqqy inject
                               ▼
                       ┌────────────────┐
                       │ processed/*.md │
@@ -47,11 +47,11 @@ Bu belge sistemin **nasıl çalıştığını** açıklar: pipeline akışı, mo
                       └────────────────┘
 ```
 
-**Anahtar fikir:** Her aşama bağımsız çalıştırılabilir ve **deterministik**. `docq ingest`'i baştan çalıştırırsan `processed/`'i baştan yazar. Yeniden chunk'lamak istersen sadece `docq chunk`. Tam rebuild = sırayla 4 komut.
+**Anahtar fikir:** Her aşama bağımsız çalıştırılabilir ve **deterministik**. `doqqy ingest`'i baştan çalıştırırsan `processed/`'i baştan yazar. Yeniden chunk'lamak istersen sadece `doqqy chunk`. Tam rebuild = sırayla 4 komut.
 
 ## 2. Aşamalar — detay
 
-### 2.1 Ingest (`docq ingest`)
+### 2.1 Ingest (`doqqy ingest`)
 
 **Girdi:** `raw/` altındaki her dosya.
 **Çıktı:** `processed/<aynı yapı>/<dosya>.md` (uzantı .md'ye çevrilmiş, kanonik markdown).
@@ -73,7 +73,7 @@ Parser eşlemesi:
 
 Pandoc CLI kurulu değilse `.docx` otomatik mammoth'a düşer (saf Python). PDF'lerde docling layout-aware çıktı verir; başarısız olursa pymupdf4llm daha hızlı ama basit bir alternatif sağlar.
 
-### 2.2 Chunk (`docq chunk`)
+### 2.2 Chunk (`doqqy chunk`)
 
 **Girdi:** `processed/**/*.md`.
 **Çıktı:** `chunks/chunks.parquet` (her satır bir `Chunk` kaydı).
@@ -88,7 +88,7 @@ Akış:
    - Tek bir blok zaten büyükse (örn. devasa kod bloğu) kendi başına bir chunk olur.
 4. Aynı doküman içindeki chunk'lar `prev_chunk` / `next_chunk` UUID'leriyle bağlanır (Faz 3'te bağlam genişletme için hazır).
 
-### 2.3 Embed (`docq embed`)
+### 2.3 Embed (`doqqy embed`)
 
 **Girdi:** `chunks/chunks.parquet`.
 **Çıktı:** `store.lance/chunks/` (LanceDB tablosu, vector + meta).
@@ -101,7 +101,7 @@ Akış:
 
 Faz 2'de sparse vektör de eklenecek; şu an sadece dense.
 
-### 2.4 Map (`docq map`)
+### 2.4 Map (`doqqy map`)
 
 **Girdi:** `processed/*.md` + `store.lance/` (mevcut dense vektörler).
 **Çıktı:** `topics.yaml` (proje kökünde).
@@ -120,14 +120,14 @@ Faz 2'de sparse vektör de eklenecek; şu an sadece dense.
 3. Farklı dosyalardaki centroid'lerle cosine benzerlik hesaplanır.
 4. `MAP_COSINE_THRESHOLD` (0.75) üstündeki en yakın `MAP_TOP_N_NEIGHBORS` (5) komşu `might_be_related` olarak kaydedilir.
 
-### 2.5 Index (`docq index`)
+### 2.5 Index (`doqqy index`)
 
 **Girdi:** `topics.yaml`.
 **Çıktı:** `processed/INDEX.md`.
 
 `topics.yaml`'daki bağlantıları dosya → section hiyerarşisinde listeler. Her satır 📌 (explicit) veya 💡 (tematik, skoru ile) kategorisinde gösterilir. Obsidian vault'unda giriş noktası olarak kullanılır.
 
-### 2.6 Query (`docq query "..."`)
+### 2.6 Query (`doqqy query "..."`)
 
 **Girdi:** Doğal dilli sorgu metni.
 **Çıktı:** Top-k chunk + skor + kaynak yolu + section path.
@@ -169,6 +169,7 @@ class Chunk:
     doc_id: str                # processed/.../foo.md (relative)
     source: str                # raw/.../foo.pdf (frontmatter'dan)
     doc_type: str              # md/pdf/docx/txt
+    tags: list[str]            # klasör kırılımı → ["proje-a", "alt-klasor"]
     content: str               # chunk metni (header dahil)
     section_path: list[str]    # ["1. Auth", "1.2 JWT"]
     char_count: int
@@ -176,9 +177,11 @@ class Chunk:
     next_chunk: str | None
 ```
 
+`tags` alanı `ingest/base.py:base_metadata` tarafından `raw/` altındaki klasör kırılımından otomatik doldurulur. Örnek: `raw/bulut-saha/genel/dosya.pdf` → `tags: ["bulut-saha", "genel"]`.
+
 ### 3.3 LanceDB tablo şeması (`store.lance/chunks/`)
 
-Chunk dataclass'ının tüm alanları + iki ek:
+Chunk dataclass'ının tüm alanları + üç ek:
 
 | Kolon | Tip | Not |
 |---|---|---|
@@ -186,6 +189,8 @@ Chunk dataclass'ının tüm alanları + iki ek:
 | `doc_id` | string | |
 | `source` | string | orijinal kaynak |
 | `doc_type` | string | |
+| `tags` | list<string> | klasör bazlı etiketler |
+| `tags_str` | string | `",bulut-saha,genel,"` — SQL LIKE filtresi için |
 | `content` | string | tam chunk metni |
 | `section_path` | list<string> | başlık hiyerarşisi |
 | `section_path_str` | string | `"H1 > H2 > H3"` — gösterim için |
@@ -193,13 +198,16 @@ Chunk dataclass'ının tüm alanları + iki ek:
 | `prev_chunk` | string \| null | |
 | `next_chunk` | string \| null | |
 | **`vector`** | **fixed_size_list<float32, 1024>** | bge-m3 dense |
+| `sparse_vector` | string (JSON) | bge-m3 sparse token ağırlıkları |
+
+`tags_str` kolonunun formatı `",tag1,tag2,"` şeklindedir (öne/sona virgül). Bu sayede LanceDB SQL filtresi `tags_str LIKE '%,bulut-saha,%'` ile hem prefix hem suffix çakışması olmaksızın tam eşleşme yapılabilir.
 
 ## 4. Dosya organizasyonu
 
 ```
-src/docq/
+src/doqqy/
 ├── __init__.py            # version
-├── __main__.py            # python -m docq → cli.app
+├── __main__.py            # python -m doqqy → cli.app
 ├── cli.py                 # typer komutları (ingest, chunk, embed, map, index, query, info)
 ├── config.py              # yollar, sabitler, GPU detect, logger fabrikası
 ├── chunk.py               # MarkdownHeaderTextSplitter + atomik blok packing
@@ -244,9 +252,9 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 | Embed (CUDA) | 2–3 dk |
 | Tek sorgu | <1 sn |
 
-İlk `docq embed` ekstra ~2 GB model indirme (tek seferlik, sonra cache'ten).
+İlk `doqqy embed` ekstra ~2 GB model indirme (tek seferlik, sonra cache'ten).
 
-## 7. Faz 4: Wikilink Enjeksiyonu (`docq inject`)
+## 7. Faz 4: Wikilink Enjeksiyonu (`doqqy inject`)
 
 **Girdi:** `topics.yaml` + `processed/*.md`.
 **Çıktı:** Her `processed/*.md` dosyasının sonuna enjekte edilmiş `[[wikilink]]` bloğu.
@@ -254,7 +262,7 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 `topics.yaml`'daki her dosyanın `explicit_related` ve `might_be_related` linkleri bir marker blok içinde markdown dosyasına yazılır:
 
 ```markdown
-<!-- docq:links:start -->
+<!-- doqqy:links:start -->
 ## Bağlantılar
 
 ### 📌 Explicit Referanslar
@@ -262,9 +270,51 @@ Daha derin "neden" cevapları için `memory-bank/productContext.md` ve `memory-b
 
 ### 🔗 Tematik Bağlantılar
 - [[PRISMA]] → Payment Model (0.83)
-<!-- docq:links:end -->
+<!-- doqqy:links:end -->
 ```
 
 `wikilink_inject.py` idempotent çalışır: her çalıştırmada önceki marker bloğunu silip yeniden yazar. `raw/` dosyaları hiç değişmez, yalnızca `processed/` güncellenir.
 
 Obsidian, markdown içindeki `[[...]]`'yi otomatik olarak graph view'da edge'e dönüştürür — manuel işlem gerekmez.
+
+## 8. Faz 5: Çoklu Korpus ve Tag Filtreleme
+
+**Amaç:** `raw/` altında birden fazla proje/konu karışık olduğunda, sorgu ve harita oluşturma işlemlerini belirli bir alt kümeye kısıtlama yeteneği.
+
+### Nasıl çalışır?
+
+`ingest/base.py:base_metadata` her dosyayı ingest ederken `raw/` altındaki klasör kırılımını otomatik olarak `tags` listesine çevirir:
+
+```
+raw/bulut-saha/genel/dokuman.pdf  →  tags: ["bulut-saha", "genel"]
+raw/erp12/faturalama/api.md       →  tags: ["erp12", "faturalama"]
+raw/genel/readme.txt              →  tags: ["genel"]
+```
+
+Bu `tags` listesi `Chunk` veri modeline, oradan `embed.py` aracılığıyla LanceDB'ye taşınır. LanceDB'de iki kolon olarak saklanır:
+
+- `tags` — orijinal liste (Python `list[str]`)
+- `tags_str` — `",bulut-saha,genel,"` formatında string (SQL LIKE filtresi için)
+
+### Filtreleme mekanizması
+
+`doqqy query` ve `doqqy map` komutlarına `--tag <TAG>` parametresi eklenerek LanceDB seviyesinde filtreleme yapılır:
+
+```sql
+-- Örnek: LanceDB içinde üretilen filtre
+tags_str LIKE '%,bulut-saha,%'
+```
+
+Bu filtre **dense arama**, **sparse arama** ve **Pass 2 cosine komşuluk** hesaplamalarının tümüne uygulanır — yani arama ya da harita üretimi tamamen seçilen tag'e ait chunk'larla sınırlı kalır.
+
+### Yeni CLI komutları
+
+| Komut | Açıklama |
+|---|---|
+| `doqqy tags` | LanceDB'deki tüm kayıtlı tag'leri listeler |
+| `doqqy query "..." --tag X` | Sadece tag X'e ait chunk'larda hibrit arama yapar |
+| `doqqy map --tag X` | Pass 2 cosine benzerliğini sadece tag X chunk'larıyla sınırlar |
+
+### Tasarım kararı: array yerine string serialize
+
+LanceDB, `list[str]` kolonları üzerinde `LIKE` veya `IN` gibi SQL filtreleri desteklemez. Bu nedenle tag listesi `",tag1,tag2,"` formatında (öne ve sona virgül) string'e serialize edilir. Virgüllü format, kısmi eşleşmeyi (`"bulut"` ile `"bulut-saha"` eşleşmesi) önler.

@@ -32,11 +32,11 @@ pip install --default-timeout=600 -e .
 ### Doğrulama
 
 ```powershell
-docq --help
-docq info
+doqqy --help
+doqqy info
 ```
 
-`docq info` sana mevcut pipeline durumunu söyler (kaç raw dosya, processed var mı, chunks ve store dolu mu).
+`doqqy info` sana mevcut pipeline durumunu söyler (kaç raw dosya, processed var mı, chunks ve store dolu mu).
 
 ## 2. Veri hazırlığı
 
@@ -51,17 +51,17 @@ Diğer her şey (kod örnekleri, `.dll`, `package.json`, görseller) **otomatik 
 İlk kurulumda sırayla:
 
 ```powershell
-docq ingest        # 1. Markdown'a dönüştür
-docq chunk         # 2. Header-aware böl
-docq embed         # 3. Vektöre dönüştür + indeksle
+doqqy ingest        # 1. Markdown'a dönüştür
+doqqy chunk         # 2. Header-aware böl
+doqqy embed         # 3. Vektöre dönüştür + indeksle
 ```
 
-### `docq ingest`
+### `doqqy ingest`
 
 ```powershell
-docq ingest                       # raw/ tamamı
-docq ingest --source path/to/dir  # başka bir klasörden
-docq ingest -n 5                  # ilk 5 dosya (smoke test)
+doqqy ingest                       # raw/ tamamı
+doqqy ingest --source path/to/dir  # başka bir klasörden
+doqqy ingest -n 5                  # ilk 5 dosya (smoke test)
 ```
 
 Çıktı: `processed/<aynı yapı>/<dosya>.md`. Her dosyaya YAML frontmatter eklenir (kaynak, parser, hash vs.).
@@ -74,11 +74,11 @@ Başarısız dosyalar:
   - raw/.../bozuk.pdf: hem docling hem pymupdf4llm başarısız. ...
 ```
 
-### `docq chunk`
+### `doqqy chunk`
 
 ```powershell
-docq chunk
-docq chunk --processed path/to/processed  # başka bir kaynaktan
+doqqy chunk
+doqqy chunk --processed path/to/processed  # başka bir kaynaktan
 ```
 
 Çıktı: `chunks/chunks.parquet`. Parquet'i incelemek istersen:
@@ -86,34 +86,34 @@ docq chunk --processed path/to/processed  # başka bir kaynaktan
 python -c "import pandas as pd; print(pd.read_parquet('chunks/chunks.parquet').head())"
 ```
 
-### `docq embed`
+### `doqqy embed`
 
 ```powershell
-docq embed
+doqqy embed
 ```
 
 **İlk çalıştırma:** HuggingFace'ten `BAAI/bge-m3` modeli iner (~2 GB, cache: `%USERPROFILE%\.cache\huggingface\`). Sonraki çalıştırmalar cache'ten okur.
 
-Çıktı: `store.lance/chunks/` — LanceDB tablosu. GPU varsa otomatik kullanır (`DOCQ_DEVICE=cpu` ile zorlayabilirsin).
+Çıktı: `store.lance/chunks/` — LanceDB tablosu. GPU varsa otomatik kullanır (`DOQQY_DEVICE=cpu` ile zorlayabilirsin).
 
 ## 4. Harita üretimi (Faz 3)
 
 Dokümanlar arasındaki ilişkileri keşfedip `topics.yaml` ve `INDEX.md` üretir. LLM çağrısı yok — tamamen local.
 
 ```powershell
-docq map          # Pass 1 (regex) + Pass 2 (embedding cosine) → topics.yaml
-docq map --pass1  # Sadece regex explicit referanslar
-docq map --pass2  # Sadece embedding cosine tematik komşuluk
-docq index        # topics.yaml → processed/INDEX.md
+doqqy map          # Pass 1 (regex) + Pass 2 (embedding cosine) → topics.yaml
+doqqy map --pass1  # Sadece regex explicit referanslar
+doqqy map --pass2  # Sadece embedding cosine tematik komşuluk
+doqqy index        # topics.yaml → processed/INDEX.md
 ```
 
-### `docq map`
+### `doqqy map`
 
 ```powershell
-docq map                        # tüm processed/*.md, varsayılan eşik 0.75
-docq map --threshold 0.80       # daha az ama daha güvenilir tematik bağlantı
-docq map --top-n 10             # section başına maksimum 10 komşu (varsayılan 5)
-docq map --processed path/to/   # farklı klasör
+doqqy map                        # tüm processed/*.md, varsayılan eşik 0.75
+doqqy map --threshold 0.80       # daha az ama daha güvenilir tematik bağlantı
+doqqy map --top-n 10             # section başına maksimum 10 komşu (varsayılan 5)
+doqqy map --processed path/to/   # farklı klasör
 ```
 
 **Pass 1 — Regex:** `bkz.`, `bkz:`, `see section`, `see also`, parantez içi `(DOSYA.md)`, `[[WikiLink]]` kalıplarını yakalar. Bulduğu referansı bilinen dosya adlarıyla normalize eder.
@@ -130,12 +130,12 @@ sections:
     might_be_related: [...]     # cosine benzerlikle bulunan, skorlu
 ```
 
-### `docq index`
+### `doqqy index`
 
 ```powershell
-docq index                              # topics.yaml → processed/INDEX.md
-docq index --topics path/topics.yaml    # farklı topics dosyası
-docq index --output path/to/vault/      # farklı çıktı klasörü
+doqqy index                              # topics.yaml → processed/INDEX.md
+doqqy index --topics path/topics.yaml    # farklı topics dosyası
+doqqy index --output path/to/vault/      # farklı çıktı klasörü
 ```
 
 `processed/INDEX.md` Obsidian vault'unun giriş noktasıdır. Her dosyanın bağlantılı section'larını 📌 (explicit) ve 💡 (tematik) kategorilerde listeler.
@@ -145,23 +145,52 @@ docq index --output path/to/vault/      # farklı çıktı klasörü
 `topics.yaml`'daki bağlantıları `processed/*.md` dosyalarına `[[wikilink]]` olarak enjekte eder. Obsidian graph view bu linklerle otomatik dolar.
 
 ```powershell
-docq inject                              # topics.yaml → processed/*.md enjekte et
-docq inject --dry-run                    # Neyin enjekte edileceğini göster, dosyaları değiştirme
-docq inject --topics path/topics.yaml   # Farklı topics dosyası
+doqqy inject                              # topics.yaml → processed/*.md enjekte et
+doqqy inject --dry-run                    # Neyin enjekte edileceğini göster, dosyaları değiştirme
+doqqy inject --topics path/topics.yaml   # Farklı topics dosyası
 ```
 
-**Önce `docq map` çalıştırılmış olmalı** — `topics.yaml` yoksa inject çalışmaz.
+**Önce `doqqy map` çalıştırılmış olmalı** — `topics.yaml` yoksa inject çalışmaz.
 
 `inject` idempotent çalışır: her çalıştırmada önceki enjeksiyonu temizleyip yeniden yazar. `raw/` dosyaları asla değişmez.
 
 Enjeksiyondan sonra `processed/` klasörünü Obsidian'da vault olarak aç — graph view dosyalar arası bağlantıları gösterir.
 
-## 6. Sorgu
+## 6. Çoklu Korpus ve Tag Filtreleme (Faz 5)
+
+`raw/` altındaki klasör yapısı otomatik olarak etiket (tag) haline gelir. Örneğin:
+
+```
+raw/
+  bulut-saha/
+    genel/      ← tag: bulut-saha, genel
+      ...
+  erp12/        ← tag: erp12
+    ...
+```
 
 ```powershell
-docq query "JWT refresh nasıl çalışıyor?"
-docq query "PayTR iade akışı" -k 10                    # top-10
-docq query "stored procedure ekle cari kart" --full    # tam chunk göster
+# Sistemde kayıtlı tüm tag'leri listele
+doqqy tags
+
+# Sadece belirli bir proje/klasörde ara
+doqqy query "sipariş iade akışı" --tag erp12
+doqqy query "ödeme entegrasyonu" -t bulut-saha
+
+# Sadece belirli bir tag'in haritasını çıkar
+doqqy map --tag erp12
+doqqy map --tag bulut-saha --threshold 0.80
+```
+
+Tag filtreleme LanceDB seviyesinde SQL (`LIKE '%,tag,%'`) ile uygulanır — embedding araması ve harita üretimi yalnızca ilgili belge alt kümesiyle sınırlı kalır.
+
+## 7. Sorgu
+
+```powershell
+doqqy query "JWT refresh nasıl çalışıyor?"
+doqqy query "PayTR iade akışı" -k 10                    # top-10
+doqqy query "stored procedure ekle cari kart" --full    # tam chunk göster
+doqqy query "ödeme akışı" --tag paytr                   # sadece paytr klasöründe ara
 ```
 
 Örnek çıktı:
@@ -180,6 +209,7 @@ docq query "stored procedure ekle cari kart" --full    # tam chunk göster
 Flags:
 - `-k, --top-k N` — kaç sonuç (varsayılan 5)
 - `--full` — chunk'ı kesmeden tam göster (varsayılan ilk 400 karakter)
+- `-t, --tag TAG` — sadece bu tag/klasördeki dokümanlarda ara
 
 ## 7. Tipik akışlar
 
@@ -187,16 +217,16 @@ Flags:
 Şu an inkremental update yok — tam rebuild:
 ```powershell
 # raw/'a yeni dosyaları kopyala
-docq ingest
-docq chunk
-docq embed   # model yüklü, sadece embedding süresi
+doqqy ingest
+doqqy chunk
+doqqy embed   # model yüklü, sadece embedding süresi
 ```
 
 ### Sorgu sonuçları kötü — chunk ayarını değiştir
 ```powershell
-# src/docq/config.py içinde CHUNK_MAX_TOKENS değerini değiştir
-docq chunk    # processed/ ve raw/ değişmedi — sadece bunu çalıştır
-docq embed    # yeni chunk'lar için vektör üret
+# src/doqqy/config.py içinde CHUNK_MAX_TOKENS değerini değiştir
+doqqy chunk    # processed/ ve raw/ değişmedi — sadece bunu çalıştır
+doqqy embed    # yeni chunk'lar için vektör üret
 ```
 
 ### Bir dosyada parser sorunu var
@@ -205,25 +235,26 @@ docq embed    # yeni chunk'lar için vektör üret
 Get-Content logs/ingest.log -Tail 50
 
 # Dosya bazlı dene
-python -c "from docq.ingest import ingest_file; from pathlib import Path; print(ingest_file(Path('raw/.../sorunlu.pdf')))"
+python -c "from doqqy.ingest import ingest_file; from pathlib import Path; print(ingest_file(Path('raw/.../sorunlu.pdf')))"
 ```
 
 ### CPU'ya zorla (GPU sorun çıkarıyorsa)
 ```powershell
-$env:DOCQ_DEVICE = "cpu"
-docq embed
+$env:DOQQY_DEVICE = "cpu"
+doqqy embed
 ```
 
 ## 8. Tam pipeline (ilk kurulum)
 
 ```powershell
-docq ingest        # 1. Markdown'a dönüştür
-docq chunk         # 2. Header-aware böl
-docq embed         # 3. Vektöre dönüştür + indeksle
-docq map           # 4. Harita üret → topics.yaml
-docq index         # 5. topics.yaml → INDEX.md
-docq inject        # 6. [[wikilink]] enjekte et → Obsidian graph view dolar
-docq query "..."   # Sor
+doqqy ingest        # 1. Markdown'a dönüştür
+doqqy chunk         # 2. Header-aware böl
+doqqy embed         # 3. Vektöre dönüştür + indeksle
+doqqy map           # 4. Harita üret → topics.yaml
+doqqy index         # 5. topics.yaml → INDEX.md
+doqqy inject        # 6. [[wikilink]] enjekte et → Obsidian graph view dolar
+doqqy tags          # 7. Hangi tag'ler (klasör/proje) var? listele
+doqqy query "..."   # Sor (opsiyonel: --tag ile filtrele)
 ```
 
 ## 9. Sık karşılaşılan sorunlar
@@ -243,10 +274,10 @@ pip install -e .
 ### "No pandoc was found"
 `.docx` ingest sırasında çıkar. **Hata değil — uyarı.** Otomatik olarak mammoth'a düşer. İstersen `winget install pandoc` ile daha iyi kaliteye geç.
 
-### "store.lance yok — önce `docq embed` çalıştır"
-`docq query` sırasında. Açıklayıcı: pipeline'ı sırayla yürütmemişsin. Önce `ingest → chunk → embed`.
+### "store.lance yok — önce `doqqy embed` çalıştır"
+`doqqy query` sırasında. Açıklayıcı: pipeline'ı sırayla yürütmemişsin. Önce `ingest → chunk → embed`.
 
-### "chunks.parquet yok — önce `docq chunk` çalıştır"
+### "chunks.parquet yok — önce `doqqy chunk` çalıştır"
 Benzer şekilde. Sırayla yürüt.
 
 ### Çok yavaş — embed'de takıldı
@@ -276,11 +307,10 @@ UTF-8 decode başarısız olursa otomatik latin-1 fallback var. Yine de bozuk ç
 
 ## 10. Mevcut sınırlamalar
 
-Bu MVP. Şu özellikler **henüz yok**:
+Şu özellikler **henüz yok**:
 
 - Inkremental update — değişen dosyaları tespit etme yok, her seferinde tam rebuild
 - PDF görselleri — yoksayılıyor (caption üretimi ileride)
 - MCP server — Claude Code entegrasyonu sistemler stabilleştikten sonra
-- Çoklu korpus filtresi — `--project` parametresi henüz yok (PayTR / ERP12 karışık corpus)
 
 Tam roadmap için [memory-bank/progress.md](../memory-bank/progress.md).

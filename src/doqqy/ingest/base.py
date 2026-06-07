@@ -56,8 +56,20 @@ def content_hash(text: str) -> str:
 
 def base_metadata(source: Path, project_root: Path, kind: str) -> dict[str, Any]:
     rel = source.relative_to(project_root) if source.is_absolute() else source
+
+    # "raw/" veya proje_root altındaki klasör kırılımlarını filtrele
+    # Örneğin: raw/bulut-saha/erimelektronik-b2b-sistemi/veri.md
+    # -> tags: ["bulut-saha", "erimelektronik-b2b-sistemi"]
+    parts = list(rel.parts)
+    if parts and parts[0] == "raw":
+        parts = parts[1:]
+
+    # Son parça dosya adı, onu atıyoruz. Kalanlar klasör isimleri (tag'ler)
+    tags = parts[:-1] if len(parts) > 1 else []
+
     return {
         "source": str(rel).replace("\\", "/"),
         "type": kind,
+        "tags": tags,
         "ingested_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }

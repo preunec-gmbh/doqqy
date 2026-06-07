@@ -1,14 +1,14 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
-**⏳ Faz 4 BEKLEMEDE — Faz 3 tamamlandı (2026-06-02), Faz 4 planlandı (2026-06-06).**
+**✅ Faz 5 TAMAM (2026-06-07) — Çoklu Korpus / Tag Filtreleme sistemi eklendi.**
 
 Detaylı implementation notları: [fazlar/faz4.md](fazlar/faz4.md).
 Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Mevcut hal:**
-- Tüm kaynak kod (`src/docq/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı ve tam test edildi.
+- Tüm kaynak kod (`src/doqqy/`): ingest (md/txt/pdf/docx), chunk, embed, query, cli — yazıldı ve tam test edildi.
 - `.venv/` Python 3.10.11 + tüm bağımlılıklar kurulu (torch 2.12 CPU, docling 2.95, FlagEmbedding 1.4, lancedb 0.30, mammoth, pymupdf4llm vb.).
 - `raw/` altında gerçek PDF + DOCX + TXT + MD dosyalarıyla tam smoke test tamamlandı.
 - bge-m3 modeli HuggingFace cache'inde (~2 GB, `%USERPROFILE%\.cache\huggingface\`, symlink yok diye duplicate).
@@ -17,7 +17,7 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 **2026-06-02 Günü Yapılan Değişiklikler (Faz 3):**
 1. **`map_gen.py` (yeni):** Pass 1 (regex explicit referanslar) + Pass 2 (LanceDB dense vektör cosine komşuluk) → `topics.yaml`. 10 dosya, 213 section, 788 tematik bağlantı üretildi.
 2. **`index_gen.py` (yeni):** `topics.yaml` → `processed/INDEX.md`. 📌 explicit + 💡 might_be kategorileri.
-3. **`cli.py`:** `docq map` (--pass1/--pass2/--threshold/--top-n) + `docq index` komutları eklendi.
+3. **`cli.py`:** `doqqy map` (--pass1/--pass2/--threshold/--top-n) + `doqqy index` komutları eklendi.
 4. **`config.py`:** `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`, `TOPICS_YAML` sabitleri eklendi.
 
 **2026-05-28 Günü Yapılan Değişiklikler (Faz 2):**
@@ -82,18 +82,35 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 - [x] **Pass 1 — Regex:** Her `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`.
 - [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu).
 - [x] **Birleştirme:** `topics.yaml` yaz (iki kategori: explicit / might_be).
-- [x] `src/docq/map_gen.py` — tamamen local, API anahtarı gerektirmez.
-- [x] `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md`.
-- [x] `docq map` + `docq index` CLI komutları.
+- [x] `src/doqqy/map_gen.py` — tamamen local, API anahtarı gerektirmez.
+- [x] `src/doqqy/index_gen.py` — `topics.yaml` → `INDEX.md`.
+- [x] `doqqy map` + `doqqy index` CLI komutları.
 
 **Test sonuçları:** 10 dosya, 213 section, 1 explicit + 788 tematik bağlantı. 172/213 section bağlı.
 
-### Faz 4 — Obsidian Polish — **⏳ BEKLEMEDE (2026-06-06 planlandı)**
+**2026-06-07 Günü Yapılan Değişiklikler (Faz 5):**
+1. **`ingest/base.py`:** `base_metadata()` fonksiyonu `raw/` altındaki klasör kırılımını otomatik olarak `tags: list[str]` haline getiriyor. Örn: `raw/bulut-saha/genel/dosya.pdf` → `tags: ["bulut-saha", "genel"]`.
+2. **`chunk.py`:** `Chunk` dataclass'ına `tags: list[str]` alanı eklendi; frontmatter'dan okunuyor.
+3. **`embed.py`:** LanceDB'ye yazarken `tags_str` kolonu eklendi — format: `",tag1,tag2,"` (LIKE filtresi için).
+4. **`query.py`:** `search()`, `_dense_search()`, `_sparse_search()` fonksiyonlarına `filter_tag` parametresi eklendi; `tags_str LIKE '%,X,%'` SQL filtresi uygulanıyor.
+5. **`map_gen.py`:** `_pass2()` ve `generate_map()` fonksiyonlarına `filter_tag` parametresi eklendi; Pass 2 cosine benzerliği sadece filtrelenmiş chunk'larla sınırlı kalıyor.
+6. **`cli.py`:** `doqqy query --tag/-t`, `doqqy map --tag/-t`, `doqqy tags` (yeni komut) eklendi.
+
+### Faz 4 — Obsidian Polish — **🟢 TAMAM (2026-06-06)**
 
 Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 
-- `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/docq/wikilink_inject.py`).
-- Obsidian'da vault testi, graph view doğrulaması.
+- [x] `topics.yaml`'dan `[[wiki-link]]` enjeksiyon scripti (`src/doqqy/wikilink_inject.py`).
+- [x] `doqqy inject` CLI komutu (`--dry-run`, idempotent).
+- [x] Obsidian vault testi, graph view doğrulaması.
+
+### Faz 5 — Çoklu Korpus / Tag Filtreleme — **🟢 TAMAM (2026-06-07)**
+
+- [x] `raw/` klasör kırılımı → `tags: list[str]` otomatik metadata (`ingest/base.py`).
+- [x] `Chunk.tags` alanı + LanceDB `tags_str` kolonu (`,tag1,tag2,` serialize formatı).
+- [x] `doqqy query --tag <TAG>` — hibrit arama tag filtreli.
+- [x] `doqqy map --tag <TAG>` — Pass 2 cosine benzerliği tag filtreli.
+- [x] `doqqy tags` — sistemdeki tüm tag'leri listele.
 
 ## Aktif Düşünceler / Devam Eden Konular
 
@@ -101,7 +118,7 @@ Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 - **HuggingFace symlink uyarısı:** Windows Developer Mode kapalı, cache duplicate dosya saklıyor. Disk biraz daha fazla, fonksiyon etkilenmiyor.
 - **Ağ problemi:** PyPI timeout sorunu vardı, pyarrow özellikle. Faz 2'de yeni paket gerekirse `--default-timeout=600 --retries=10` veya tek tek indirme.
 - **Eval set:** Faz 2 sonrası, 15-20 test sorusu + recall@5.
-- **Proje adı:** Şimdilik `docq`, daha iyi bir isim çıkarsa değişebilir.
+- **Proje adı:** Şimdilik `doqqy`, daha iyi bir isim çıkarsa değişebilir.
 
 ## Önemli Pattern'ler ve Tercihler
 

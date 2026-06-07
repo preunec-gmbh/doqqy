@@ -28,7 +28,7 @@ Faz 1'de gözlemlenen sorun: dense-only retrieval bazı sorgularda doğru dosyay
 - [x] `encode()` çağrısında `return_sparse=True` ekle
 - [x] LanceDB schema'ya `sparse_vector` kolonu ekle (JSON string formatı: `{"token_id": weight}`)
 - [x] Mevcut `store.lance` tablosunu yeni schema ile yeniden oluştur (tam rebuild)
-- [x] `docq embed` komutu sonunda kaç sparse token üretildiğini log'a yaz
+- [x] `doqqy embed` komutu sonunda kaç sparse token üretildiğini log'a yaz
 
 ### 3.2 Hybrid Query (`query.py`)
 
@@ -46,7 +46,7 @@ Faz 1'de gözlemlenen sorun: dense-only retrieval bazı sorgularda doğru dosyay
 
 ### 3.4 CLI Güncellemesi (`cli.py`)
 
-- [x] `docq query` komutuna `--no-rerank` flag'i ekle (debug için)
+- [x] `doqqy query` komutuna `--no-rerank` flag'i ekle (debug için)
 - [x] Çıktıda hangi aşamanın skoru olduğunu göster: `dense_rank`, `sparse_rank`, `rrf_score`, `rerank_score`
 
 ### 3.5 LanceDB Sparse Desteği
@@ -72,18 +72,18 @@ query → sparse embed → sparse top-50 ─┘
 
 | Dosya | Değişiklik |
 |---|---|
-| `src/docq/embed.py` | `return_sparse=True`, LanceDB schema güncelleme |
-| `src/docq/query.py` | Sparse retrieval + RRF fonksiyonu |
-| `src/docq/rerank.py` | Yeni modül — `bge-reranker-v2-m3` |
-| `src/docq/cli.py` | `--no-rerank` flag, çıktıda aşama skorları |
+| `src/doqqy/embed.py` | `return_sparse=True`, LanceDB schema güncelleme |
+| `src/doqqy/query.py` | Sparse retrieval + RRF fonksiyonu |
+| `src/doqqy/rerank.py` | Yeni modül — `bge-reranker-v2-m3` |
+| `src/doqqy/cli.py` | `--no-rerank` flag, çıktıda aşama skorları |
 | `pyproject.toml` | Gerekirse yeni bağımlılık yok (FlagEmbedding reranker'ı zaten içeriyor) |
 
 ## 6. Test Planı
 
-1. `docq embed` ile sparse vektörler de yazıldı mı kontrol et (`docq info` güncellenir)
-2. `docq query "JWT_REFRESH_SECRET"` — tam eşleşme gerektiren sorgu, sparse olmadan çok kötüydü
-3. `docq query "PayTR odeme akisi"` — önceki problemi çözdü mü?
-4. `docq query "..." --no-rerank` vs normal — reranker fark yaratıyor mu?
+1. `doqqy embed` ile sparse vektörler de yazıldı mı kontrol et (`doqqy info` güncellenir)
+2. `doqqy query "JWT_REFRESH_SECRET"` — tam eşleşme gerektiren sorgu, sparse olmadan çok kötüydü
+3. `doqqy query "PayTR odeme akisi"` — önceki problemi çözdü mü?
+4. `doqqy query "..." --no-rerank` vs normal — reranker fark yaratıyor mu?
 5. 15-20 soru ile recall@5 hesapla (Faz 2 eval seti)
 
 ## 7. Riskler

@@ -1,7 +1,7 @@
 # Proje Brifi
 
 ## Proje Adı
-**docq** (geçici çalışma adı) — Yerel Doküman Bilgi Sistemi.
+**doqqy** (geçici çalışma adı) — Yerel Doküman Bilgi Sistemi.
 
 ## Temel Problem
 Elimizde ~500 sayfa, klasörlere dağılmış doküman var (md, pdf, docx karışık). Geliştirme sırasında ihtiyaç oldukça doğru bölümlere hızlıca ulaşabilmek istiyoruz. Dokümanın tek seferde okunup anlaşılması mümkün değil; "kervan yolda düzülür" mantığıyla çalışacağız ama bunun için **neyin nerede olduğunu** ve **hangi bölümün hangiyle ilgili olduğunu** sistemin bilmesi gerekiyor.

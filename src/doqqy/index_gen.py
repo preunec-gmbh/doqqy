@@ -6,9 +6,9 @@ from pathlib import Path
 
 import yaml
 
-from docq.config import PROCESSED_DIR, TOPICS_YAML, get_logger
+from doqqy.config import PROCESSED_DIR, TOPICS_YAML, get_logger
 
-_LOG = get_logger("docq.index_gen")
+_LOG = get_logger("doqqy.index_gen")
 
 
 def generate_index(
@@ -17,7 +17,7 @@ def generate_index(
 ) -> Path:
     """topics.yaml okuyup INDEX.md yaz. Dönen değer: yazılan dosya yolu."""
     if not topics_path.exists():
-        raise FileNotFoundError(f"{topics_path} yok — önce `docq map` çalıştır.")
+        raise FileNotFoundError(f"{topics_path} yok — önce `doqqy map` çalıştır.")
 
     data = yaml.safe_load(topics_path.read_text(encoding="utf-8"))
     sections = data.get("sections", [])
@@ -34,7 +34,7 @@ def generate_index(
     lines: list[str] = [
         "# Doküman İndeksi",
         "",
-        "> Bu dosya `docq index` tarafından otomatik üretilmiştir.",
+        "> Bu dosya `doqqy index` tarafından otomatik üretilmiştir.",
         "",
     ]
 

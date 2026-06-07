@@ -1,42 +1,42 @@
 # İlerleme
 
 ## Şu Anki Durum
-**✅ Sistem Stabil — Ana pipeline tamamlandı (Faz 1-4).**
+**✅ Sistem Stabil — Ana pipeline tamamlandı (Faz 1-5).**
 
 Detaylı implementation notları: [fazlar/faz4.md](fazlar/faz4.md).
 Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 ## Çalışanlar
 - Proje iskeleti (`pyproject.toml`, `.gitignore`, `.env.example`).
-- Klasör yapısı (`raw/`, `processed/`, `chunks/`, `src/docq/`, `logs/`).
+- Klasör yapısı (`raw/`, `processed/`, `chunks/`, `src/doqqy/`, `logs/`).
 - `docs/` → `raw/` (320 dosya — kullanıcının PayTR + ERP12 + ERIMELEKTRONIK + GENERAL dokümanları).
 - `.venv/` Python 3.10.11 ile.
-- Kaynak kodun tamamı (`src/docq/`).
+- Kaynak kodun tamamı (`src/doqqy/`).
 
 ## Yapılacaklar
 
 ### Faz 1: MVP — **🟢 TAMAM**
 - [x] Proje iskeleti
   - [x] `pyproject.toml` (paket bağımlılıkları)
-  - [x] Klasör yapısı (`raw/`, `processed/`, `chunks/`, `src/docq/`, `logs/`)
+  - [x] Klasör yapısı (`raw/`, `processed/`, `chunks/`, `src/doqqy/`, `logs/`)
   - [x] `.env.example`
   - [x] `.gitignore`
 - [x] Ingest katmanı
-  - [x] `src/docq/ingest/base.py` — Document dataclass + IngestResult + helpers
-  - [x] `src/docq/ingest/md_ingest.py` — .md + .txt
-  - [x] `src/docq/ingest/docx_ingest.py` — pandoc (auto-download) → mammoth fallback
-  - [x] `src/docq/ingest/pdf_ingest.py` — docling → pymupdf4llm fallback
-  - [x] `src/docq/ingest/router.py`
+  - [x] `src/doqqy/ingest/base.py` — Document dataclass + IngestResult + helpers
+  - [x] `src/doqqy/ingest/md_ingest.py` — .md + .txt
+  - [x] `src/doqqy/ingest/docx_ingest.py` — pandoc (auto-download) → mammoth fallback
+  - [x] `src/doqqy/ingest/pdf_ingest.py` — docling → pymupdf4llm fallback
+  - [x] `src/doqqy/ingest/router.py`
   - [x] `_processed_path` path hatası düzeltildi (resolve() ile relative/absolute sorun giderildi)
 - [x] Chunking
-  - [x] `src/docq/chunk.py` — header-aware, kod/tablo atomik
+  - [x] `src/doqqy/chunk.py` — header-aware, kod/tablo atomik
   - [x] Bold-heading normalize: `**Başlık**` / `__Başlık__` → `## Başlık` (Word DOCX uyumluluğu)
 - [x] Embedding
-  - [x] `src/docq/embed.py` — bge-m3 dense + LanceDB yazımı
+  - [x] `src/doqqy/embed.py` — bge-m3 dense + LanceDB yazımı
 - [x] Sorgu
-  - [x] `src/docq/query.py` — cosine dense search
+  - [x] `src/doqqy/query.py` — cosine dense search
 - [x] CLI
-  - [x] `src/docq/cli.py` — typer ile `ingest`, `chunk`, `embed`, `query`, `info`
+  - [x] `src/doqqy/cli.py` — typer ile `ingest`, `chunk`, `embed`, `query`, `info`
 - [x] Bağımlılık kurulumu — `pip install -e .`
 - [x] **Smoke test — MD path** başarılı
 - [x] **Smoke test — PDF path** (docling + pymupdf4llm fallback) başarılı
@@ -60,12 +60,12 @@ Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 > Orijinal plan (Seçenek D: LLM + embedding) iptal edildi. Embedding zaten tematik ilişkiyi biliyor; LLM gereksiz maliyet ve complexity getiriyordu.
 
-- [x] `src/docq/map_gen.py` — tamamen local, API anahtarı yok
+- [x] `src/doqqy/map_gen.py` — tamamen local, API anahtarı yok
 - [x] **Pass 1 — Regex:** `processed/*.md` içinde `bkz.` / `see section` / dosya adı referanslarını yakala → `explicit_related`
 - [x] **Pass 2 — Embedding cosine:** LanceDB'den her section için top-N komşu → `might_be_related` (skorlu)
 - [x] `topics.yaml` schema + writer (iki kategori: `explicit_related`, `might_be_related`)
-- [x] `src/docq/index_gen.py` — `topics.yaml` → `INDEX.md`
-- [x] `docq map` + `docq index` CLI komutları (`--pass1`, `--pass2`, `--threshold`, `--top-n`)
+- [x] `src/doqqy/index_gen.py` — `topics.yaml` → `INDEX.md`
+- [x] `doqqy map` + `doqqy index` CLI komutları (`--pass1`, `--pass2`, `--threshold`, `--top-n`)
 - [x] `config.py` sabitleri: `MAP_COSINE_THRESHOLD=0.75`, `MAP_TOP_N_NEIGHBORS=5`
 - [x] Test: 10 dosya, 213 section, 788 tematik bağlantı, 172/213 section bağlı
 
@@ -73,20 +73,25 @@ Faz 3 notları: [fazlar/faz3.md](fazlar/faz3.md).
 
 Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 
-- [x] `src/docq/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte (marker blok, idempotent)
-- [x] `docq inject` CLI komutu (`--dry-run`, `--topics`, `--processed` flags)
+- [x] `src/doqqy/wikilink_inject.py` — `topics.yaml` → `processed/*.md` içine `[[link]]` enjekte (marker blok, idempotent)
+- [x] `doqqy inject` CLI komutu (`--dry-run`, `--topics`, `--processed` flags)
 - [x] `processed/` klasörünü Obsidian'da vault olarak aç
 - [x] Graph view doğrulaması — edge'ler görünüyor mu (evet)
 - [x] `INDEX.md`'den dosyalara navigasyon testi
-- [x] Smoke test: `docq inject --dry-run` önce, sonra gerçek çalıştır (6 dosya, 20 link enjekte edildi)
+- [x] Smoke test: `doqqy inject --dry-run` önce, sonra gerçek çalıştır (6 dosya, 20 link enjekte edildi)
+
+### Faz 5: Çoklu Korpus ve Tag Filtreleme — **🟢 TAMAM (2026-06-07)**
+
+- [x] `raw/` altındaki klasör kırılımlarının (Örn: `raw/bulut-saha/genel/...`) otomatik etiket (tag) olarak `Document.metadata` içine `tags: ["bulut-saha", "genel"]` formatında aktarılması.
+- [x] Chunk metadatalarında LanceDB array serileştirme sorununu aşmak için tag listesinin `,etiket1,etiket2,` text şeklide LanceDB'ye kaydedilmesi.
+- [x] `doqqy tags` komutunun eklenmesi (Mevcut indekslenmiş tüm etiketleri/klasör tiplerini çıkartır).
+- [x] `doqqy query` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (LanceDB seviyesinde SQL filtering yaparak arama sonuçlarını izole eder).
+- [x] `doqqy map` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (Pass 2'deki vektörel cosine benzerlik aramasını sadece ilgili tag altındakilerle sınırlandırır).
 
 ### Faz Sonrası (gelecek, sırasız)
-- [ ] Eval set: 15-20 test sorusu + recall@5 metriği
 - [ ] Inkremental update (content hash bazlı diff)
 - [ ] MCP server (Claude Code entegrasyonu)
-- [ ] Görsel caption üretimi (vision LLM)
 - [ ] (Belki) Web arayüz
-- [ ] **Çoklu korpus / proje filtresi:** Korpus tek bir proje veya konuya ait olmayabilir (örn. PayTR + ERP12 + GENEL karışık). `docq map` ve `docq query` komutlarına `--project` veya `--corpus` parametresi eklenebilir; harita ve arama belirli bir alt kümeye kısıtlanır. Detay için konuşulacak.
 
 ## Bilinen Sorunlar / Riskler
 

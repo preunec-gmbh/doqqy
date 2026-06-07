@@ -14,7 +14,7 @@
   ```powershell
   winget install pandoc
   ```
-  Doğrulama: `pandoc --version`. Kurulu değilse `docq` otomatik olarak `mammoth` (saf Python) fallback'ine geçer; sadece tablo/karmaşık layout'larda kalite farkı olur.
+  Doğrulama: `pandoc --version`. Kurulu değilse `doqqy` otomatik olarak `mammoth` (saf Python) fallback'ine geçer; sadece tablo/karmaşık layout'larda kalite farkı olur.
 - **Python 3.10+** — `python --version` ile doğrula.
 
 ## Python Paketleri
@@ -110,14 +110,14 @@ ANTHROPIC_API_KEY=...    # opsiyonel, fallback için
 
 ```powershell
 # Tam pipeline (sırayla)
-python -m docq ingest
-python -m docq chunk
-python -m docq embed
-python -m docq map           # LLM çağrısı yapar, dikkat
+python -m doqqy ingest
+python -m doqqy chunk
+python -m doqqy embed
+python -m doqqy map           # LLM çağrısı yapar, dikkat
 
 # Sorgu
-python -m docq query "JWT refresh nasıl çalışıyor?"
-python -m docq related auth/jwt-flow#3.2
+python -m doqqy query "JWT refresh nasıl çalışıyor?"
+python -m doqqy related auth/jwt-flow#3.2
 
 # Vault aç
 # Obsidian'da processed/ klasörünü vault olarak aç

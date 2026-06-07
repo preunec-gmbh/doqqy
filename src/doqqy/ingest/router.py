@@ -7,13 +7,13 @@ from typing import Callable
 
 from tqdm import tqdm
 
-from docq.config import RAW_DIR, SUPPORTED_EXTENSIONS, get_logger
-from docq.ingest.base import Document, IngestError, IngestResult
-from docq.ingest.docx_ingest import ingest_docx
-from docq.ingest.md_ingest import ingest_md, ingest_txt
-from docq.ingest.pdf_ingest import ingest_pdf
+from doqqy.config import RAW_DIR, SUPPORTED_EXTENSIONS, get_logger
+from doqqy.ingest.base import Document, IngestError, IngestResult
+from doqqy.ingest.docx_ingest import ingest_docx
+from doqqy.ingest.md_ingest import ingest_md, ingest_txt
+from doqqy.ingest.pdf_ingest import ingest_pdf
 
-_LOG = get_logger("docq.ingest.router", log_file="ingest.log")
+_LOG = get_logger("doqqy.ingest.router", log_file="ingest.log")
 
 
 _DISPATCH: dict[str, Callable[[Path], Document]] = {

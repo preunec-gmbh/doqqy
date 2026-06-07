@@ -41,7 +41,7 @@ Bir bölümü okuduğumda onunla bağlantılı diğer bölümleri kolayca bulmak
 Obsidian vault'unu aç → `INDEX.md`'den başla → graph view ile dolaş. Genel yapıya hakim ol.
 
 ### Hedefli Arama Modu
-`docq query "..."` ile CLI'dan sor → top-5 sonucu oku → gerekirse Obsidian'dan o dosyaya atla → orijinal bağlamı gör.
+`doqqy query "..."` ile CLI'dan sor → top-5 sonucu oku → gerekirse Obsidian'dan o dosyaya atla → orijinal bağlamı gör.
 
 ### Performans
 - Sorgu sonucu **<1 saniye** gelmeli.

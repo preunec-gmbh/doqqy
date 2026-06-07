@@ -22,7 +22,7 @@ import pandas as pd
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from tqdm import tqdm
 
-from docq.config import (
+from doqqy.config import (
     CHUNK_MAX_TOKENS,
     CHUNK_MIN_MERGE_TOKENS,
     CHUNKS_PARQUET,
@@ -30,7 +30,7 @@ from docq.config import (
     get_logger,
 )
 
-_LOG = get_logger("docq.chunk")
+_LOG = get_logger("doqqy.chunk")
 
 # Approx 4 karakter ≈ 1 token (multilingual ortalama). Tam tokenizer Faz 2'de.
 _MAX_CHARS = CHUNK_MAX_TOKENS * 4
@@ -60,6 +60,7 @@ class Chunk:
     doc_id: str                  # processed/.../foo.md (proje köküne göre relative)
     source: str                  # original kaynak (raw/.../foo.pdf gibi)
     doc_type: str                # md / pdf / txt
+    tags: list[str] = field(default_factory=list) # project/folder tags
     content: str
     section_path: list[str] = field(default_factory=list)
     char_count: int = 0
@@ -147,6 +148,7 @@ def chunk_file(md_path: Path) -> list[Chunk]:
 
     source = fm.get("source", doc_id)
     doc_type = fm.get("type", "md")
+    tags = fm.get("tags", [])
 
     # Tek satırda tamamen bold olan ifadeleri ## başlığa çevir (Word'de Heading stili yerine
     # bold kullanan dokümanlar için: __A224. Toplantı__ → ## A224. Toplantı)
@@ -171,6 +173,7 @@ def chunk_file(md_path: Path) -> list[Chunk]:
                     doc_id=doc_id,
                     source=source,
                     doc_type=doc_type,
+                    tags=tags,
                     content=piece,
                     section_path=path,
                     char_count=len(piece),

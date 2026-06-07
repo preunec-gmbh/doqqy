@@ -4,10 +4,11 @@ Her faz için implementation sonrası yazılan **detaylı not**. Plan değil —
 
 | Faz | Belge | Durum |
 |---|---|---|
-| Faz 1 — MVP | [faz1.md](faz1.md) | Kod yazıldı, install + smoke test bekliyor |
-| Faz 2 — Hibrit arama + reranker | — | Başlamadı |
-| Faz 3 — Harita üretimi | — | Başlamadı |
-| Faz 4 — Obsidian polish | — | Başlamadı |
+| Faz 1 — MVP | [faz1.md](faz1.md) | 🟢 Tamamlandı |
+| Faz 2 — Hibrit arama + reranker | [faz2.md](faz2.md) | 🟢 Tamamlandı |
+| Faz 3 — Harita üretimi | [faz3.md](faz3.md) | 🟢 Tamamlandı |
+| Faz 4 — Obsidian polish | [faz4.md](faz4.md) | 🟢 Tamamlandı |
+| Faz 5 — Çoklu korpus / tag filtreleme | [faz5.md](faz5.md) | 🟢 Tamamlandı |
 
 ## Bu klasör neden var?
 

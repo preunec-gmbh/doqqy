@@ -1,4 +1,4 @@
-"""docq CLI — typer ile ingest/chunk/embed/query komutları."""
+"""doqqy CLI — typer ile ingest/chunk/embed/query komutları."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Optional
 
 import typer
 
-from docq.config import (
+from doqqy.config import (
     DEFAULT_TOP_K,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
@@ -28,7 +28,7 @@ if sys.platform == "win32":
 
 app = typer.Typer(
     add_completion=False,
-    help="docq — yerel dokuman bilgi sistemi.",
+    help="doqqy — yerel dokuman bilgi sistemi.",
     no_args_is_help=True,
     # Rich'in Windows legacy console renderer'ı Türkçe karakterlerde çöküyor;
     # düz click help'i kullan.
@@ -47,7 +47,7 @@ def ingest(
     ),
 ) -> None:
     """raw/ altındaki dosyaları processed/ altına kanonik markdown olarak yaz."""
-    from docq.ingest import ingest_directory
+    from doqqy.ingest import ingest_directory
 
     ensure_dirs()
     src = source_dir or RAW_DIR
@@ -72,7 +72,7 @@ def chunk(
     ),
 ) -> None:
     """processed/*.md → chunks/chunks.parquet (header-aware bölme)."""
-    from docq.chunk import chunk_directory
+    from doqqy.chunk import chunk_directory
 
     ensure_dirs()
     src = processed_dir or PROCESSED_DIR
@@ -83,7 +83,7 @@ def chunk(
 @app.command()
 def embed() -> None:
     """chunks/chunks.parquet → store.lance (bge-m3 dense)."""
-    from docq.embed import build_index
+    from doqqy.embed import build_index
 
     ensure_dirs()
     n = build_index()
@@ -96,9 +96,10 @@ def query(
     k: int = typer.Option(DEFAULT_TOP_K, "--top-k", "-k", help="Kaç sonuç döndürülecek."),
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
+    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
-    from docq.query import search
+    from doqqy.query import search
 
     hits = search(text, k=k, rerank=not no_rerank)
     if not hits:
@@ -107,8 +108,8 @@ def query(
 
     for i, hit in enumerate(hits, 1):
         path = " > ".join(hit.section_path) if hit.section_path else "(başlıksız)"
-        typer.echo(f"\n[{i}] {hit.source}")
-        typer.echo(f"    {path}")
+        typer.echo(f"\\n[{i}] {hit.source}")
+        typer.echo(f"{path}")
 
         # Aşama skorlarını göster
         ex = hit.extra
@@ -141,15 +142,12 @@ def map(
     ),
     pass1_only: bool = typer.Option(False, "--pass1", help="Sadece regex pass çalıştır."),
     pass2_only: bool = typer.Option(False, "--pass2", help="Sadece embedding cosine pass çalıştır."),
-    threshold: float = typer.Option(
-        MAP_COSINE_THRESHOLD, "--threshold", "-t", help="Cosine benzerlik eşiği (Pass 2)."
-    ),
-    top_n: int = typer.Option(
-        MAP_TOP_N_NEIGHBORS, "--top-n", "-n", help="Section başına max komşu (Pass 2)."
-    ),
+    threshold: float = typer.Option(MAP_COSINE_THRESHOLD, "--threshold", help="Cosine benzerlik alt limiti."),
+    top_n: int = typer.Option(MAP_TOP_N_NEIGHBORS, "--top-n", help="Her section için max komşu sayısı."),
+    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag'e sahip sectionlar arasında ilişki kur."),
 ) -> None:
     """processed/*.md → topics.yaml (regex referanslar + embedding cosine)."""
-    from docq.map_gen import generate_map
+    from doqqy.map_gen import generate_map
 
     ensure_dirs()
     src = processed_dir or PROCESSED_DIR
@@ -158,12 +156,12 @@ def map(
     do_pass2 = not pass1_only
 
     out = generate_map(
-        processed_dir=src,
-        pass1=do_pass1,
-        pass2=do_pass2,
+        processed_dir=p_dir,
+        pass1=p1,
+        pass2=p2,
         cosine_threshold=threshold,
         top_n=top_n,
-        output=TOPICS_YAML,
+        tag=tag,
     )
     typer.echo(f"OK: {out}")
 
@@ -178,7 +176,7 @@ def index(
     ),
 ) -> None:
     """topics.yaml → processed/INDEX.md (Obsidian giriş noktası)."""
-    from docq.index_gen import generate_index
+    from doqqy.index_gen import generate_index
 
     ensure_dirs()
     out = generate_index(
@@ -199,7 +197,7 @@ def inject(
     dry_run: bool = typer.Option(False, "--dry-run", help="Dosyaları değiştirmeden neyin enjekte edileceğini göster."),
 ) -> None:
     """topics.yaml → processed/*.md içine [[wikilink]] enjekte et (Obsidian graph view)."""
-    from docq.wikilink_inject import inject_links
+    from doqqy.wikilink_inject import inject_links
 
     ensure_dirs()
     result = inject_links(
@@ -215,9 +213,51 @@ def inject(
 
 
 @app.command()
+
+@app.command()
+def tags() -> None:
+    """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
+    import lancedb # type: ignore
+    from doqqy.config import STORE_DIR, LANCE_TABLE
+    
+    if not STORE_DIR.exists():
+        typer.echo("LanceDB bulunamadı. Önce `doqqy embed` çalıştırın.", err=True)
+        raise typer.Exit(1)
+        
+    db = lancedb.connect(STORE_DIR)
+    if LANCE_TABLE not in db.table_names():
+        typer.echo("LanceDB tablosu boş.", err=True)
+        raise typer.Exit(1)
+        
+    table = db.open_table(LANCE_TABLE)
+    df = table.search().limit(100000).to_pandas()
+    
+    if "tags" not in df.columns:
+        typer.echo("Kayıtlı tag bulunamadı (Eski index kullanılıyor olabilir).")
+        raise typer.Exit()
+        
+    all_tags = set()
+    for t_list in df["tags"].dropna():
+        # pandas array of strings
+        if isinstance(t_list, (list, tuple, np.ndarray)):
+            for t in t_list:
+                all_tags.add(t)
+                
+    if not all_tags:
+        typer.echo("Gösterilecek tag bulunamadı.")
+    else:
+        typer.echo(f"\nBulunan tag'ler: ({len(all_tags)} adet)")
+        typer.echo("-" * 40)
+        for t in sorted(all_tags):
+            typer.echo(f"- {t}")
+        typer.echo("-" * 40)
+        typer.echo("Örnek kullanım: doqqy query \"sorgu\" --tag " + list(all_tags)[0])
+
+
+@app.command()
 def info() -> None:
     """Mevcut pipeline durumunu özetle."""
-    from docq.config import CHUNKS_PARQUET, STORE_DIR
+    from doqqy.config import CHUNKS_PARQUET, STORE_DIR
 
     typer.echo(f"raw/        : {_count_files(RAW_DIR)} dosya")
     typer.echo(f"processed/  : {_count_files(PROCESSED_DIR, suffix='.md')} md dosya")
@@ -227,11 +267,11 @@ def info() -> None:
         n = len(pd.read_parquet(CHUNKS_PARQUET, columns=["chunk_id"]))
         typer.echo(f"chunks/     : {n} chunk (parquet mevcut)")
     else:
-        typer.echo("chunks/     : (boş — `docq chunk` çalıştır)")
+        typer.echo("chunks/     : (boş — `doqqy chunk` çalıştır)")
     if STORE_DIR.exists():
         typer.echo(f"store.lance : mevcut ({STORE_DIR})")
     else:
-        typer.echo("store.lance : (boş — `docq embed` çalıştır)")
+        typer.echo("store.lance : (boş — `doqqy embed` çalıştır)")
 
 
 def _count_files(root: Path, suffix: str | None = None) -> int:

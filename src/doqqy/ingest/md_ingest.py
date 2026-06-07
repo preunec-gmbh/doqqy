@@ -10,8 +10,8 @@ from pathlib import Path
 
 import frontmatter
 
-from docq.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from docq.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
 
 
 def _processed_path(source: Path) -> Path:
