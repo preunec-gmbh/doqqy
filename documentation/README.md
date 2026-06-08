@@ -10,6 +10,8 @@
 
 Hızlı başlangıç için [README.md](../README.md) kök dizinde.
 
+> **Not:** Sistem CLI düzeyinde zengin terminal kullanıcı arayüzü sunmak üzere tasarlanmıştır. Çıktılar yapılandırılmıştır ve uzun süren RAG pipeline (chunk/embed) işlemlerinde progress bar takibi sunulur.
+
 ## Bu klasör vs. `memory-bank/`
 
 | | `documentation/` | `memory-bank/` |

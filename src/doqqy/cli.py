@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich import box
 
 from doqqy.config import (
     DEFAULT_TOP_K,
@@ -26,12 +30,12 @@ if sys.platform == "win32":
     except (AttributeError, ValueError):
         pass
 
+console = Console()
+
 app = typer.Typer(
     add_completion=False,
     help="doqqy — yerel dokuman bilgi sistemi.",
     no_args_is_help=True,
-    # Rich'in Windows legacy console renderer'ı Türkçe karakterlerde çöküyor;
-    # düz click help'i kullan.
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
 )
@@ -51,18 +55,32 @@ def ingest(
 
     ensure_dirs()
     src = source_dir or RAW_DIR
-    typer.echo(f"ingest kaynak: {src}")
+    console.print(f"[bold cyan]ingest[/bold cyan] kaynak: [dim]{src}[/dim]")
     result = ingest_directory(src, limit=limit)
-    typer.echo(
-        f"OK: {len(result.succeeded)} başarılı, "
-        f"{len(result.failed)} başarısız, toplam {result.total}."
-    )
+
     if result.failed:
-        typer.echo("\nBaşarısız dosyalar:")
+        console.print(
+            Panel(
+                f"[green]Başarılı:[/green] {len(result.succeeded)}  "
+                f"[red]Başarısız:[/red] {len(result.failed)}  "
+                f"Toplam: {result.total}",
+                title="[bold]ingest tamamlandı[/bold]",
+                border_style="yellow",
+            )
+        )
+        console.print("[red]Başarısız dosyalar:[/red]")
         for path, err in result.failed[:20]:
-            typer.echo(f"  - {path}: {err}")
+            console.print(f"  [red]✗[/red] {path}: [dim]{err}[/dim]")
         if len(result.failed) > 20:
-            typer.echo(f"  ... ve {len(result.failed) - 20} tane daha (bkz. logs/ingest.log).")
+            console.print(f"  [dim]... ve {len(result.failed) - 20} tane daha (bkz. logs/ingest.log).[/dim]")
+    else:
+        console.print(
+            Panel(
+                f"[green]✓[/green] {len(result.succeeded)} dosya başarıyla işlendi.",
+                title="[bold green]ingest tamamlandı[/bold green]",
+                border_style="green",
+            )
+        )
 
 
 @app.command()
@@ -77,7 +95,13 @@ def chunk(
     ensure_dirs()
     src = processed_dir or PROCESSED_DIR
     chunks = chunk_directory(src)
-    typer.echo(f"OK: {len(chunks)} chunk üretildi.")
+    console.print(
+        Panel(
+            f"[green]✓[/green] {len(chunks)} chunk üretildi.",
+            title="[bold green]chunk tamamlandı[/bold green]",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -87,7 +111,13 @@ def embed() -> None:
 
     ensure_dirs()
     n = build_index()
-    typer.echo(f"OK: {n} chunk indekslendi.")
+    console.print(
+        Panel(
+            f"[green]✓[/green] {n} chunk indekslendi.",
+            title="[bold green]embed tamamlandı[/bold green]",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -103,36 +133,36 @@ def query(
 
     hits = search(text, k=k, rerank=not no_rerank)
     if not hits:
-        typer.echo("Sonuç yok.")
+        console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
+
+    console.print(Panel(f'[bold]"{text}"[/bold] için {len(hits)} sonuç', border_style="cyan"))
 
     for i, hit in enumerate(hits, 1):
         path = " > ".join(hit.section_path) if hit.section_path else "(başlıksız)"
-        typer.echo(f"\\n[{i}] {hit.source}")
-        typer.echo(f"{path}")
-
-        # Aşama skorlarını göster
         ex = hit.extra
         score_parts = []
         if ex.get("dense_rank") is not None:
-            score_parts.append(f"dense_rank={ex['dense_rank']}")
+            score_parts.append(f"dense={ex['dense_rank']}")
         if ex.get("sparse_rank") is not None:
-            score_parts.append(f"sparse_rank={ex['sparse_rank']}")
+            score_parts.append(f"sparse={ex['sparse_rank']}")
         if ex.get("rrf_score") is not None:
             score_parts.append(f"rrf={ex['rrf_score']:.4f}")
         if ex.get("rerank_score") is not None:
             score_parts.append(f"rerank={ex['rerank_score']:.3f}")
-        if score_parts:
-            typer.echo(f"    [{' | '.join(score_parts)}]")
+        scores = "  [dim]" + " | ".join(score_parts) + "[/dim]" if score_parts else ""
 
         body = hit.content if full else hit.content[:400].rstrip()
-        typer.echo(_indent(body, "    "))
-        if not full and len(hit.content) > 400:
-            typer.echo(f"    … ({len(hit.content) - 400} karakter daha)")
+        ellipsis = f"\n[dim]… ({len(hit.content) - 400} karakter daha)[/dim]" if not full and len(hit.content) > 400 else ""
 
-
-def _indent(text: str, prefix: str) -> str:
-    return "\n".join(prefix + line for line in text.splitlines())
+        console.print(
+            Panel(
+                f"[dim]{path}[/dim]{scores}\n\n{body}{ellipsis}",
+                title=f"[bold cyan][{i}][/bold cyan] {hit.source}",
+                border_style="dim",
+                box=box.ROUNDED,
+            )
+        )
 
 
 @app.command()
@@ -156,14 +186,20 @@ def map(
     do_pass2 = not pass1_only
 
     out = generate_map(
-        processed_dir=p_dir,
-        pass1=p1,
-        pass2=p2,
+        processed_dir=src,
+        pass1=do_pass1,
+        pass2=do_pass2,
         cosine_threshold=threshold,
         top_n=top_n,
         tag=tag,
     )
-    typer.echo(f"OK: {out}")
+    console.print(
+        Panel(
+            f"[green]✓[/green] Harita oluşturuldu: [dim]{out}[/dim]",
+            title="[bold green]map tamamlandı[/bold green]",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -183,7 +219,13 @@ def index(
         topics_path=topics or TOPICS_YAML,
         output_dir=output_dir or PROCESSED_DIR,
     )
-    typer.echo(f"OK: {out}")
+    console.print(
+        Panel(
+            f"[green]✓[/green] Index oluşturuldu: [dim]{out}[/dim]",
+            title="[bold green]index tamamlandı[/bold green]",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -206,52 +248,54 @@ def inject(
         dry_run=dry_run,
     )
     prefix = "[dry-run] " if result.dry_run else ""
-    typer.echo(
-        f"{prefix}OK: {result.updated} dosya güncellendi, "
-        f"{result.skipped} atlandı, toplam {result.total_links} link enjekte edildi."
+    console.print(
+        Panel(
+            f"[green]✓[/green] {prefix}{result.updated} dosya güncellendi, "
+            f"{result.skipped} atlandı, toplam {result.total_links} link enjekte edildi.",
+            title="[bold green]inject tamamlandı[/bold green]",
+            border_style="green" if not result.dry_run else "yellow",
+        )
     )
 
 
 @app.command()
-
-@app.command()
 def tags() -> None:
     """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
-    import lancedb # type: ignore
+    import numpy as np
+    import lancedb  # type: ignore
     from doqqy.config import STORE_DIR, LANCE_TABLE
-    
+
     if not STORE_DIR.exists():
-        typer.echo("LanceDB bulunamadı. Önce `doqqy embed` çalıştırın.", err=True)
+        console.print("[red]LanceDB bulunamadı. Önce `doqqy embed` çalıştırın.[/red]", err=True)
         raise typer.Exit(1)
-        
+
     db = lancedb.connect(STORE_DIR)
     if LANCE_TABLE not in db.table_names():
-        typer.echo("LanceDB tablosu boş.", err=True)
+        console.print("[red]LanceDB tablosu boş.[/red]", err=True)
         raise typer.Exit(1)
-        
+
     table = db.open_table(LANCE_TABLE)
     df = table.search().limit(100000).to_pandas()
-    
+
     if "tags" not in df.columns:
-        typer.echo("Kayıtlı tag bulunamadı (Eski index kullanılıyor olabilir).")
+        console.print("[yellow]Kayıtlı tag bulunamadı (Eski index kullanılıyor olabilir).[/yellow]")
         raise typer.Exit()
-        
-    all_tags = set()
+
+    all_tags: set[str] = set()
     for t_list in df["tags"].dropna():
-        # pandas array of strings
         if isinstance(t_list, (list, tuple, np.ndarray)):
             for t in t_list:
                 all_tags.add(t)
-                
+
     if not all_tags:
-        typer.echo("Gösterilecek tag bulunamadı.")
+        console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
     else:
-        typer.echo(f"\nBulunan tag'ler: ({len(all_tags)} adet)")
-        typer.echo("-" * 40)
+        table_view = Table(title=f"Bulunan Tag'ler ({len(all_tags)} adet)", box=box.ROUNDED)
+        table_view.add_column("Tag", style="cyan")
         for t in sorted(all_tags):
-            typer.echo(f"- {t}")
-        typer.echo("-" * 40)
-        typer.echo("Örnek kullanım: doqqy query \"sorgu\" --tag " + list(all_tags)[0])
+            table_view.add_row(t)
+        console.print(table_view)
+        console.print(f"\n[dim]Örnek: doqqy query \"sorgu\" --tag {sorted(all_tags)[0]}[/dim]")
 
 
 @app.command()
@@ -259,19 +303,29 @@ def info() -> None:
     """Mevcut pipeline durumunu özetle."""
     from doqqy.config import CHUNKS_PARQUET, STORE_DIR
 
-    typer.echo(f"raw/        : {_count_files(RAW_DIR)} dosya")
-    typer.echo(f"processed/  : {_count_files(PROCESSED_DIR, suffix='.md')} md dosya")
+    table = Table(title="doqqy pipeline durumu", box=box.ROUNDED)
+    table.add_column("Aşama", style="bold")
+    table.add_column("Durum")
+
+    raw_count = _count_files(RAW_DIR)
+    table.add_row("raw/", f"{raw_count} dosya")
+
+    proc_count = _count_files(PROCESSED_DIR, suffix=".md")
+    table.add_row("processed/", f"{proc_count} .md dosya")
+
     if CHUNKS_PARQUET.exists():
         import pandas as pd
-
         n = len(pd.read_parquet(CHUNKS_PARQUET, columns=["chunk_id"]))
-        typer.echo(f"chunks/     : {n} chunk (parquet mevcut)")
+        table.add_row("chunks/", f"[green]{n} chunk[/green] (parquet mevcut)")
     else:
-        typer.echo("chunks/     : (boş — `doqqy chunk` çalıştır)")
+        table.add_row("chunks/", "[yellow](boş — `doqqy chunk` çalıştır)[/yellow]")
+
     if STORE_DIR.exists():
-        typer.echo(f"store.lance : mevcut ({STORE_DIR})")
+        table.add_row("store.lance", f"[green]mevcut[/green] ({STORE_DIR})")
     else:
-        typer.echo("store.lance : (boş — `doqqy embed` çalıştır)")
+        table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
+
+    console.print(table)
 
 
 def _count_files(root: Path, suffix: str | None = None) -> int:

@@ -96,8 +96,8 @@ Faz 1–5 tamamlandı. Mevcut özellikler:
 - ✅ `INDEX.md` üretimi — Obsidian vault giriş noktası
 - ✅ Wikilink enjeksiyonu: `.doqqy/topics.yaml` → `processed/*.md` içine `[[link]]` (idempotent, `doqqy inject`)
 - ✅ Çoklu korpus / tag filtreleme: `raw/` klasör yapısından otomatik tag üretimi, `doqqy query --tag` ve `doqqy map --tag` ile izole arama
-- ✅ Typer CLI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info`
-- 🎯 **Planlanan (Faz 6):** `rich` entegrasyonu ile terminal arayüzünde (CLI) UI/UX (progress bar ve geri bildirim) iyileştirmesi.
+- ✅ Typer CLI ve Rich UI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info` (Formatlı paneller, interaktif process barlar)
+- 🎯 **Planlanan:** Inkremental update (Sadece değişen dosyaları işleme almak)
 
 ## Lisans / Gizlilik
 

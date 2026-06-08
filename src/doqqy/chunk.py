@@ -20,7 +20,7 @@ from pathlib import Path
 import frontmatter
 import pandas as pd
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-from tqdm import tqdm
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
 
 from doqqy.config import (
     CHUNK_MAX_TOKENS,
@@ -57,11 +57,11 @@ _BOLD_HEADING_RE = re.compile(r"^(?:\*\*|__)(.+?)(?:\*\*|__)$", re.MULTILINE)
 @dataclass
 class Chunk:
     chunk_id: str
-    doc_id: str                  # processed/.../foo.md (proje köküne göre relative)
-    source: str                  # original kaynak (raw/.../foo.pdf gibi)
-    doc_type: str                # md / pdf / txt
-    tags: list[str] = field(default_factory=list) # project/folder tags
+    doc_id: str
+    source: str
+    doc_type: str
     content: str
+    tags: list[str] = field(default_factory=list)
     section_path: list[str] = field(default_factory=list)
     char_count: int = 0
     prev_chunk: str | None = None
@@ -195,12 +195,21 @@ def chunk_directory(processed_dir: Path | None = None) -> list[Chunk]:
 
     md_files = sorted(processed_dir.rglob("*.md"))
     all_chunks: list[Chunk] = []
-    for md_file in tqdm(md_files, desc="chunk", unit="file"):
-        try:
-            file_chunks = chunk_file(md_file)
-            all_chunks.extend(file_chunks)
-        except Exception as exc:  # noqa: BLE001
-            _LOG.exception("chunk hatası: %s — %s", md_file, exc)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]chunk[/bold cyan]"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task("chunk", total=len(md_files))
+        for md_file in md_files:
+            progress.update(task, description=f"[dim]{md_file.name}[/dim]", advance=1)
+            try:
+                file_chunks = chunk_file(md_file)
+                all_chunks.extend(file_chunks)
+            except Exception as exc:  # noqa: BLE001
+                _LOG.exception("chunk hatası: %s — %s", md_file, exc)
 
     if not all_chunks:
         _LOG.warning("hiç chunk üretilmedi.")

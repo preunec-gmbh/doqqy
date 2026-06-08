@@ -88,11 +88,14 @@ Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 - [x] `doqqy query` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (LanceDB seviyesinde SQL filtering yaparak arama sonuçlarını izole eder).
 - [x] `doqqy map` komutuna `--tag <TAG>` (veya `-t`) parametresi eklenmesi (Pass 2'deki vektörel cosine benzerlik aramasını sadece ilgili tag altındakilerle sınırlandırır).
 
-### Faz 6: CLI UX İyileştirmesi ve Progress Barlar (Planlandı)
-- [ ] `rich` kütüphanesinin projeye dahil edilmesi
-- [ ] `doqqy ingest` süreci için interaktif ilerleme durumu / barlarının (parser ve document bazında) uygulanması
-- [ ] `doqqy embed` süreci için batch ve chunk aktarımı sırasında ilerleme göstergesinin güncellenmesi
-- [ ] Terminal komut hatalarının formatlı şekilde şeffaf bir Terminal UX tasarımıyla yönetilmesi
+### Faz 6: CLI UX İyileştirmesi ve Progress Barlar — **🟢 TAMAM (2026-06-09)**
+- [x] `rich` kütüphanesinin projeye dahil edilmesi (`pyproject.toml`)
+- [x] `doqqy ingest` süreci için interaktif ilerleme durumu / barlarının (parser ve document bazında) uygulanması
+- [x] `doqqy chunk` ve `doqqy embed` süreci için batch ve chunk aktarımı sırasında ilerleme göstergesinin güncellenmesi
+- [x] `tqdm` kullanımlarının `rich.progress` ile değiştirilmesi
+- [x] Terminal UX tasarımıyla yapılandırılmış çıktıların Typer CLI üzerine entegre edilmesi
+- [x] Chunk dataclass TypeError bug'ının düzeltilmesi
+- [x] Data ordering kaynaklı list serialization hatasının onarılması
 
 ### Faz Sonrası (gelecek, sırasız)
 - [ ] Inkremental update (content hash bazlı diff)

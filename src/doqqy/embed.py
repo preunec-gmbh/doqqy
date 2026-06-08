@@ -8,7 +8,7 @@ from typing import Iterator
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
 
 from doqqy.config import (
     CHUNKS_PARQUET,
@@ -51,26 +51,29 @@ def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
     dense_list: list[np.ndarray] = []
     sparse_list: list[str] = []
 
-    for batch in tqdm(
-        list(_batched(texts, EMBEDDING_BATCH_SIZE)),
-        desc="embed",
-        unit="batch",
-    ):
-        out = model.encode(
-            batch,
-            batch_size=len(batch),
-            max_length=1024,
-            return_dense=True,
-            return_sparse=True,
-            return_colbert_vecs=False,
-        )
-        dense = np.asarray(out["dense_vecs"], dtype=np.float32)
-        dense_list.append(dense)
-
-        # sparse: list[dict[int, float]] → JSON string olarak sakla
-        for sparse_dict in out["lexical_weights"]:
-            # token id int olabilir, JSON key string olmalı
-            sparse_list.append(json.dumps({str(k): float(v) for k, v in sparse_dict.items()}))
+    batches = list(_batched(texts, EMBEDDING_BATCH_SIZE))
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]embed[/bold cyan]"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task("embed", total=len(batches))
+        for batch in batches:
+            out = model.encode(
+                batch,
+                batch_size=len(batch),
+                max_length=1024,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False,
+            )
+            dense = np.asarray(out["dense_vecs"], dtype=np.float32)
+            dense_list.append(dense)
+            for sparse_dict in out["lexical_weights"]:
+                sparse_list.append(json.dumps({str(k): float(v) for k, v in sparse_dict.items()}))
+            progress.advance(task)
 
     dense_arr = np.vstack(dense_list) if dense_list else np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
     return dense_arr, sparse_list

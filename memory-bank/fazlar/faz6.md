@@ -18,10 +18,15 @@ Kullanıcı araçla (özellikle CLI üzerinden) etkileşimde bulunurken arka pla
 Python terminal ekosisteminde de-facto standart olması, kullanımı çok kolay bir progress ve log arayüzü sunması. Projede hali hazırda kullanılan Typer (CLI altyapısı) ile de doğal bir entegrasyonu vardır (Typer, logları Rich üzerinden renklendirilebilir).
 
 ## Görevler
-- [ ] `pyproject.toml` veya paket yöneticisine `rich`'in bağımlılık olarak eklenmesi.
-- [ ] `src/doqqy/cli.py` içerisinde `rich.progress.Progress`, `rich.console.Console` adaptasyonu yapılması.
-- [ ] Mevcut `ingest` ve `embed` pipeline'ındaki `tqdm` ve `print` çıktılarının veya sade döngülerin yerine `rich.progress` entegrasyonu yapılması.
-- [ ] Windows terminalinde `utf-8` ve `rich_markup_mode` konfigürasyonlarının yeni düzende bozulmadığından (sorun çıkartmadığından) emin olunması.
+- [x] `pyproject.toml` veya paket yöneticisine `rich`'in bağımlılık olarak eklenmesi.
+- [x] `src/doqqy/cli.py` içerisinde `rich.progress.Progress`, `rich.console.Console` adaptasyonu yapılması.
+- [x] Mevcut `ingest` ve `embed` pipeline'ındaki `tqdm` ve `print` çıktılarının veya sade döngülerin yerine `rich.progress` entegrasyonu yapılması.
+- [x] Windows terminalinde `utf-8` ve `rich_markup_mode` konfigürasyonlarının yeni düzende bozulmadığından (sorun çıkartmadığından) emin olunması.
+
+## Ek Kararlar / Implementasyon Detayları
+- Dataclass sıralamaları (required field ve default field konumu) kontrol edildi ve TypeError ortadan kaldırıldı.
+- Typer'ın eski standart print() methodları Console ve Panel class'ları ile zenginleştirilerek tüm çıktı ve hatalar formatlandı.
+- Hız kaybı olmadan CLI düzeyinde premium bir RAG pipeline deneyimi elde edildi.
 
 ---
 **Bağlam Notu:** Bu aşama, `doqqy` komut satırı arayüzünün sistem çapında (`pipx` ile vs.) küresel bir UI modülü gibi pürüzsüz çalışmasını amaçlayan polish (cilalama) katmanıdır.

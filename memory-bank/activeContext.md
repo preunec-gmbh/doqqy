@@ -1,6 +1,7 @@
 # Aktif Bağlam
 
 ## Şu Anki Durum
+**✅ Faz 6 TAMAM (2026-06-09) — CLI UX İyileştirmesi ve Progress Barlar (Rich) eklendi.**
 **✅ Faz 5 TAMAM (2026-06-07) — Çoklu Korpus / Tag Filtreleme sistemi eklendi.**
 
 Detaylı implementation notları: [fazlar/faz4.md](fazlar/faz4.md).
@@ -89,6 +90,12 @@ Faz 2 notları: [fazlar/faz2.md](fazlar/faz2.md).
 
 **Test sonuçları:** 10 dosya, 213 section, 1 explicit + 788 tematik bağlantı. 172/213 section bağlı.
 
+**2026-06-09 Günü Yapılan Değişiklikler (Faz 6):**
+1. **`pyproject.toml`:** `rich` bağımlılığı projeye eklendi.
+2. **`chunk.py`, `embed.py`, `ingest/router.py`:** Döngülerdeki ve işlem akışlarındaki `tqdm` kullanımları `rich.progress` ile değiştirildi.
+3. **`cli.py`:** İletişim, başlıklar ve uyarı mesajları panellere (`rich.panel.Panel`) ve zengin metin çıktılarına (`rich.console.Console`) dönüştürüldü. Typer'ın varsayılan print'leri Rich standartlarına çekildi.
+4. **Bugfix (Dataclass):** Python'ın kwargs ile dataclass başlatma sürecinde `Chunk` modelinin initialization esnasındaki field sıralaması hatası (required ile default field çatışması) çözüldü. İşlem sırasındaki TypeError giderildi.
+
 **2026-06-07 Günü Yapılan Değişiklikler (Faz 5):**
 1. **`ingest/base.py`:** `base_metadata()` fonksiyonu `raw/` altındaki klasör kırılımını otomatik olarak `tags: list[str]` haline getiriyor. Örn: `raw/bulut-saha/genel/dosya.pdf` → `tags: ["bulut-saha", "genel"]`.
 2. **`chunk.py`:** `Chunk` dataclass'ına `tags: list[str]` alanı eklendi; frontmatter'dan okunuyor.
@@ -112,6 +119,13 @@ Detaylı plan: [fazlar/faz4.md](fazlar/faz4.md).
 - [x] `doqqy query --tag <TAG>` — hibrit arama tag filtreli.
 - [x] `doqqy map --tag <TAG>` — Pass 2 cosine benzerliği tag filtreli.
 - [x] `doqqy tags` — sistemdeki tüm tag'leri listele.
+
+### Faz 6 — CLI UX / Progress Bar (Rich) — **🟢 TAMAM (2026-06-09)**
+
+- [x] Tüm sistemde `tqdm` kullanımları kalıcı olarak `rich.progress`'e geçirildi.
+- [x] `doqqy ingest`, `doqqy chunk` ve `doqqy embed` işlem çıktıları ve progress barları formatlandı.
+- [x] CLI kullanıcı panelleri ile güçlendirildi.
+- [x] Data ordering ile ortaya çıkan dataclass type error (`Chunk` in `chunk.py`) onarıldı.
 
 ## Aktif Düşünceler / Devam Eden Konular
 
