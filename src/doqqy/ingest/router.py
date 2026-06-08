@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from tqdm import tqdm
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
 
 from doqqy.config import RAW_DIR, SUPPORTED_EXTENSIONS, get_logger
 from doqqy.ingest.base import Document, IngestError, IngestResult
@@ -55,17 +55,26 @@ def ingest_directory(root: Path | None = None, *, limit: int | None = None) -> I
         files = files[:limit]
 
     result = IngestResult()
-    for path in tqdm(files, desc="ingest", unit="file"):
-        try:
-            doc = ingest_file(path)
-            doc.write()
-            result.succeeded.append(path)
-        except IngestError as exc:
-            _LOG.error("%s: %s", path, exc)
-            result.failed.append((path, str(exc)))
-        except Exception as exc:  # noqa: BLE001
-            _LOG.exception("beklenmedik hata: %s", path)
-            result.failed.append((path, f"{type(exc).__name__}: {exc}"))
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]ingest[/bold cyan]"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task("ingest", total=len(files))
+        for path in files:
+            progress.update(task, description=f"[dim]{path.name}[/dim]", advance=1)
+            try:
+                doc = ingest_file(path)
+                doc.write()
+                result.succeeded.append(path)
+            except IngestError as exc:
+                _LOG.error("%s: %s", path, exc)
+                result.failed.append((path, str(exc)))
+            except Exception as exc:  # noqa: BLE001
+                _LOG.exception("beklenmedik hata: %s", path)
+                result.failed.append((path, f"{type(exc).__name__}: {exc}"))
 
     _LOG.info(
         "ingest bitti: %d başarılı, %d başarısız, toplam %d.",
