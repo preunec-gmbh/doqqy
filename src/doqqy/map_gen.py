@@ -134,7 +134,7 @@ def _pass1(processed_dir: Path, known_files: set[str]) -> dict[str, list[Explici
     """Tüm dosyaları regex ile tara. {section_id: [ExplicitRef]} döndür."""
     results: dict[str, list[ExplicitRef]] = {}
 
-    for md_file in sorted(processed_dir.glob("*.md")):
+    for md_file in sorted(processed_dir.rglob("*.md")):
         if md_file.name == "INDEX.md":
             continue
         sections = _parse_sections(md_file)
@@ -317,7 +317,7 @@ def generate_map(
     tag: str | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Dönen değer: yazılan dosya yolu."""
-    md_files = sorted(f for f in processed_dir.glob("*.md") if f.name != "INDEX.md")
+    md_files = sorted(f for f in processed_dir.rglob("*.md") if f.name != "INDEX.md")
     if not md_files:
         raise FileNotFoundError(f"{processed_dir} içinde .md dosyası yok.")
 
