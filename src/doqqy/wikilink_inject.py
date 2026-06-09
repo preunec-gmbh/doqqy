@@ -172,7 +172,7 @@ def inject_links(
     file_links = _load_file_links(topics_path)
 
     md_files = [
-        f for f in sorted(processed_dir.glob("*.md"))
+        f for f in sorted(processed_dir.rglob("*.md"))
         if f.name != "INDEX.md"
     ]
 
