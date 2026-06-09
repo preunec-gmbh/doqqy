@@ -115,7 +115,7 @@ def build_index(*, batch_size: int | None = None) -> int:
     # Array olan tags alanını LanceDB'nin kolay filtreleyebilmesi için
     # string (virgülle ayrılmış değerler) formatına çevirelim.
     # Örn: ["bulut-saha", "x"] -> ",bulut-saha,x,"
-    df_out["tags_str"] = df_out["tags"].apply(lambda ts: f",{','.join(ts)}," if ts else "")
+    df_out["tags_str"] = df_out["tags"].apply(lambda ts: f",{','.join(ts)}," if ts is not None and len(ts) > 0 else "")
 
     import lancedb  # type: ignore
 
