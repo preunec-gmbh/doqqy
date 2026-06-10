@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doqqy"
-version = "0.1.5"
+version = "0.1.6"
 description = "Yerel doküman bilgi sistemi — hibrit semantik+lexical arama + harita üretimi."
 requires-python = ">=3.10"
 readme = { text = "Bkz. memory-bank/", content-type = "text/plain" }
