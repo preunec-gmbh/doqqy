@@ -131,7 +131,7 @@ def query(
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.query import search
 
-    hits = search(text, k=k, rerank=not no_rerank)
+    hits = search(text, k=k, rerank=not no_rerank, tag=tag)
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
