@@ -2,7 +2,7 @@
 processed/
 INDEX.md
 .doqqy/
-/memory-bank
+memory-bank/
 # Raw mirror (kullanıcı kendi dosyalarını koyar)
 raw/
 test_docs/
