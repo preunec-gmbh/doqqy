@@ -147,6 +147,8 @@ Concurrency note: bge-m3 inference is not safely reentrant on one GPU without ca
 
 ### 2.3 StoreManager (`infra/store.py`)
 
+> **Update (2026-07):** the store is now accessed through a pluggable `VectorStore` port (LanceDB default, **Qdrant priority backend** — see [VECTOR-STORE-ADAPTERS.md](VECTOR-STORE-ADAPTERS.md)). StoreManager remains as the per-workspace cache in front of the adapter factory; the LanceDB-specific sketch below describes the LanceDB adapter's internals.
+
 Fixes blocker B2 properly: LanceDB handles are **per-workspace**, cached in a bounded LRU keyed by workspace root, with a lock (LanceDB handles aren't guaranteed thread-safe across writers).
 
 ```python
@@ -629,6 +631,6 @@ Each step deploys and demos independently; step 3 already delivers the biggest s
 ## 9. Explicit non-goals for v1
 
 - **No LLM synthesis endpoint** — the product promise is verbatim chunks + sources. If ever added, it's a separate opt-in route with its own pricing, never default.
-- **No shared multi-tenant vector database** — directory-per-workspace isolation is a *feature* at this scale; revisit only when workspace count makes file handles/backup painful (the StoreManager seam is where a Qdrant/pgvector backend would plug in).
+- ~~No shared multi-tenant vector database~~ — **superseded (2026-07): the Qdrant adapter is now a priority deliverable.** The StoreManager seam becomes a `VectorStore` port with LanceDB (local default) and Qdrant (server/SaaS) backends; Qdrant's server-side hybrid fusion and payload multitenancy replace the sparse-scan and shared-FS-search constraints described above. See [VECTOR-STORE-ADAPTERS.md](VECTOR-STORE-ADAPTERS.md).
 - **No websocket/SSE job streaming** — polling `GET /v1/jobs/{id}` is fine; add SSE only when a UI demands it.
 - **No Celery, no Kubernetes requirement** — arq + compose runs on one box; the topology scales to k8s later without redesign (stateless api, queue-fed workers, RWX volume → PVC).
