@@ -1,7 +1,6 @@
 # doqqy — Documentation
 
-English technical documentation for **doqqy**, the local-first document knowledge system.
-(Turkish user-facing docs live in [`documentation/`](../documentation/) — `MIMARI.md`, `KULLANIM.md`, `GELISTIRME.md`.)
+Technical documentation for **doqqy**, the local-first document knowledge system.
 
 | Document | Audience | Contents |
 |---|---|---|
@@ -10,6 +9,7 @@ English technical documentation for **doqqy**, the local-first document knowledg
 | [DEVELOPER-HANDOVER.md](DEVELOPER-HANDOVER.md) | New maintainers | Codebase tour, extension recipes with code, known issues & tech debt, testing strategy |
 | [ROADMAP.md](ROADMAP.md) | Product / engineering | Future-feature analysis: REST API layer, SaaS multi-tenancy, incremental indexing, performance improvements |
 | [API-ARCHITECTURE.md](API-ARCHITECTURE.md) | Backend / DevOps | Implementation blueprint for the API layer: layering, module layout, FastAPI surface, jobs, deployment, security, build order |
+| [VECTOR-STORE-ADAPTERS.md](VECTOR-STORE-ADAPTERS.md) | Backend / DevOps | **Priority:** pluggable `VectorStore` port — LanceDB (local default) + Qdrant (server/SaaS) adapters, schema mapping, migration tool, revised phase order |
 
 ## What doqqy is, in one paragraph
 

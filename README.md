@@ -1,104 +1,117 @@
 # doqqy
 
-Yerel doküman bilgi sistemi. PDF, Markdown, DOCX ve TXT dosyalarını ingest eder, header-aware chunk'lara böler, **bge-m3** ile lokal embedding (dense + sparse) üretir, hibrit arama ve **bge-reranker-v2-m3** ile akıllı cross-encoder reranking yaparak anlık doğal-dilli arama imkanı verir. **bge-m3 embedding cosine benzerliği** ile dokümanlar arası otomatik harita (`.doqqy/topics.yaml` + `INDEX.md`) üretir.
+Local-first document knowledge system. Ingests PDF, Markdown, DOCX and TXT files, splits them into header-aware chunks, generates local embeddings with **bge-m3** (dense + sparse), and serves instant natural-language search via hybrid retrieval with **bge-reranker-v2-m3** cross-encoder reranking. It also builds an automatic cross-document relationship map (`.doqqy/topics.yaml` + `INDEX.md`) from bge-m3 embedding cosine similarity.
 
-LLM çağrısı **yapmaz** — ne sorgularda ne de harita üretiminde. Ham chunk + kaynak döner, harita embedding matematiğiyle kurulur.
+It makes **no LLM calls** — not for queries, not for map generation. Queries return raw chunks + sources; the map is built with pure embedding math. Nothing leaves your machine.
 
-## Hızlı başlangıç
+## Quick start
 
 ```powershell
-# 1. Bağımlılıklar
+# 1. Dependencies
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
 
-# 2. Dokümanları raw/ altına koy (PDF, MD, DOCX, TXT)
-#    Klasör yapısı otomatik olarak tag'e dönüşür: raw/proje-a/... → tag: "proje-a"
+# 2. Put documents under raw/ (PDF, MD, DOCX, TXT)
+#    Folder structure automatically becomes tags: raw/project-a/... → tag: "project-a"
 
 # 3. Pipeline
-doqqy ingest        # raw/ → processed/ (markdown)
+doqqy ingest        # raw/ → processed/ (canonical markdown)
 doqqy chunk         # processed/ → chunks.parquet
-doqqy embed         # → .doqqy/store.lance/  (bge-m3 dense + sparse vektör)
+doqqy embed         # → .doqqy/store.lance/  (bge-m3 dense + sparse vectors)
 
-# 4. Harita üret
+# 4. Build the map
 doqqy map           # processed/*.md → .doqqy/topics.yaml (regex + embedding cosine)
 doqqy index         # .doqqy/topics.yaml → processed/INDEX.md
-doqqy inject        # .doqqy/topics.yaml → processed/*.md içine [[wikilink]] enjekte et
+doqqy inject        # inject [[wikilinks]] into processed/*.md (Obsidian graph view)
 
-# 5. Sor
-doqqy query "JWT refresh nasıl çalışıyor?"
-doqqy query "PayTR iade akışı" --top-k 10
-doqqy query "iade süreci" --tag erp12        # sadece erp12 klasöründe ara
-doqqy tags                                   # hangi tag'ler var?
+# 5. Ask
+doqqy query "how does JWT refresh work?"
+doqqy query "PayTR refund flow" --top-k 10
+doqqy query "refund process" --tag erp12     # search only the erp12 folder
+doqqy tags                                   # which tags exist?
+doqqy info                                   # pipeline state overview
 ```
 
-## Proje yapısı
+The first `doqqy embed` downloads ~2 GB of models from HuggingFace (one-time; cached afterwards). Everything after that runs fully offline.
+
+## Project structure
 
 ```
-puroje/
-├── README.md                # bu dosya — başlangıç noktası
-├── pyproject.toml           # paket + bağımlılıklar
-├── .env.example             # API anahtarları (sadece Faz 3 harita üretimi için)
+doqqy/
+├── README.md                # this file — start here
+├── pyproject.toml           # package + dependencies
+├── .env.example             # optional env vars (HF cache dir, reserved LLM keys)
 │
-├── raw/                     # GİRDİ — orijinal dosyalar (gitignore'da)
-├── processed/               # AŞAMA 1 ÇIKTI — kanonik markdown (gitignore'da)
-├── chunks/                  # AŞAMA 2 ÇIKTI — chunks.parquet (gitignore'da)
-├── .doqqy/store.lance/             # AŞAMA 3 ÇIKTI — LanceDB vector store (gitignore'da)
-├── .doqqy/topics.yaml              # AŞAMA 4 ÇIKTI — harita verisi (gitignore'da)
-├── .doqqy/logs/                    # ingest hata logları (gitignore'da)
+├── raw/                     # INPUT — your original files (gitignored, never modified)
+├── processed/               # STAGE 1 OUTPUT — canonical markdown (gitignored)
+├── .doqqy/                  # STATE (gitignored)
+│   ├── chunks/chunks.parquet    # STAGE 2 — chunk records
+│   ├── store.lance/             # STAGE 3 — LanceDB vector store
+│   ├── topics.yaml              # STAGE 4 — relationship map
+│   └── logs/                    # ingest error logs
 │
-├── src/doqqy/                # KAYNAK KOD
-│   ├── cli.py               # typer komutları
-│   ├── config.py            # yollar, sabitler, RAM/Model configleri
+├── src/doqqy/               # SOURCE CODE
+│   ├── cli.py               # typer commands
+│   ├── config.py            # paths, constants, RAM/model settings
 │   ├── chunk.py             # header-aware chunking
-│   ├── embed.py             # bge-m3 dense+sparse LanceDB yazımı
-│   ├── query.py             # Hibrit arama (Dense + Sparse) & RRF Birleşimi
+│   ├── embed.py             # bge-m3 dense+sparse → LanceDB
+│   ├── query.py             # hybrid search (dense + sparse) + RRF fusion
 │   ├── rerank.py            # bge-reranker-v2-m3 (cross-encoder)
-│   ├── map_gen.py           # Pass 1 (regex) + Pass 2 (cosine) → .doqqy/topics.yaml
-│   ├── index_gen.py         # .doqqy/topics.yaml → INDEX.md
-│   └── ingest/              # format-spesifik parser'lar
+│   ├── map_gen.py           # Pass 1 (regex) + Pass 2 (cosine) → topics.yaml
+│   ├── index_gen.py         # topics.yaml → INDEX.md
+│   ├── wikilink_inject.py   # topics.yaml → [[wikilinks]] in processed/*.md
+│   └── ingest/              # format-specific parsers
+│       ├── base.py          # Document, IngestResult, content_hash, tag derivation
+│       ├── router.py        # extension → parser dispatch + batch ingest (failure-isolated)
+│       ├── md_ingest.py     # .md (frontmatter + YAML auto-repair) and .txt
+│       ├── pdf_ingest.py    # docling → pymupdf4llm fallback
+│       └── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
 │
-├── documentation/           # İNSANLAR İÇİN BELGELER
-│   ├── MIMARI.md            # sistem mimarisi, veri akışı, modül-modül açıklama
-│   ├── KULLANIM.md          # CLI komut referansı, tipik akışlar, FAQ
-│   └── GELISTIRME.md        # yeni format eklemek, ayar değiştirmek
-│
-└── memory-bank/             # AJANLAR İÇİN NOTLAR
-    ├── projectbrief.md      # proje briefi
-    ├── productContext.md    # neden var, nasıl çalışmalı
-    ├── activeContext.md     # şu anki durum
-    ├── progress.md          # ne tamam, ne pending
-    ├── systemPatterns.md    # mimari pattern'ler
-    ├── techContext.md       # teknoloji stack'i
-    └── fazlar/              # her faz için detaylı implementation notu
-        ├── faz1.md
-        ├── faz2.md
-        └── ...
+└── docs/                    # TECHNICAL DOCS
+    ├── ARCHITECTURE.md          # pipeline internals, LanceDB schema, design decisions
+    ├── USAGE.md                 # full CLI reference, workflows, Python API, FAQ
+    ├── DEVELOPER-HANDOVER.md    # codebase tour, extension recipes, known issues, test plan
+    ├── ROADMAP.md               # future features: API layer, SaaS path, priorities
+    ├── API-ARCHITECTURE.md      # implementation blueprint for the planned API layer
+    └── VECTOR-STORE-ADAPTERS.md # PRIORITY: VectorStore port — LanceDB local + Qdrant server backend
 ```
 
-## Belgeler
+## Documentation
 
-- **Mimari ve veri akışı:** [documentation/MIMARI.md](documentation/MIMARI.md)
-- **CLI komut referansı + tipik akışlar:** [documentation/KULLANIM.md](documentation/KULLANIM.md)
-- **Yeni format/model eklemek:** [documentation/GELISTIRME.md](documentation/GELISTIRME.md)
+- **Architecture & data flow:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **CLI reference + workflows + Python API:** [docs/USAGE.md](docs/USAGE.md)
+- **Maintainer handover (extension recipes, known issues):** [docs/DEVELOPER-HANDOVER.md](docs/DEVELOPER-HANDOVER.md)
+- **Roadmap & SaaS analysis:** [docs/ROADMAP.md](docs/ROADMAP.md)
+- **API layer blueprint:** [docs/API-ARCHITECTURE.md](docs/API-ARCHITECTURE.md)
+- **Vector store adapters (Qdrant priority):** [docs/VECTOR-STORE-ADAPTERS.md](docs/VECTOR-STORE-ADAPTERS.md)
 
-## Geçerli durum
+## Current status
 
-Faz 1–5 tamamlandı. Mevcut özellikler:
+Phases 1–5 complete. Shipped features:
 
 - ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback)
-- ✅ Header-aware chunking (kod blokları ve tablolar atomik, Word bold başlıklar optimize)
-- ✅ bge-m3 ile dense ve sparse embedding üretimi + LanceDB
-- ✅ RAM Optimizasyonu (Embedding Batch Size:4 / Max Length: 1024)
-- ✅ Hibrit Arama: Dense + Sparse (Manuel Python-side dot product) + RRF (k=60)
-- ✅ bge-reranker-v2-m3 (Transformers tabanlı Cross-encoder)
-- ✅ Harita üretimi: Pass 1 (regex explicit referanslar) + Pass 2 (embedding cosine tematik komşuluk) → `.doqqy/topics.yaml`
-- ✅ `INDEX.md` üretimi — Obsidian vault giriş noktası
-- ✅ Wikilink enjeksiyonu: `.doqqy/topics.yaml` → `processed/*.md` içine `[[link]]` (idempotent, `doqqy inject`)
-- ✅ Çoklu korpus / tag filtreleme: `raw/` klasör yapısından otomatik tag üretimi, `doqqy query --tag` ve `doqqy map --tag` ile izole arama
-- ✅ Typer CLI ve Rich UI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info` (Formatlı paneller, interaktif process barlar)
-- 🎯 **Planlanan:** Inkremental update (Sadece değişen dosyaları işleme almak)
+- ✅ Header-aware chunking (code blocks and tables kept atomic; Word bold-heading recovery)
+- ✅ bge-m3 dense + sparse embeddings → LanceDB
+- ✅ RAM-constrained defaults (embedding batch size 4 / max length 1024)
+- ✅ Hybrid search: dense + sparse (Python-side dot product) + RRF fusion (k=60)
+- ✅ bge-reranker-v2-m3 cross-encoder reranking (transformers-based)
+- ✅ Map generation: Pass 1 (regex explicit references) + Pass 2 (embedding cosine thematic neighbors) → `.doqqy/topics.yaml`
+- ✅ `INDEX.md` generation — Obsidian vault entry point
+- ✅ Wikilink injection: `topics.yaml` → `[[links]]` in `processed/*.md` (idempotent, `doqqy inject`)
+- ✅ Multi-corpus / tag filtering: automatic tags from `raw/` folder structure; isolated search via `doqqy query --tag` and `doqqy map --tag`
+- ✅ Typer CLI with Rich UI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info`
 
-## Lisans / Gizlilik
+## Roadmap (prioritized)
 
-Local-first: sorgu zamanında **hiçbir** veri internet'e gönderilmez. Embedding, reranker ve harita üretimi **tamamen lokal CPU/GPU gücünüzle çalışır**. Dış API çağrısı yoktur.
+1. 🎯 **Vector-store adapter port + Qdrant backend** — pluggable `VectorStore` interface; LanceDB stays the zero-daemon local default, Qdrant becomes the server/SaaS backend (native sparse vectors, server-side RRF fusion, payload multitenancy). Design: [docs/VECTOR-STORE-ADAPTERS.md](docs/VECTOR-STORE-ADAPTERS.md)
+2. `doqqy serve` — resident-model local API (queries go from ~30 s cold start to <1 s)
+3. Incremental indexing (`doqqy sync` / `doqqy watch`) — only reprocess changed files
+4. MCP server — expose search to AI agents (Claude Code, IDEs)
+5. Multi-tenant REST API — the SaaS-able cut. Blueprint: [docs/API-ARCHITECTURE.md](docs/API-ARCHITECTURE.md)
+
+Full analysis and sequencing: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## License / Privacy
+
+Local-first: at query time **no** data is sent to the internet. Embedding, reranking, and map generation run entirely on your local CPU/GPU. There are no external API calls.

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **doqqy** is a local-first document knowledge system: it ingests PDF/MD/DOCX/TXT into canonical markdown, chunks header-aware, embeds locally with **bge-m3** (dense + sparse), serves hybrid search (dense + sparse → RRF k=60 → **bge-reranker-v2-m3** cross-encoder), and builds a document relationship map via regex + embedding cosine similarity. **It makes no LLM calls** — not for queries, not for map generation. Queries return raw chunks + sources; nothing leaves the machine. Preserve this property: never add network calls or LLM synthesis to the query/map path.
 
-All documentation and code comments are in Turkish. Human docs live in `documentation/` (`MIMARI.md` architecture, `KULLANIM.md` CLI reference, `GELISTIRME.md` extension guide). English technical docs live in `docs/` (`ARCHITECTURE.md`, `USAGE.md`, `DEVELOPER-HANDOVER.md` — includes known issues/tech debt, `ROADMAP.md` — API/SaaS analysis, `API-ARCHITECTURE.md` — implementation blueprint for the planned API layer).
+Code comments and log messages are in Turkish; documentation is in English under `docs/` (`ARCHITECTURE.md`, `USAGE.md`, `DEVELOPER-HANDOVER.md` — includes known issues/tech debt, `ROADMAP.md` — API/SaaS analysis, `API-ARCHITECTURE.md` — implementation blueprint for the planned API layer, `VECTOR-STORE-ADAPTERS.md` — priority `VectorStore` port design: LanceDB local default + Qdrant server backend).
 
 ## Commands
 
@@ -30,7 +30,7 @@ doqqy tags          # list tags in the store
 doqqy info          # pipeline state overview
 ```
 
-There are **no tests and no lint config yet** (MVP). If adding tests, use pytest under `tests/` (see `documentation/GELISTIRME.md` §6 for the expected pattern).
+There are **no tests and no lint config yet** (MVP). If adding tests, use pytest under `tests/` (see `docs/DEVELOPER-HANDOVER.md` §5 for the expected pattern and ready-made test examples).
 
 **`PROJECT_ROOT` is `Path.cwd()`** (`config.py`) — doqqy operates on whatever directory you run it from. `raw/` is input; `processed/` and all state (`.doqqy/chunks/`, `.doqqy/store.lance/`, `.doqqy/topics.yaml`, `.doqqy/logs/`) live under the cwd and are gitignored. First `doqqy embed` downloads ~2 GB of models from HuggingFace (then cached). `DOQQY_DEVICE` env var overrides CPU/CUDA autodetection.
 
@@ -48,7 +48,7 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 
 **Tag filtering:** LanceDB can't run `LIKE`/`IN` on list columns, so tags are also serialized to `tags_str` in `",tag1,tag2,"` form (leading/trailing commas prevent partial matches); `--tag X` filters via `tags_str LIKE '%,X,%'` and applies to dense search, sparse search, and Pass 2 alike. Keep both columns in sync if touching the schema.
 
-## Conventions (from documentation/GELISTIRME.md)
+## Conventions (see docs/DEVELOPER-HANDOVER.md §1)
 
 - **Format-agnostic core:** after ingest, everything is markdown — chunk/embed/query must never know source formats. Adding a format = new ingester in `ingest/` + entry in `router.py`'s `_DISPATCH` + extension in `config.SUPPORTED_EXTENSIONS` + dependency in `pyproject.toml`; nothing else changes.
 - **Idempotency:** every stage must be safely re-runnable (overwrite/rebuild is the default behavior).

@@ -209,7 +209,7 @@ Ordered roughly by how likely they are to bite you.
 10. **Unused config**: `CHUNK_OVERLAP`, `CHUNK_MIN_MERGE_TOKENS` are declared but not implemented. Don't assume overlap exists.
 11. **Windows specifics**: `cli.py` reconfigures stdout/stderr to UTF-8 (Turkish characters under cp1252); `doc_id` normalizes backslashes to `/`. Keep both behaviors when refactoring.
 12. **The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)** — an installer artifact that predates the `pypandoc.download_pandoc()` auto-install. It's committed to git; consider removing it from history if repo size matters.
-13. **README project-structure section mentions `memory-bank/`** — that directory was deleted (see git history); the README hasn't caught up.
+13. **`pyproject.toml` readme field points at the deleted `memory-bank/`** — `readme = { text = "Bkz. memory-bank/", ... }`; harmless but stale, point it at `README.md` when touching packaging. (The README itself was rewritten in English in July 2026 and no longer references memory-bank.)
 
 ## 5. Testing (none exists — here's the plan)
 
