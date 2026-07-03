@@ -2,6 +2,7 @@
 processed/
 INDEX.md
 .doqqy/
+logs/
 
 # Raw mirror (kullanıcı kendi dosyalarını koyar)
 raw/
