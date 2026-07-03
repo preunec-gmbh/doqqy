@@ -190,26 +190,33 @@ The no-LLM query path stays. That's the differentiator: *"your documents never l
 
 | Rank | Feature | Effort | Why |
 |---|---|---|---|
-| 1 | **`doqqy serve` + thin-client CLI** | S | Kills the per-invocation model-load; prerequisite knowledge for the API anyway |
-| 2 | **Incremental indexing / `doqqy sync` / `doqqy watch`** | M | Biggest current UX pain; biggest SaaS cost lever (Phase 2) |
-| 3 | **MCP server** (`doqqy mcp`) | S | Expose `query`/`tags`/`info` as MCP tools → any AI agent (Claude Code, IDEs) can search the corpus locally. Very cheap: wraps the same `search()` — and turns doqqy into "the local RAG backend for agents", a category with real pull right now |
-| 4 | **Context expansion at query time** | S | `prev_chunk`/`next_chunk` already stored and unused; `--context 1` flag returns neighbors |
-| 5 | **OCR fallback for scanned PDFs** | M | Today scanned PDFs fail; docling has OCR support (EasyOCR/Tesseract) behind options — currently the biggest ingest gap |
-| 6 | **Sparse-search scalability** | M | Inverted index built at embed time (token → [chunk_id, weight]) stored as parquet; query cost drops from O(N) to O(matching-postings) |
-| 7 | **Retrieval eval harness** | M | A `tests/eval/` set of (query, expected-doc) pairs + recall@k / MRR script — otherwise threshold/model changes (0.75 cosine, RRF k=60) are vibes-based |
+| 1 | **Vector-store adapter port + Qdrant backend** | M | **Priority decision (2026-07).** Pluggable `VectorStore` port; LanceDB stays the local default, Qdrant becomes the server/SaaS backend: native sparse vectors + server-side RRF kill the O(N) sparse scan, structured filters kill the injection surface, payload multitenancy replaces shared-FS search. Full design: [VECTOR-STORE-ADAPTERS.md](VECTOR-STORE-ADAPTERS.md) |
+| 2 | **`doqqy serve` + thin-client CLI** | S | Kills the per-invocation model-load; prerequisite knowledge for the API anyway |
+| 3 | **Incremental indexing / `doqqy sync` / `doqqy watch`** | M | Biggest current UX pain; biggest SaaS cost lever (Phase 2); trivial on Qdrant (`upsert`/`delete_by_doc`) |
+| 4 | **MCP server** (`doqqy mcp`) | S | Expose `query`/`tags`/`info` as MCP tools → any AI agent (Claude Code, IDEs) can search the corpus locally. Very cheap: wraps the same `search()` — and turns doqqy into "the local RAG backend for agents", a category with real pull right now |
+| 5 | **Context expansion at query time** | S | `prev_chunk`/`next_chunk` already stored and unused; `--context 1` flag returns neighbors |
+| 6 | **OCR fallback for scanned PDFs** | M | Today scanned PDFs fail; docling has OCR support (EasyOCR/Tesseract) behind options — currently the biggest ingest gap |
+| 7 | **Retrieval eval harness** | M | A `tests/eval/` set of (query, expected-doc) pairs + recall@k / MRR script — otherwise threshold/model changes (0.75 cosine, RRF k=60) are vibes-based. Also the backend-parity gate for LanceDB vs Qdrant |
 | 8 | **Web UI** | M | Local FastAPI + single-page search UI over the API from Phase 3; also the SaaS front-end seed |
 | 9 | **Dedup by `content_hash`** | S | Same doc in two folders currently embeds twice; hash is already computed |
 | 10 | **HTML / PPTX / XLSX ingesters** | S each | Recipe documented in the handover; docling natively handles PPTX/XLSX — thin wrappers |
 | 11 | **ColBERT reranking leg** | L | bge-m3 can emit ColBERT vectors (`return_colbert_vecs`) — a third retrieval signal; only worth it after the eval harness exists to prove it |
 
+(The former "sparse-search scalability via custom inverted index" item is dropped — the Qdrant adapter solves it properly; the LanceDB backend keeps the current scan, acceptable for local corpus sizes.)
+
 ## 5. Suggested sequencing
 
 ```
-Phase 1  Workspace refactor + injection fix + reranker-on-GPU + unit tests        (~1–2 weeks)
-Phase 2  Incremental indexing (manifest, sync, watch) + dedup                     (~1–2 weeks)
-Phase 3a doqqy serve (local API, single workspace) + thin CLI client + MCP server (~1 week)
-Phase 3b Multi-workspace API + auth + upload jobs + quotas  ← first SaaS-able cut (~3–4 weeks)
-Phase 4  Web UI, billing, parser sandboxing hardening, eval harness, OCR
+Phase 1   Workspace refactor + VectorStore port + LanceDB adapter (logic move)
+          + injection fix + reranker-on-GPU + unit tests                          (~1–2 weeks)
+Phase 1.5 Qdrant adapter + `doqqy migrate-store` + backend parity checks          (~1 week)
+Phase 2   Incremental indexing (manifest, sync, watch) + dedup                    (~1–2 weeks)
+Phase 3a  doqqy serve (local API, single workspace) + thin CLI client + MCP server (~1 week)
+Phase 3b  Multi-workspace API + auth + upload jobs + quotas — Qdrant as prod
+          backend  ← first SaaS-able cut                                          (~3–4 weeks)
+Phase 4   Web UI, billing, parser sandboxing hardening, eval harness, OCR
 ```
+
+Adapter design, Qdrant schema, and migration tooling: [VECTOR-STORE-ADAPTERS.md](VECTOR-STORE-ADAPTERS.md).
 
 Each phase is independently shippable and none breaks the local-first CLI story — the CLI remains the free, offline core; the API/SaaS is the same engine with tenancy around it.
