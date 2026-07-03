@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **doqqy** is a local-first document knowledge system: it ingests PDF/MD/DOCX/TXT into canonical markdown, chunks header-aware, embeds locally with **bge-m3** (dense + sparse), serves hybrid search (dense + sparse → RRF k=60 → **bge-reranker-v2-m3** cross-encoder), and builds a document relationship map via regex + embedding cosine similarity. **It makes no LLM calls** — not for queries, not for map generation. Queries return raw chunks + sources; nothing leaves the machine. Preserve this property: never add network calls or LLM synthesis to the query/map path.
 
-All documentation and code comments are in Turkish. Human docs live in `documentation/` (`MIMARI.md` architecture, `KULLANIM.md` CLI reference, `GELISTIRME.md` extension guide). English technical docs live in `docs/` (`ARCHITECTURE.md`, `USAGE.md`, `DEVELOPER-HANDOVER.md` — includes known issues/tech debt, `ROADMAP.md` — API/SaaS analysis).
+All documentation and code comments are in Turkish. Human docs live in `documentation/` (`MIMARI.md` architecture, `KULLANIM.md` CLI reference, `GELISTIRME.md` extension guide). English technical docs live in `docs/` (`ARCHITECTURE.md`, `USAGE.md`, `DEVELOPER-HANDOVER.md` — includes known issues/tech debt, `ROADMAP.md` — API/SaaS analysis, `API-ARCHITECTURE.md` — implementation blueprint for the planned API layer).
 
 ## Commands
 

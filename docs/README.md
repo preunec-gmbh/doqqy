@@ -9,6 +9,7 @@ English technical documentation for **doqqy**, the local-first document knowledg
 | [USAGE.md](USAGE.md) | Users / operators | Installation, full CLI reference, typical workflows, Python API, troubleshooting |
 | [DEVELOPER-HANDOVER.md](DEVELOPER-HANDOVER.md) | New maintainers | Codebase tour, extension recipes with code, known issues & tech debt, testing strategy |
 | [ROADMAP.md](ROADMAP.md) | Product / engineering | Future-feature analysis: REST API layer, SaaS multi-tenancy, incremental indexing, performance improvements |
+| [API-ARCHITECTURE.md](API-ARCHITECTURE.md) | Backend / DevOps | Implementation blueprint for the API layer: layering, module layout, FastAPI surface, jobs, deployment, security, build order |
 
 ## What doqqy is, in one paragraph
 
