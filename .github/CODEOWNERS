@@ -1,0 +1,14 @@
+# CODEOWNERS — auto-requests a review from the owner on every PR, so a
+# contributor's change lands in your review queue automatically.
+#
+# To ENFORCE it, enable branch protection on `main`:
+#   Settings → Branches → add rule → "Require review from Code Owners"
+
+# Everything is owned by the maintainer by default:
+*                         @Emirhan-K
+
+# Finer-grained ownership (optional — uncomment to require these explicitly):
+# /src/doqqy/config.py     @Emirhan-K   # single source for paths/models/thresholds
+# /src/doqqy/embed.py      @Emirhan-K   # embedding + LanceDB schema
+# /src/doqqy/query.py      @Emirhan-K   # hybrid search / RRF / rerank
+# /.github/                @Emirhan-K   # CI/CD
