@@ -56,6 +56,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 | `.txt` | UTF-8 read, body wrapped in a fenced code block | latin-1 on `UnicodeDecodeError` | Filename becomes the H1 title |
 | `.pdf` | **docling** (layout-aware) | **pymupdf4llm** (fast, simple) | Empty output → `IngestError` ("scanned PDF?") |
 | `.docx` | **pandoc** via pypandoc (GFM output, `--wrap=none`) | **mammoth** (pure Python) | Missing pandoc binary triggers `pypandoc.download_pandoc()` auto-install; if that fails, mammoth |
+| `.xml` | `xml.etree.ElementTree` | — | Pretty-printed XML inside a fenced block, extracts leaf nodes text to a content summary section |
 
 **Failure isolation:** one bad file never stops the run. `ingest_directory()` catches per-file exceptions, logs to `.doqqy/logs/ingest.log`, collects `(path, error)` pairs in `IngestResult.failed`, and the CLI prints a summary panel.
 
@@ -64,7 +65,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 ```yaml
 ---
 source: raw/erp12/faturalama/api.md   # relative original path
-type: pdf                             # md / pdf / docx / txt
+type: pdf                             # md / pdf / docx / txt / xml
 tags: [erp12, faturalama]             # derived from folder structure under raw/
 ingested_at: "2026-07-03T00:14:00+00:00"
 content_hash: a1b2c3d4e5f60718        # first 16 hex of SHA-256(body)
