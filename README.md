@@ -12,7 +12,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
 
-# 2. Put documents under raw/ (PDF, MD, DOCX, TXT)
+# 2. Put documents under raw/ (PDF, MD, DOCX, TXT, XML)
 #    Folder structure automatically becomes tags: raw/project-a/... → tag: "project-a"
 
 # 3. Pipeline
@@ -66,7 +66,8 @@ doqqy/
 │       ├── router.py        # extension → parser dispatch + batch ingest (failure-isolated)
 │       ├── md_ingest.py     # .md (frontmatter + YAML auto-repair) and .txt
 │       ├── pdf_ingest.py    # docling → pymupdf4llm fallback
-│       └── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
+│       ├── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
+│       └── xml_ingest.py    # etree (stdlib)
 │
 └── docs/                    # TECHNICAL DOCS
     ├── ARCHITECTURE.md          # pipeline internals, LanceDB schema, design decisions
@@ -90,7 +91,7 @@ doqqy/
 
 Phases 1–5 complete. Shipped features:
 
-- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback)
+- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.xml` (etree)
 - ✅ Header-aware chunking (code blocks and tables kept atomic; Word bold-heading recovery)
 - ✅ bge-m3 dense + sparse embeddings → LanceDB
 - ✅ RAM-constrained defaults (embedding batch size 4 / max length 1024)
