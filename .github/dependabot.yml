@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Embedding + vector store — these move together, keep bumps in one PR.
+      embedding-store:
+        patterns:
+          - "FlagEmbedding"
+          - "lancedb"
+          - "pylance"
+          - "pyarrow"
+          - "pandas"
+          - "numpy"
+      ingest:
+        patterns:
+          - "docling"
+          - "pymupdf4llm"
+          - "pypandoc"
+          - "mammoth"
+          - "python-frontmatter"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

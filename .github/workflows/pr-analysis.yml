@@ -1,0 +1,144 @@
+# Makes a PR easy to analyse at a glance. On every PR update it posts/updates
+# ONE sticky comment summarising: the issue it closes, the change size, which
+# pipeline stages it touches, risk flags for sensitive files, the largest diffs,
+# and a reviewer checklist. It also auto-labels the PR (size/*, area/*) so you
+# can filter the PR list.
+#
+# Note: this uses the `pull_request` event, which has a read-only token for PRs
+# opened from FORKS. Contributors pushing branches to this repo work fine. If you
+# later accept fork PRs and want comments on them, switch to a separate
+# `pull_request_target` workflow (and review its security implications first).
+name: PR Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+concurrency:
+  group: pr-analysis-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  analyze:
+    name: Summarise & label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) return;
+            const { owner, repo } = context.repo;
+            const number = pr.number;
+
+            // --- changed files + diff size ---------------------------------
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+            let add = 0, del = 0;
+            for (const f of files) { add += f.additions; del += f.deletions; }
+            const total = add + del;
+
+            // --- linked issues (closing keywords in the PR body) -----------
+            const body = pr.body || "";
+            const closeRe = /\b(close[sd]?|fixe?[sd]?|resolve[sd]?)\b\s+#(\d+)/gi;
+            const issues = [...new Set([...body.matchAll(closeRe)].map(m => m[2]))];
+
+            // --- which pipeline stages were touched ------------------------
+            const AREAS = [
+              { label: "area/ingest", test: p => p.startsWith("src/doqqy/ingest/") },
+              { label: "area/chunk",  test: p => p.startsWith("src/doqqy/chunk") },
+              { label: "area/embed",  test: p => p.startsWith("src/doqqy/embed") },
+              { label: "area/query",  test: p => p.startsWith("src/doqqy/query") || p.startsWith("src/doqqy/rerank") },
+              { label: "area/map",    test: p => p.startsWith("src/doqqy/map_gen") || p.startsWith("src/doqqy/index_gen") || p.startsWith("src/doqqy/wikilink_inject") },
+              { label: "area/cli",    test: p => p.startsWith("src/doqqy/cli") },
+              { label: "area/config", test: p => p.startsWith("src/doqqy/config") },
+              { label: "area/docs",   test: p => p.startsWith("docs/") || p.endsWith(".md") },
+              { label: "area/ci",     test: p => p.startsWith(".github/") },
+              { label: "area/tests",  test: p => p.startsWith("tests/") },
+            ];
+            const areaCount = {};
+            for (const f of files) {
+              for (const a of AREAS) if (a.test(f.filename)) { areaCount[a.label] = (areaCount[a.label] || 0) + 1; break; }
+            }
+
+            // --- risk flags for sensitive files ----------------------------
+            const SENSITIVE = [
+              { p: "src/doqqy/config.py",       why: "single source for paths/models/thresholds — a bad value breaks every stage" },
+              { p: "src/doqqy/embed.py",        why: "embedding + LanceDB schema — keep `tags` and `tags_str` columns in sync" },
+              { p: "src/doqqy/query.py",        why: "hybrid search / RRF / rerank — verify no network or LLM call added" },
+              { p: "src/doqqy/map_gen.py",      why: "map generation — must stay LLM-free (local cosine only)" },
+              { p: "src/doqqy/ingest/router.py", why: "format dispatch — new formats need _DISPATCH + SUPPORTED_EXTENSIONS" },
+              { p: "pyproject.toml",            why: "dependencies changed — verify no unexpected bumps" },
+              { p: ".github/workflows/",        why: "CI/CD changed" },
+            ];
+            const risks = [];
+            for (const s of SENSITIVE) {
+              if (files.some(f => f.filename === s.p || f.filename.startsWith(s.p))) risks.push(s);
+            }
+
+            // --- size bucket -----------------------------------------------
+            const size = total < 10 ? "XS" : total < 50 ? "S" : total < 200 ? "M" : total < 500 ? "L" : "XL";
+
+            // --- apply labels (create them if missing; never fail the run) --
+            const colors = {
+              "size/XS": "c2e0c6", "size/S": "bfd4f2", "size/M": "fbca04",
+              "size/L": "e99695", "size/XL": "b60205",
+            };
+            const labels = [`size/${size}`, ...Object.keys(areaCount)];
+            for (const name of labels) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch {
+                try { await github.rest.issues.createLabel({ owner, repo, name, color: colors[name] || "ededed" }); } catch {}
+              }
+            }
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+            } catch (e) { core.warning(`label add failed: ${e.message}`); }
+
+            // --- largest changes -------------------------------------------
+            const top = [...files]
+              .sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions))
+              .slice(0, 8);
+
+            // --- compose the sticky comment --------------------------------
+            const area = Object.entries(areaCount)
+              .map(([k, v]) => `\`${k.replace("area/", "")}\` ${v}`).join(" · ") || "—";
+
+            let md = `<!-- pr-analysis -->\n## 🔍 PR Analysis\n\n`;
+            md += issues.length
+              ? `**Closes:** ${issues.map(n => `#${n}`).join(", ")}\n\n`
+              : `> ⚠️ **No linked issue.** Add \`Closes #<number>\` to the description so the change is traceable to its issue.\n\n`;
+            md += `**Size:** \`${size}\` — ${files.length} file(s), \`+${add}\` / \`-${del}\` (${total} lines)\n\n`;
+            md += `**Stages touched:** ${area}\n\n`;
+            if (risks.length) {
+              md += `**⚠️ Review carefully**\n` + risks.map(r => `- \`${r.p}\` — ${r.why}`).join("\n") + `\n\n`;
+            }
+            md += `<details><summary>Largest changes</summary>\n\n`;
+            md += top.map(f => `- \`${f.filename}\` \`+${f.additions}\`/\`-${f.deletions}\` (${f.status})`).join("\n");
+            md += `\n</details>\n\n`;
+            md += `<details><summary>Reviewer checklist</summary>\n\n`;
+            md += `- [ ] Closes the referenced issue — and nothing unrelated\n`;
+            md += `- [ ] **Local-first invariant held** — no network call or LLM synthesis added to the query/map path\n`;
+            md += `- [ ] Config/tuning changes live in \`config.py\`, not inline\n`;
+            md += `- [ ] Stages stay idempotent (re-runnable) and failure-isolated (one bad file doesn't stop the run)\n`;
+            md += `- [ ] New format? added ingester + \`router.py\` _DISPATCH + \`SUPPORTED_EXTENSIONS\` + \`pyproject.toml\` dep\n`;
+            md += `</details>\n\n`;
+            md += `<sub>Auto-generated — refreshes on every push to this PR.</sub>`;
+
+            // --- upsert (one comment, updated in place) --------------------
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: number, per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes("<!-- pr-analysis -->"));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: md });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body: md });
+            }
