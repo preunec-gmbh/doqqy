@@ -9,6 +9,7 @@ from doqqy.ingest.base import IngestError
 from doqqy.ingest.router import _DISPATCH, ingest_file
 from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
+from doqqy.ingest.csv_ingest import ingest_csv
 
 
 def test_router_dispatch_registration() -> None:
@@ -23,6 +24,12 @@ def test_router_xlsx_dispatch_registration() -> None:
     assert _DISPATCH[".xlsx"] == ingest_xlsx
 
 
+def test_router_csv_dispatch_registration() -> None:
+    """Test that the .csv extension is correctly registered in the dispatch map."""
+    assert ".csv" in _DISPATCH
+    assert _DISPATCH[".csv"] == ingest_csv
+
+
 def test_router_unsupported_raises() -> None:
     """Test that trying to ingest an unsupported file extension raises an IngestError."""
     unsupported_file = Path("dummy.json")
@@ -30,4 +37,3 @@ def test_router_unsupported_raises() -> None:
         ingest_file(unsupported_file)
     
     assert "desteklenmeyen uzantı" in str(exc_info.value)
-

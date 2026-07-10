@@ -47,7 +47,7 @@ You can maintain any number of separate corpora — each is just a directory. De
 
 ### `doqqy ingest`
 
-Convert `raw/` files (`.md`, `.markdown`, `.txt`, `.pdf`, `.docx`, `.xml`, `.xlsx`) to canonical markdown in `processed/`.
+Convert `raw/` files (`.md`, `.markdown`, `.txt`, `.pdf`, `.docx`, `.xml`, `.xlsx`, `.csv`) to canonical markdown in `processed/`.
 
 ```powershell
 doqqy ingest                     # all of raw/
