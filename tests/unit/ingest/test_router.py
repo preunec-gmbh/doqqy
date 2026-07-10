@@ -8,12 +8,26 @@ import pytest
 from doqqy.ingest.base import IngestError
 from doqqy.ingest.router import _DISPATCH, ingest_file
 from doqqy.ingest.xml_ingest import ingest_xml
+from doqqy.ingest.xlsx_ingest import ingest_xlsx
+from doqqy.ingest.csv_ingest import ingest_csv
 
 
 def test_router_dispatch_registration() -> None:
     """Test that the .xml extension is correctly registered in the dispatch map."""
     assert ".xml" in _DISPATCH
     assert _DISPATCH[".xml"] == ingest_xml
+
+
+def test_router_xlsx_dispatch_registration() -> None:
+    """Test that the .xlsx extension is correctly registered in the dispatch map."""
+    assert ".xlsx" in _DISPATCH
+    assert _DISPATCH[".xlsx"] == ingest_xlsx
+
+
+def test_router_csv_dispatch_registration() -> None:
+    """Test that the .csv extension is correctly registered in the dispatch map."""
+    assert ".csv" in _DISPATCH
+    assert _DISPATCH[".csv"] == ingest_csv
 
 
 def test_router_unsupported_raises() -> None:
