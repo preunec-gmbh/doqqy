@@ -12,7 +12,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
 
-# 2. Put documents under raw/ (PDF, MD, DOCX, TXT, XML, CSV)
+# 2. Put documents under raw/ (PDF, MD, DOCX, TXT, XML, XLSX, CSV)
 #    Folder structure automatically becomes tags: raw/project-a/... → tag: "project-a"
 
 # 3. Pipeline
@@ -68,6 +68,7 @@ doqqy/
 │       ├── pdf_ingest.py    # docling → pymupdf4llm fallback
 │       ├── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
 │       ├── xml_ingest.py    # etree (stdlib)
+│       ├── xlsx_ingest.py   # pandas + openpyxl (splits large sheets)
 │       └── csv_ingest.py    # pandas (delimiter detection, encoding fallback, Markdown tables, row-blocking)
 │
 └── docs/                    # TECHNICAL DOCS
@@ -92,7 +93,7 @@ doqqy/
 
 Phases 1–5 complete. Shipped features:
 
-- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.xml` (etree), `.csv` (pandas with delimiter detection and encoding fallback)
+- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.xml` (etree), `.xlsx` (pandas + openpyxl), `.csv` (pandas with delimiter detection and encoding fallback)
 - ✅ Header-aware chunking (code blocks and tables kept atomic; Word bold-heading recovery)
 - ✅ bge-m3 dense + sparse embeddings → LanceDB
 - ✅ RAM-constrained defaults (embedding batch size 4 / max length 1024)
