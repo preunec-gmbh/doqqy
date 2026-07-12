@@ -22,6 +22,8 @@ dependencies = [
     "pypandoc>=1.13",          # pandoc binary'sini sarar; binary kurulu değilse mammoth fallback
     "mammoth>=1.8",
     "python-frontmatter>=1.1",
+    "beautifulsoup4>=4.12",
+    "markdownify>=1.2",
 
     # Chunking
     "langchain-text-splitters>=0.3",
