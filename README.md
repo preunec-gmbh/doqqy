@@ -70,7 +70,7 @@ doqqy/
 │       ├── xml_ingest.py    # etree (stdlib)
 │       ├── xlsx_ingest.py   # pandas + openpyxl (splits large sheets)
 │       ├── csv_ingest.py    # pandas (delimiter detection, encoding fallback, Markdown tables, row-blocking)
-│       └── html_ingest.py   # BeautifulSoup + markdownify (cleans boilerplate, ATX headings)
+│       └── html_ingest.py   # BeautifulSoup + markdownify (charset detection, boilerplate cleanup, <title> fallback H1, ATX headings)
 │
 └── docs/                    # TECHNICAL DOCS
     ├── ARCHITECTURE.md          # pipeline internals, LanceDB schema, design decisions
