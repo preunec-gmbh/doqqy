@@ -27,8 +27,8 @@ def setup_mock_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_ingest_html_valid(tmp_path: Path) -> None:
-    """Test that script/style/nav/header/footer and comments are stripped,
-    headings become ATX, and metadata has the correct parser.
+    """Test that script/style/nav/site-level header/footer and comments are
+    stripped, headings become ATX, and metadata has the correct parser.
     """
     html_content = """
     <html>
@@ -57,7 +57,7 @@ def test_ingest_html_valid(tmp_path: Path) -> None:
     doc = ingest_html(html_file)
 
     # Check content features
-    # Script, style, nav, header, footer, comments should be stripped
+    # Script, style, nav, site-level header/footer, comments should be stripped
     assert "Site Title" not in doc.content
     assert "body {" not in doc.content
     assert "Link" not in doc.content
@@ -87,15 +87,76 @@ def test_ingest_html_empty(tmp_path: Path) -> None:
     assert "boş içerik" in str(exc_info.value)
 
 
-def test_ingest_html_encoding_fallback(tmp_path: Path) -> None:
-    """Test ingesting an HTML file encoded with latin-1."""
-    # Character 'ş' in latin-1 (cp1252) is 0xFE
-    html_bytes = b"<html><body><h1>\xfeeker</h1></body></html>"
-    html_file = tmp_path / "raw" / "latin1.html"
-    html_file.write_bytes(html_bytes)
+def test_ingest_html_article_header_kept(tmp_path: Path) -> None:
+    """Test that a <header> inside <article> (real content, not site chrome)
+    is preserved while the site-level footer is stripped.
+    """
+    html_content = (
+        "<html><body>"
+        "<article><header><h1>Makale Başlığı</h1></header>"
+        "<p>Makale içeriği.</p></article>"
+        "<footer>Site footer</footer>"
+        "</body></html>"
+    )
+    html_file = tmp_path / "raw" / "article.html"
+    html_file.write_text(html_content, encoding="utf-8")
 
     doc = ingest_html(html_file)
+
+    assert "# Makale Başlığı" in doc.content
+    assert "Makale içeriği." in doc.content
+    assert "Site footer" not in doc.content
+
+
+def test_ingest_html_title_fallback_when_no_h1(tmp_path: Path) -> None:
+    """Test that <title> becomes the document H1 when the body has no <h1>,
+    and is recorded in metadata.
+    """
+    html_content = (
+        "<html><head><title>Sayfa Başlığı</title></head>"
+        "<body><p>Sadece paragraf var.</p></body></html>"
+    )
+    html_file = tmp_path / "raw" / "no-h1.html"
+    html_file.write_text(html_content, encoding="utf-8")
+
+    doc = ingest_html(html_file)
+
+    assert doc.content.startswith("# Sayfa Başlığı")
+    assert "Sadece paragraf var." in doc.content
+    assert doc.metadata["title"] == "Sayfa Başlığı"
+
+
+def test_ingest_html_title_not_duplicated_when_h1_exists(tmp_path: Path) -> None:
+    """Test that <title> does not leak into the content (head is dropped)
+    when the body already has an <h1>.
+    """
+    html_content = (
+        "<html><head><title>Tarayıcı Sekmesi Başlığı</title></head>"
+        "<body><h1>Gerçek Başlık</h1><p>İçerik.</p></body></html>"
+    )
+    html_file = tmp_path / "raw" / "with-h1.html"
+    html_file.write_text(html_content, encoding="utf-8")
+
+    doc = ingest_html(html_file)
+
+    assert "# Gerçek Başlık" in doc.content
+    assert "Tarayıcı Sekmesi Başlığı" not in doc.content
+    assert doc.metadata["title"] == "Tarayıcı Sekmesi Başlığı"
+
+
+def test_ingest_html_meta_charset_detection(tmp_path: Path) -> None:
+    """Test that a windows-1254 (Turkish) page with a <meta charset> declaration
+    is decoded correctly ('ş' is 0xFE in cp1254 — undecodable as utf-8).
+    """
+    html_content = (
+        '<html><head><meta charset="windows-1254"></head>'
+        "<body><h1>şeker</h1><p>Türkçe içerik: ğüşıöç</p></body></html>"
+    )
+    html_file = tmp_path / "raw" / "cp1254.html"
+    html_file.write_bytes(html_content.encode("cp1254"))
+
+    doc = ingest_html(html_file)
+
+    assert "# şeker" in doc.content
+    assert "ğüşıöç" in doc.content
     assert doc.metadata["type"] == "html"
-    # Depending on how read_text decodes latin-1, 0xFE might decode to þ/ş.
-    # We verify it doesn't crash and captures the decoded character.
-    assert "þeker" in doc.content or "şeker" in doc.content or "þ" in doc.content
