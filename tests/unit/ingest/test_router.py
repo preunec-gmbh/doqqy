@@ -10,6 +10,15 @@ from doqqy.ingest.router import _DISPATCH, ingest_file
 from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
 from doqqy.ingest.csv_ingest import ingest_csv
+from doqqy.ingest.html_ingest import ingest_html
+
+
+def test_router_html_dispatch_registration() -> None:
+    """Test that the .html and .htm extensions are correctly registered in the dispatch map."""
+    assert ".html" in _DISPATCH
+    assert _DISPATCH[".html"] == ingest_html
+    assert ".htm" in _DISPATCH
+    assert _DISPATCH[".htm"] == ingest_html
 
 
 def test_router_dispatch_registration() -> None:

@@ -1,6 +1,6 @@
 # doqqy
 
-Local-first document knowledge system. Ingests PDF, Markdown, DOCX and TXT files, splits them into header-aware chunks, generates local embeddings with **bge-m3** (dense + sparse), and serves instant natural-language search via hybrid retrieval with **bge-reranker-v2-m3** cross-encoder reranking. It also builds an automatic cross-document relationship map (`.doqqy/topics.yaml` + `INDEX.md`) from bge-m3 embedding cosine similarity.
+Local-first document knowledge system. Ingests PDF, Markdown, HTML, DOCX and TXT files, splits them into header-aware chunks, generates local embeddings with **bge-m3** (dense + sparse), and serves instant natural-language search via hybrid retrieval with **bge-reranker-v2-m3** cross-encoder reranking. It also builds an automatic cross-document relationship map (`.doqqy/topics.yaml` + `INDEX.md`) from bge-m3 embedding cosine similarity.
 
 It makes **no LLM calls** — not for queries, not for map generation. Queries return raw chunks + sources; the map is built with pure embedding math. Nothing leaves your machine.
 
@@ -12,7 +12,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
 
-# 2. Put documents under raw/ (PDF, MD, DOCX, TXT, XML, XLSX, CSV)
+# 2. Put documents under raw/ (PDF, MD, HTML, DOCX, TXT, XML, XLSX, CSV)
 #    Folder structure automatically becomes tags: raw/project-a/... → tag: "project-a"
 
 # 3. Pipeline
@@ -69,7 +69,8 @@ doqqy/
 │       ├── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
 │       ├── xml_ingest.py    # etree (stdlib)
 │       ├── xlsx_ingest.py   # pandas + openpyxl (splits large sheets)
-│       └── csv_ingest.py    # pandas (delimiter detection, encoding fallback, Markdown tables, row-blocking)
+│       ├── csv_ingest.py    # pandas (delimiter detection, encoding fallback, Markdown tables, row-blocking)
+│       └── html_ingest.py   # BeautifulSoup + markdownify (charset detection, boilerplate cleanup, <title> fallback H1, ATX headings)
 │
 └── docs/                    # TECHNICAL DOCS
     ├── ARCHITECTURE.md          # pipeline internals, LanceDB schema, design decisions
@@ -93,7 +94,7 @@ doqqy/
 
 Phases 1–5 complete. Shipped features:
 
-- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.xml` (etree), `.xlsx` (pandas + openpyxl), `.csv` (pandas with delimiter detection and encoding fallback)
+- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.html`/`.htm` (BeautifulSoup + markdownify), `.xml` (etree), `.xlsx` (pandas + openpyxl), `.csv` (pandas with delimiter detection and encoding fallback)
 - ✅ Header-aware chunking (code blocks and tables kept atomic; Word bold-heading recovery)
 - ✅ bge-m3 dense + sparse embeddings → LanceDB
 - ✅ RAM-constrained defaults (embedding batch size 4 / max length 1024)
