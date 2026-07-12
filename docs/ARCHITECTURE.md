@@ -57,6 +57,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 | `.pdf` | **docling** (layout-aware) | **pymupdf4llm** (fast, simple) | Empty output → `IngestError` ("scanned PDF?") |
 | `.docx` | **pandoc** via pypandoc (GFM output, `--wrap=none`) | **mammoth** (pure Python) | Missing pandoc binary triggers `pypandoc.download_pandoc()` auto-install; if that fails, mammoth |
 | `.xml` | `xml.etree.ElementTree` | — | Pretty-printed XML inside a fenced block, extracts leaf nodes text to a content summary section |
+| `.html`, `.htm` | `BeautifulSoup` + `markdownify` | Encoding auto-detected from BOM / `<meta charset>` (UnicodeDammit) | Drops boilerplate (`<script>`, `<style>`, `<nav>`, `<aside>`, `<form>`, `<iframe>`, `<noscript>`, `<svg>`, comments); `<header>`/`<footer>` removed only outside `<article>`/`<section>`/`<main>`; `<title>` → frontmatter `title` and fallback H1 when body has none; ATX headers |
 | `.xlsx` | `pandas` + `openpyxl` | – | Reads sheets, renders as GFM tables, and splits sheets into blocks of ≤40 rows with repeated headers |
 | `.csv` | `pandas` | Encoding fallback (`cp1254`, `latin-1`) | Supports different delimiters, converts tabular data into GFM tables, and splits rows into blocks with repeated headers |
 
@@ -67,7 +68,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 ```yaml
 ---
 source: raw/erp12/faturalama/api.md   # relative original path
-type: pdf                             # md / pdf / docx / txt / xml / xlsx / csv
+type: pdf                             # md / pdf / html / docx / txt / xml / xlsx / csv
 tags: [erp12, faturalama]             # derived from folder structure under raw/
 ingested_at: "2026-07-03T00:14:00+00:00"
 content_hash: a1b2c3d4e5f60718        # first 16 hex of SHA-256(body)

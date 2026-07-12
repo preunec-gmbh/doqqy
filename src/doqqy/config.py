@@ -25,7 +25,7 @@ STORE_DIR: Path = DOQQY_STATE_DIR / "store.lance"
 CHUNKS_PARQUET: Path = CHUNKS_DIR / "chunks.parquet"
 
 # Ingest scope — MVP: sadece dokümantasyon dosyaları, kod örnekleri hariç.
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".docx", ".txt", ".xml", ".xlsx", ".csv"})
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".docx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"})
 
 # Chunking
 CHUNK_MAX_TOKENS: int = 800  # yaklaşık; recursive splitter karakter bazlı çalışır
