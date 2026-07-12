@@ -15,6 +15,7 @@ from doqqy.ingest.pdf_ingest import ingest_pdf
 from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
 from doqqy.ingest.csv_ingest import ingest_csv
+from doqqy.ingest.html_ingest import ingest_html
 
 
 _LOG = get_logger("doqqy.ingest.router", log_file="ingest.log")
@@ -29,6 +30,8 @@ _DISPATCH: dict[str, Callable[[Path], Document]] = {
     ".xml": ingest_xml,
     ".xlsx": ingest_xlsx,
     ".csv": ingest_csv,
+    ".html": ingest_html,
+    ".htm": ingest_html,
 }
 
 
