@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 
@@ -13,10 +14,10 @@ from doqqy.config import (
     EMBEDDING_MODEL,
     LANCE_TABLE,
     RETRIEVAL_TOP_K,
-    STORE_DIR,
     detect_device,
     get_logger,
 )
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.query")
 
@@ -43,6 +44,7 @@ class SearchHit:
     extra: dict = field(default_factory=dict)
 
 
+# Model korpus-bağımsız → process-global singleton kalır.
 @lru_cache(maxsize=1)
 def _model():
     from FlagEmbedding import BGEM3FlagModel  # type: ignore
@@ -51,16 +53,32 @@ def _model():
     return BGEM3FlagModel(EMBEDDING_MODEL, use_fp16=(device == "cuda"), device=device)
 
 
-@lru_cache(maxsize=1)
-def _table():
+# Tablo handle'ları workspace'e özel: kök yola göre key'lenir. Tek girişli
+# lru_cache buradaki B2 hatasıydı — ilk korpusun handle'ı sonsuza kadar kalıyordu.
+_TABLE_CACHE: dict[Path, object] = {}
+
+
+def _table(ws: Workspace):
     import lancedb  # type: ignore
 
-    if not STORE_DIR.exists():
-        raise FileNotFoundError(f"{STORE_DIR} yok — önce `doqqy embed` çalıştır.")
-    db = lancedb.connect(STORE_DIR)
-    if LANCE_TABLE not in db.table_names():
+    key = ws.root.resolve()
+    cached = _TABLE_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    if not ws.store_dir.exists():
+        raise FileNotFoundError(f"{ws.store_dir} yok — önce `doqqy embed` çalıştır.")
+    db = lancedb.connect(ws.store_dir)
+    if LANCE_TABLE not in db.list_tables().tables:
         raise RuntimeError(f"tablo bulunamadı: {LANCE_TABLE}")
-    return db.open_table(LANCE_TABLE)
+    table = db.open_table(LANCE_TABLE)
+    _TABLE_CACHE[key] = table
+    return table
+
+
+def invalidate_table_cache(ws: Workspace) -> None:
+    """Workspace'in store'u yeniden yazıldığında açık handle'ı düşür."""
+    _TABLE_CACHE.pop(ws.root.resolve(), None)
 
 
 def _embed_query(text: str) -> tuple[np.ndarray, dict[str, float]]:
@@ -76,8 +94,8 @@ def _embed_query(text: str) -> tuple[np.ndarray, dict[str, float]]:
     return dense, sparse
 
 
-def _dense_search(qvec: np.ndarray, k: int, filter_tag: str | None = None) -> list[dict]:
-    query_builder = _table().search(qvec).metric("cosine")
+def _dense_search(ws: Workspace, qvec: np.ndarray, k: int, filter_tag: str | None = None) -> list[dict]:
+    query_builder = _table(ws).search(qvec).metric("cosine")
 
     if filter_tag:
         # Array'i string olarak kaydettiğimiz formatta arıyoruz
@@ -91,9 +109,9 @@ def _dense_search(qvec: np.ndarray, k: int, filter_tag: str | None = None) -> li
     return results
 
 
-def _sparse_search(query_sparse: dict[str, float], k: int, filter_tag: str | None = None) -> list[dict]:
+def _sparse_search(ws: Workspace, query_sparse: dict[str, float], k: int, filter_tag: str | None = None) -> list[dict]:
     """Tüm chunk'ların sparse vektörleriyle dot product hesapla, top-k döndür."""
-    table = _table()
+    table = _table(ws)
     if filter_tag:
         rows = table.search().where(f"tags_str LIKE '%,{filter_tag},%'").to_pandas()
     else:
@@ -146,11 +164,11 @@ def _rrf(
     return sorted(by_id.values(), key=lambda x: x.get("rrf_score", 0.0), reverse=True)
 
 
-def search(query: str, k: int = DEFAULT_TOP_K, rerank: bool = True, tag: str | None = None) -> list[SearchHit]:
+def search(ws: Workspace, query: str, *, k: int = DEFAULT_TOP_K, rerank: bool = True, tag: str | None = None) -> list[SearchHit]:
     dense_vec, sparse_vec = _embed_query(query)
 
-    dense_rows = _dense_search(dense_vec, RETRIEVAL_TOP_K, filter_tag=tag)
-    sparse_rows = _sparse_search(sparse_vec, RETRIEVAL_TOP_K, filter_tag=tag)
+    dense_rows = _dense_search(ws, dense_vec, RETRIEVAL_TOP_K, filter_tag=tag)
+    sparse_rows = _sparse_search(ws, sparse_vec, RETRIEVAL_TOP_K, filter_tag=tag)
     fused = _rrf(dense_rows, sparse_rows)[:RETRIEVAL_TOP_K]
 
     if rerank and fused:

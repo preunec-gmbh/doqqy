@@ -7,7 +7,7 @@ from typing import Callable
 
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
 
-from doqqy.config import RAW_DIR, SUPPORTED_EXTENSIONS, get_logger
+from doqqy.config import SUPPORTED_EXTENSIONS, file_log, get_logger
 from doqqy.ingest.base import Document, IngestError, IngestResult
 from doqqy.ingest.docx_ingest import ingest_docx
 from doqqy.ingest.md_ingest import ingest_md, ingest_txt
@@ -16,12 +16,13 @@ from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
 from doqqy.ingest.csv_ingest import ingest_csv
 from doqqy.ingest.html_ingest import ingest_html
+from doqqy.workspace import Workspace
 
 
-_LOG = get_logger("doqqy.ingest.router", log_file="ingest.log")
+_LOG = get_logger("doqqy.ingest.router")
 
 
-_DISPATCH: dict[str, Callable[[Path], Document]] = {
+_DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
     ".md": ingest_md,
     ".markdown": ingest_md,
     ".txt": ingest_txt,
@@ -35,12 +36,12 @@ _DISPATCH: dict[str, Callable[[Path], Document]] = {
 }
 
 
-def ingest_file(source: Path) -> Document:
+def ingest_file(source: Path, ws: Workspace) -> Document:
     ext = source.suffix.lower()
     parser = _DISPATCH.get(ext)
     if parser is None:
         raise IngestError(f"desteklenmeyen uzantı: {ext}")
-    return parser(source)
+    return parser(source, ws)
 
 
 def _iter_supported(root: Path) -> list[Path]:
@@ -51,12 +52,12 @@ def _iter_supported(root: Path) -> list[Path]:
     )
 
 
-def ingest_directory(root: Path | None = None, *, limit: int | None = None) -> IngestResult:
-    """raw/ altındaki tüm desteklenen dosyaları ingest et.
+def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: int | None = None) -> IngestResult:
+    """Kaynak klasördeki (varsayılan: ws.raw_dir) tüm desteklenen dosyaları ingest et.
 
     Bir dosya hata verirse durmaz — log + raporda failed listesine eklenir.
     """
-    root = root or RAW_DIR
+    root = source_dir or ws.raw_dir
     if not root.exists():
         raise FileNotFoundError(f"ingest root yok: {root}")
 
@@ -65,7 +66,7 @@ def ingest_directory(root: Path | None = None, *, limit: int | None = None) -> I
         files = files[:limit]
 
     result = IngestResult()
-    with Progress(
+    with file_log("doqqy.ingest", ws.logs_dir / "ingest.log"), Progress(
         SpinnerColumn(),
         TextColumn("[bold cyan]ingest[/bold cyan]"),
         BarColumn(),
@@ -76,7 +77,7 @@ def ingest_directory(root: Path | None = None, *, limit: int | None = None) -> I
         for path in files:
             progress.update(task, description=f"[dim]{path.name}[/dim]", advance=1)
             try:
-                doc = ingest_file(path)
+                doc = ingest_file(path, ws)
                 doc.write()
                 result.succeeded.append(path)
             except IngestError as exc:
@@ -86,10 +87,10 @@ def ingest_directory(root: Path | None = None, *, limit: int | None = None) -> I
                 _LOG.exception("beklenmedik hata: %s", path)
                 result.failed.append((path, f"{type(exc).__name__}: {exc}"))
 
-    _LOG.info(
-        "ingest bitti: %d başarılı, %d başarısız, toplam %d.",
-        len(result.succeeded),
-        len(result.failed),
-        result.total,
-    )
+        _LOG.info(
+            "ingest bitti: %d başarılı, %d başarısız, toplam %d.",
+            len(result.succeeded),
+            len(result.failed),
+            result.total,
+        )
     return result

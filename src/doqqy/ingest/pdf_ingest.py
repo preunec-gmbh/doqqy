@@ -4,18 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR, get_logger
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.config import get_logger
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
-_LOG = get_logger("doqqy.ingest.pdf", log_file="ingest.log")
-
-
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
+_LOG = get_logger("doqqy.ingest.pdf")
 
 
 def _parse_with_docling(source: Path) -> str:
@@ -32,7 +25,7 @@ def _parse_with_pymupdf4llm(source: Path) -> str:
     return pymupdf4llm.to_markdown(str(source))
 
 
-def ingest_pdf(source: Path) -> Document:
+def ingest_pdf(source: Path, ws: Workspace) -> Document:
     md: str | None = None
     parser_used: str | None = None
     docling_error: Exception | None = None
@@ -56,13 +49,13 @@ def ingest_pdf(source: Path) -> Document:
     if not md.strip():
         raise IngestError("parser boş içerik döndürdü (taranmış PDF olabilir).")
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="pdf")
+    meta = base_metadata(source, ws.root, kind="pdf")
     meta["parser"] = parser_used
     meta["content_hash"] = content_hash(md)
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=md,
         metadata=meta,
     )

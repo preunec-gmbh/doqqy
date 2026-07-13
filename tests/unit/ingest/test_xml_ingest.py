@@ -7,26 +7,18 @@ import pytest
 
 from doqqy.ingest.base import IngestError
 from doqqy.ingest.xml_ingest import ingest_xml
+from doqqy.workspace import Workspace
 
 
-@pytest.fixture(autouse=True)
-def setup_mock_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fixture to mock project root directories.
-
-    This ensures that absolute paths created during testing fall under the
-    mocked RAW_DIR and do not cause path resolution errors in base_metadata.
-    """
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir = tmp_path / "processed"
-    processed_dir.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr("doqqy.ingest.xml_ingest.PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr("doqqy.ingest.xml_ingest.RAW_DIR", raw_dir)
-    monkeypatch.setattr("doqqy.ingest.xml_ingest.PROCESSED_DIR", processed_dir)
+@pytest.fixture()
+def ws(tmp_path: Path) -> Workspace:
+    """Testler workspace'i açıkça alır — cwd veya monkeypatch bağımlılığı yok."""
+    workspace = Workspace(tmp_path)
+    workspace.ensure_dirs()
+    return workspace
 
 
-def test_ingest_xml_valid(tmp_path: Path) -> None:
+def test_ingest_xml_valid(tmp_path: Path, ws: Workspace) -> None:
     """Test ingesting a valid XML file.
 
     It should parse the file, extract leaf nodes text for the summary,
@@ -49,7 +41,7 @@ def test_ingest_xml_valid(tmp_path: Path) -> None:
     xml_file = tmp_path / "raw" / "valid_sample_doc.xml"
     xml_file.write_text(xml_content, encoding="utf-8")
 
-    doc = ingest_xml(xml_file)
+    doc = ingest_xml(xml_file, ws)
 
     # Title from stem: "valid_sample_doc" -> "valid sample doc"
     assert doc.content.startswith("# valid sample doc")
@@ -73,7 +65,7 @@ def test_ingest_xml_valid(tmp_path: Path) -> None:
     assert "```" in doc.content
 
 
-def test_ingest_xml_invalid(tmp_path: Path) -> None:
+def test_ingest_xml_invalid(tmp_path: Path, ws: Workspace) -> None:
     """Test ingesting a malformed XML file.
 
     It should raise an IngestError.
@@ -83,12 +75,12 @@ def test_ingest_xml_invalid(tmp_path: Path) -> None:
     xml_file.write_text(invalid_xml, encoding="utf-8")
 
     with pytest.raises(IngestError) as exc_info:
-        ingest_xml(xml_file)
+        ingest_xml(xml_file, ws)
     
     assert "XML parsing failed" in str(exc_info.value)
 
 
-def test_ingest_xml_encoding_fallback(tmp_path: Path) -> None:
+def test_ingest_xml_encoding_fallback(tmp_path: Path, ws: Workspace) -> None:
     """Test ingesting an XML file encoded with latin-1.
 
     It should fall back to latin-1 and successfully parse Turkish/special characters.
@@ -98,7 +90,7 @@ def test_ingest_xml_encoding_fallback(tmp_path: Path) -> None:
     xml_file = tmp_path / "raw" / "latin1_doc.xml"
     xml_file.write_bytes(xml_bytes)
 
-    doc = ingest_xml(xml_file)
+    doc = ingest_xml(xml_file, ws)
 
     assert doc.metadata["type"] == "xml"
     # 0xFE in latin-1 is 'þ' (Icelandic thorn) or in cp1254 'ş'.

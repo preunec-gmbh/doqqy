@@ -40,7 +40,7 @@ How doqqy works internally: the pipeline, the data models, the storage schema, a
 
 **Key idea:** every stage is an independent, deterministic, idempotent command. Re-running `doqqy chunk` after a chunking-config change does not require re-ingesting; a full rebuild is simply the commands in sequence. Every stage writes its output with overwrite semantics.
 
-**Root resolution:** `config.PROJECT_ROOT = Path.cwd()` — doqqy operates on whatever directory you run it from. All state lives under `<cwd>/.doqqy/`; inputs in `<cwd>/raw/`; canonical markdown in `<cwd>/processed/`. This makes doqqy a "per-corpus tool" like git: one working directory = one corpus.
+**Root resolution:** all paths come from an explicit `Workspace(root)` object (`workspace.py`, frozen dataclass) threaded through every pipeline function — there are no module-level path constants and nothing is resolved at import time. The CLI constructs `Workspace(Path.cwd())` per command, so doqqy still behaves as a "per-corpus tool" like git: one working directory = one corpus. All state lives under `<root>/.doqqy/`; inputs in `<root>/raw/`; canonical markdown in `<root>/processed/`. Because the workspace is explicit, one process can serve multiple corpora concurrently (the enabler for `doqqy serve` and the API layer — see ROADMAP §1). The legacy `config.PROJECT_ROOT`/`RAW_DIR`/... names still resolve (from cwd, at access time) via a deprecation shim but warn `DeprecationWarning`.
 
 ## 2. Stage-by-stage
 
@@ -176,7 +176,7 @@ class SearchHit:
     extra: dict                # chunk_id, doc_type, dense_rank, sparse_rank, rrf_score, rerank_score
 ```
 
-Both the embedding model and the LanceDB table handle are `@lru_cache(maxsize=1)` singletons — first query in a process pays the model-load cost, subsequent ones don't. (This is why a long-running server would drastically improve latency; see ROADMAP.)
+The embedding model is an `@lru_cache(maxsize=1)` process-global singleton (it's corpus-independent) — first query in a process pays the model-load cost, subsequent ones don't. LanceDB table handles are cached **per workspace** in a dict keyed by resolved root path (`query._TABLE_CACHE`); `invalidate_table_cache(ws)` drops a workspace's handle after `build_index` rewrites its store. (A long-running server reuses both caches; see ROADMAP.)
 
 ### 2.5 Map (`doqqy map`) — `src/doqqy/map_gen.py`
 
@@ -240,7 +240,9 @@ src/doqqy/
 ├── __main__.py            # python -m doqqy → cli.app
 ├── cli.py                 # typer app: ingest/chunk/embed/query/map/index/inject/tags/info
 │                          #   also: Windows stdout→UTF-8 reconfigure (Turkish chars)
-├── config.py              # SINGLE source of paths, model names, thresholds, device detect, logger factory
+├── workspace.py           # Workspace(root): frozen dataclass, SINGLE source of per-corpus paths + ensure_dirs
+├── config.py              # tuning constants (models, thresholds, batch sizes), device detect, logger factory
+│                          #   legacy path constants live on as a DeprecationWarning __getattr__ shim
 ├── chunk.py               # header-aware splitting + atomic-block packing
 ├── embed.py               # bge-m3 encode + LanceDB write (overwrite)
 ├── query.py               # hybrid search: dense + sparse → RRF → rerank; SearchHit

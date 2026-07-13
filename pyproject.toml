@@ -45,6 +45,9 @@ llm = [
     "google-genai>=0.3",
     "anthropic>=0.40",
 ]
+dev = [
+    "pytest>=8.0",
+]
 
 [project.scripts]
 doqqy = "doqqy.cli:app"
