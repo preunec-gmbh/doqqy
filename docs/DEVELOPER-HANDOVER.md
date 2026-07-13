@@ -13,7 +13,7 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) first for the pipeline mental model. Thi
 5. **`raw/` is read-only.** Only `processed/` and `.doqqy/` are ever written.
 6. **`pathlib.Path` everywhere; explicit `encoding="utf-8"` on every file open.** Windows is a first-class platform here.
 7. **Heavy imports stay inside functions** (`FlagEmbedding`, `lancedb`, `torch`, `pandas`) so `doqqy --help` stays instant.
-8. **Config lives in `config.py`.** No magic numbers inline. `EMBEDDING_BATCH_SIZE=4` and `max_length=1024` are deliberate RAM ceilings — don't raise without a reason.
+8. **Tuning constants live in `config.py`; paths live on `Workspace`.** No magic numbers inline. `EMBEDDING_BATCH_SIZE=4` and `max_length=1024` are deliberate RAM ceilings — don't raise without a reason. Never reintroduce module-level path constants: every pipeline function takes `ws: Workspace` explicitly.
 9. **CLI UX**: typer + rich. New commands print rich Panels/Tables and use the shared Progress-bar pattern (see `chunk_directory` / `router.ingest_directory`).
 10. Code comments and log messages are in **Turkish**; keep that consistent within a file.
 
@@ -21,9 +21,15 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) first for the pipeline mental model. Thi
 
 ```
 src/doqqy/
-├── config.py           ← START HERE. All paths, constants, device detection, logger factory.
-│                          PROJECT_ROOT = Path.cwd() — evaluated at import time!
-├── cli.py              ← typer commands; thin wrappers, no logic. Windows UTF-8 stdout fix at top.
+├── workspace.py        ← START HERE. Workspace(root) frozen dataclass — the single source of
+│                          per-corpus paths (raw_dir/processed_dir/state_dir/...), ensure_dirs().
+│                          Threaded explicitly through every pipeline function; nothing path-
+│                          related is resolved at import time.
+├── config.py           ← tuning constants (models, thresholds, batch sizes), device detection,
+│                          logger factory + file_log() context manager. Legacy path constants
+│                          (PROJECT_ROOT, RAW_DIR, ...) are a DeprecationWarning __getattr__ shim.
+├── cli.py              ← typer commands; thin wrappers, no logic. Each command builds
+│                          ws = Workspace(Path.cwd()). Windows UTF-8 stdout fix at top.
 ├── ingest/
 │   ├── base.py         ← Document (write() serializes frontmatter+body), IngestResult,
 │   │                      IngestError, content_hash, base_metadata (TAG DERIVATION lives here)
@@ -34,8 +40,9 @@ src/doqqy/
 ├── chunk.py            ← Chunk dataclass; _atomic_blocks / _pack_blocks / _split_section;
 │                          bold-heading → ## normalization (_BOLD_HEADING_RE)
 ├── embed.py            ← build_index(); tags_str + section_path_str derived columns
-├── query.py            ← search(); _dense_search / _sparse_search / _rrf; SearchHit;
-│                          lru_cache singletons _model() and _table()
+├── query.py            ← search(ws, ...); _dense_search / _sparse_search / _rrf; SearchHit;
+│                          lru_cache singleton _model() (corpus-independent) + per-workspace
+│                          table cache _TABLE_CACHE (keyed by root) with invalidate_table_cache()
 ├── rerank.py           ← rerank(); lru_cache singleton _load_reranker(); sigmoid over logits
 ├── map_gen.py          ← generate_map(); _pass1 (regex) / _pass2 (centroid cosine);
 │                          section id scheme _section_id = STEM_slug
@@ -64,19 +71,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
 
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
-
-
-def ingest_html(source: Path) -> Document:
+def ingest_html(source: Path, ws: Workspace) -> Document:
     try:
         from markdownify import markdownify  # noqa: PLC0415 — heavy import inside function
     except ImportError as exc:
@@ -91,17 +90,19 @@ def ingest_html(source: Path) -> Document:
     if not md.strip():
         raise IngestError("boş içerik")
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="html")
+    meta = base_metadata(source, ws.root, kind="html")
     meta["content_hash"] = content_hash(md)
-    return Document(source.resolve(), _processed_path(source), md, meta)
+    return Document(source.resolve(), processed_path_for(source, ws), md, meta)
 ```
+
+Every ingester takes `(source, ws)`; the shared `processed_path_for` helper in `base.py` maps `raw/…` to the mirrored `processed/…` path.
 
 **2) Register in the router** — `src/doqqy/ingest/router.py`:
 
 ```python
 from doqqy.ingest.html_ingest import ingest_html
 
-_DISPATCH: dict[str, Callable[[Path], Document]] = {
+_DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
     # ... existing ...
     ".html": ingest_html,
     ".htm": ingest_html,
@@ -127,13 +128,13 @@ Pattern: thin typer wrapper, heavy import inside, rich output.
 def stats() -> None:
     """Chunk istatistikleri."""
     import pandas as pd
-    from doqqy.config import CHUNKS_PARQUET
 
-    if not CHUNKS_PARQUET.exists():
+    ws = Workspace(Path.cwd())
+    if not ws.chunks_parquet.exists():
         console.print("[red]chunks.parquet yok — önce `doqqy chunk`.[/red]", err=True)
         raise typer.Exit(1)
 
-    df = pd.read_parquet(CHUNKS_PARQUET)
+    df = pd.read_parquet(ws.chunks_parquet)
     t = Table(title="Chunk istatistikleri", box=box.ROUNDED)
     t.add_column("Metrik", style="bold"); t.add_column("Değer")
     t.add_row("Toplam chunk", str(len(df)))
@@ -199,7 +200,7 @@ Ordered roughly by how likely they are to bite you.
 
 1. **`_sparse_search` is a full-table scan per query** (`query.py`). It pulls every (tag-filtered) row into pandas and computes dot products in a Python loop with `iterrows()`. Fine at ~10k chunks; painful at 100k. Fix directions: precompute a token→chunk inverted index at embed time; or vectorize with scipy sparse matrices; or move to a store with native sparse support. Same pattern in `cli.py:tags` (`.limit(100000).to_pandas()`).
 2. **Tag values are interpolated into LanceDB SQL unescaped** — `where(f"tags_str LIKE '%,{filter_tag},%'")` in `query.py` and `map_gen.py`. Harmless for a local CLI where the user owns the data, but **must be sanitized/parameterized before any API/SaaS exposure** (a tag like `x',` breaks the query; folder names become filter payloads).
-3. **`PROJECT_ROOT = Path.cwd()` is evaluated at import time** (`config.py`). Library consumers must `os.chdir()` *before* importing any doqqy module. This is the single biggest refactor needed for a server/API version (a request can't switch corpora). See ROADMAP §API for the `Workspace` refactor sketch.
+3. ~~**`PROJECT_ROOT = Path.cwd()` is evaluated at import time** (`config.py`).~~ **Fixed (issue #5, July 2026)** by the `Workspace` refactor: paths are now an explicit `Workspace(root)` object threaded through the pipeline, nothing is resolved at import time, and one process can serve multiple corpora (the `_table` lru_cache singleton is gone too — table handles are per-workspace). Library consumers construct `Workspace(some_path)` directly; the old `config.PROJECT_ROOT`-style names still work from cwd via a `DeprecationWarning` shim and will be removed once nothing imports them.
 4. **Embed is all-or-nothing** — `build_index` drops and recreates the table. `content_hash` is already stored in frontmatter precisely to enable incremental updates (planned, not built). Changing one document currently costs a full re-embed.
 5. **The reranker always runs on CPU** — `rerank.py` never calls `model.to(device)` and doesn't use `detect_device()`. Easy win: move model + inputs to CUDA when available.
 6. **`map_gen._parse_sections` frontmatter skip is a hack** — it uses `"in_fm" in dir()` to test whether a local variable exists. It works, but it's fragile and unidiomatic; if you touch this function, replace with a proper boolean initialized before the loop. It also only skips frontmatter when the *very first line* is `---`.
@@ -211,9 +212,9 @@ Ordered roughly by how likely they are to bite you.
 12. **The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)** — an installer artifact that predates the `pypandoc.download_pandoc()` auto-install. It's committed to git; consider removing it from history if repo size matters.
 13. **`pyproject.toml` readme field points at the deleted `memory-bank/`** — `readme = { text = "Bkz. memory-bank/", ... }`; harmless but stale, point it at `README.md` when touching packaging. (The README itself was rewritten in English in July 2026 and no longer references memory-bank.)
 
-## 5. Testing (none exists — here's the plan)
+## 5. Testing
 
-There are **no tests today** (MVP). Highest-value order:
+Tests live under `tests/` (pytest; install with `pip install -e ".[dev]"`). Current coverage: `tests/test_workspace.py` (Workspace paths + the multi-corpus/B2 isolation regression tests), `tests/test_chunk.py`, `tests/test_rrf.py`, `tests/test_tags.py`, and per-format ingester tests under `tests/unit/ingest/`. Ingester tests take a `ws` fixture (`Workspace(tmp_path)`) — no `monkeypatch` of config paths, no `chdir`. The examples below are the original plan and now exist in the suite:
 
 **Unit tests, pure functions first** (no models, no I/O — fast):
 
@@ -271,10 +272,10 @@ def test_root_file_has_no_tags(tmp_path):
 
 Also easily unit-testable: `wikilink_inject._strip_marker_block` (idempotency!), `map_gen._slug` / `_section_id` / `_normalize_target`, `md_ingest._try_fix_yaml_frontmatter`.
 
-**Integration tests** (mark `slow`; require model download): tiny fixture corpus in `tests/fixtures/raw/` → run ingest→chunk→embed→query in a `tmp_path` with `monkeypatch.chdir`, assert a known string is retrieved. Note the `PROJECT_ROOT`-at-import-time issue (§4.3): tests must chdir before importing doqqy modules, or you refactor config first (recommended — make tests the forcing function).
+**Integration tests** (mark `slow`; require model download): tiny fixture corpus in `tests/fixtures/raw/` → run ingest→chunk→embed→query against `Workspace(tmp_path)`, assert a known string is retrieved. No `chdir` needed anywhere — the `Workspace` refactor (§4.3) removed the import-time cwd dependency, so tests just construct a workspace and pass it in.
 
 ```powershell
-pip install pytest
+pip install -e ".[dev]"
 pytest tests/ -v -m "not slow"
 ```
 

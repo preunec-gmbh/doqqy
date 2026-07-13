@@ -176,12 +176,12 @@ Open **`processed/`** as an Obsidian vault. `INDEX.md` is the entry page; inject
 
 ## 5. Python API
 
-The CLI is a thin layer — every stage is importable. Run from (or `os.chdir` to) the corpus directory, since paths resolve from `Path.cwd()` **at import time of `doqqy.config`**.
+The CLI is a thin layer — every stage is importable. Construct a `Workspace` pointing at the corpus directory and pass it to each stage; no `chdir`, no import-order constraints, and one process can work with several corpora at once.
 
 ```python
-import os
-os.chdir("path/to/my-corpus")     # BEFORE importing doqqy modules
+from pathlib import Path
 
+from doqqy.workspace import Workspace
 from doqqy.ingest import ingest_directory
 from doqqy.chunk import chunk_directory
 from doqqy.embed import build_index
@@ -190,27 +190,34 @@ from doqqy.map_gen import generate_map
 from doqqy.index_gen import generate_index
 from doqqy.wikilink_inject import inject_links
 
-result = ingest_directory()                 # IngestResult(succeeded, failed, skipped)
-chunks = chunk_directory()                  # list[Chunk], also writes chunks.parquet
-n = build_index()                           # int: rows written to LanceDB
+ws = Workspace(Path("path/to/my-corpus"))
+ws.ensure_dirs()
 
-hits = search("JWT refresh flow", k=5, rerank=True, tag="erp12")
+result = ingest_directory(ws)               # IngestResult(succeeded, failed, skipped)
+chunks = chunk_directory(ws)                # list[Chunk], also writes chunks.parquet
+n = build_index(ws)                         # int: rows written to LanceDB
+
+hits = search(ws, "JWT refresh flow", k=5, rerank=True, tag="erp12")
 for h in hits:                              # list[SearchHit]
     print(f"{h.score:.3f}  {h.source}  {' > '.join(h.section_path)}")
     print(h.content[:200])
 
-generate_map(cosine_threshold=0.8, top_n=3) # → .doqqy/topics.yaml
-generate_index()                            # → processed/INDEX.md
-inject_links(dry_run=True)                  # InjectionResult(updated, skipped, total_links)
+generate_map(ws, cosine_threshold=0.8, top_n=3)  # → .doqqy/topics.yaml
+generate_index(ws)                          # → processed/INDEX.md
+inject_links(ws, dry_run=True)              # InjectionResult(updated, skipped, total_links)
 ```
 
 Reading the store directly:
 
 ```python
 import lancedb
-from doqqy.config import STORE_DIR, LANCE_TABLE
+from pathlib import Path
 
-db = lancedb.connect(STORE_DIR)
+from doqqy.config import LANCE_TABLE
+from doqqy.workspace import Workspace
+
+ws = Workspace(Path("path/to/my-corpus"))
+db = lancedb.connect(ws.store_dir)
 tbl = db.open_table(LANCE_TABLE)
 df = tbl.search().where("tags_str LIKE '%,erp12,%'").limit(100).to_pandas()
 ```

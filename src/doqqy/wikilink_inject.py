@@ -14,7 +14,8 @@ from typing import Optional
 
 import yaml
 
-from doqqy.config import PROCESSED_DIR, TOPICS_YAML, get_logger
+from doqqy.config import get_logger
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.wikilink_inject")
 
@@ -160,11 +161,15 @@ def _inject_into_file(md_path: Path, block: str, dry_run: bool) -> bool:
 # ---------------------------------------------------------------------------
 
 def inject_links(
-    topics_path: Path = TOPICS_YAML,
-    processed_dir: Path = PROCESSED_DIR,
+    ws: Workspace,
+    *,
+    topics_path: Path | None = None,
+    processed_dir: Path | None = None,
     dry_run: bool = False,
 ) -> InjectionResult:
     """topics.yaml → processed/*.md wikilink enjeksiyonu."""
+    topics_path = topics_path or ws.topics_yaml
+    processed_dir = processed_dir or ws.processed_dir
     if not topics_path.exists():
         raise FileNotFoundError(f"{topics_path} yok — önce `doqqy map` çalıştır.")
 

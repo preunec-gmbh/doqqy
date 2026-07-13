@@ -3,21 +3,12 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import (Document, IngestError, base_metadata, content_hash)
+from doqqy.ingest.base import (Document, IngestError, base_metadata, content_hash, processed_path_for)
 from doqqy.ingest.xlsx_ingest import _df_to_md_blocks
+from doqqy.workspace import Workspace
 
 
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-
-    return (PROCESSED_DIR / rel).with_suffix(".md")
-
-
-def ingest_csv(source: Path) -> Document:
+def ingest_csv(source: Path, ws: Workspace) -> Document:
     import pandas as pd  # heavy import inside function
 
     if not source.exists():
@@ -82,7 +73,7 @@ def ingest_csv(source: Path) -> Document:
 
     full_content = (f"# {source.stem}\n\n" + "\n\n".join(md_tables))
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="csv")
+    meta = base_metadata(source, ws.root, kind="csv")
     meta["parser"] = "pandas"
     meta["delimiter"] = detected_delimiter
     meta["encoding"] = chosen_encoding
@@ -90,7 +81,7 @@ def ingest_csv(source: Path) -> Document:
 
     return Document(
         source_path = source,
-        processed_path = _processed_path(source),
+        processed_path = processed_path_for(source, ws),
         content = full_content,
         metadata = meta,
     )

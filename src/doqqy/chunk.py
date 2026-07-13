@@ -25,10 +25,9 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCo
 from doqqy.config import (
     CHUNK_MAX_TOKENS,
     CHUNK_MIN_MERGE_TOKENS,
-    CHUNKS_PARQUET,
-    PROCESSED_DIR,
     get_logger,
 )
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.chunk")
 
@@ -135,14 +134,14 @@ def _section_path_from_meta(meta: dict[str, str]) -> list[str]:
     return path
 
 
-def chunk_file(md_path: Path) -> list[Chunk]:
+def chunk_file(md_path: Path, ws: Workspace) -> list[Chunk]:
     with md_path.open("r", encoding="utf-8") as fh:
         post = frontmatter.load(fh)
     fm = post.metadata or {}
     body = post.content
 
     try:
-        doc_id = str(md_path.relative_to(PROCESSED_DIR.parent)).replace("\\", "/")
+        doc_id = str(md_path.relative_to(ws.root)).replace("\\", "/")
     except ValueError:
         doc_id = md_path.name
 
@@ -188,8 +187,8 @@ def chunk_file(md_path: Path) -> list[Chunk]:
     return chunks
 
 
-def chunk_directory(processed_dir: Path | None = None) -> list[Chunk]:
-    processed_dir = processed_dir or PROCESSED_DIR
+def chunk_directory(ws: Workspace, *, processed_dir: Path | None = None) -> list[Chunk]:
+    processed_dir = processed_dir or ws.processed_dir
     if not processed_dir.exists():
         raise FileNotFoundError(f"processed dizini yok: {processed_dir}")
 
@@ -206,7 +205,7 @@ def chunk_directory(processed_dir: Path | None = None) -> list[Chunk]:
         for md_file in md_files:
             progress.update(task, description=f"[dim]{md_file.name}[/dim]", advance=1)
             try:
-                file_chunks = chunk_file(md_file)
+                file_chunks = chunk_file(md_file, ws)
                 all_chunks.extend(file_chunks)
             except Exception as exc:  # noqa: BLE001
                 _LOG.exception("chunk hatası: %s — %s", md_file, exc)
@@ -216,7 +215,7 @@ def chunk_directory(processed_dir: Path | None = None) -> list[Chunk]:
         return []
 
     df = pd.DataFrame([asdict(c) for c in all_chunks])
-    CHUNKS_PARQUET.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(CHUNKS_PARQUET, index=False)
-    _LOG.info("yazıldı: %s (%d chunk).", CHUNKS_PARQUET, len(all_chunks))
+    ws.chunks_parquet.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(ws.chunks_parquet, index=False)
+    _LOG.info("yazıldı: %s (%d chunk).", ws.chunks_parquet, len(all_chunks))
     return all_chunks

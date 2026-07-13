@@ -29,3 +29,8 @@ env/
 .vscode/
 .idea/
 *.swp
+
+#others
+.claude/
+graphify-out/
+TODO.md

@@ -8,18 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR, get_logger
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.config import get_logger
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
-_LOG = get_logger("doqqy.ingest.docx", log_file="ingest.log")
-
-
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
+_LOG = get_logger("doqqy.ingest.docx")
 
 
 def _parse_with_pandoc(source: Path) -> str:
@@ -52,7 +45,7 @@ def _parse_with_mammoth(source: Path) -> str:
     return result.value
 
 
-def ingest_docx(source: Path) -> Document:
+def ingest_docx(source: Path, ws: Workspace) -> Document:
     md: str | None = None
     parser_used: str | None = None
     pandoc_error: Exception | None = None
@@ -80,13 +73,13 @@ def ingest_docx(source: Path) -> Document:
     if not md.strip():
         raise IngestError("parser boş içerik döndürdü.")
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="docx")
+    meta = base_metadata(source, ws.root, kind="docx")
     meta["parser"] = parser_used
     meta["content_hash"] = content_hash(md)
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=md,
         metadata=meta,
     )

@@ -18,11 +18,9 @@ from doqqy.config import (
     LANCE_TABLE,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
-    PROCESSED_DIR,
-    STORE_DIR,
-    TOPICS_YAML,
     get_logger,
 )
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.map_gen")
 
@@ -166,12 +164,12 @@ def _pass1(processed_dir: Path, known_files: set[str]) -> dict[str, list[Explici
 # Pass 2 — Embedding Cosine (Tematik Komşular)
 # ---------------------------------------------------------------------------
 
-def _load_table():
+def _load_table(ws: Workspace):
     import lancedb  # type: ignore
-    if not STORE_DIR.exists():
-        raise FileNotFoundError(f"{STORE_DIR} yok — önce `doqqy embed` çalıştır.")
-    db = lancedb.connect(STORE_DIR)
-    if LANCE_TABLE not in db.table_names():
+    if not ws.store_dir.exists():
+        raise FileNotFoundError(f"{ws.store_dir} yok — önce `doqqy embed` çalıştır.")
+    db = lancedb.connect(ws.store_dir)
+    if LANCE_TABLE not in db.list_tables().tables:
         raise RuntimeError(f"tablo bulunamadı: {LANCE_TABLE}")
     return db.open_table(LANCE_TABLE)
 
@@ -184,14 +182,14 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def _pass2(
-    processed_dir: Path,
+    ws: Workspace,
     sections_meta: list[SectionEntry],
     top_n: int = MAP_TOP_N_NEIGHBORS,
     threshold: float = MAP_COSINE_THRESHOLD,
     filter_tag: str | None = None,
 ) -> dict[str, list[ThematicRef]]:
     """LanceDB'den vektörleri çek, her section için cosine komşuları bul."""
-    table = _load_table()
+    table = _load_table(ws)
     if filter_tag:
         df = table.search().where(f"tags_str LIKE '%,{filter_tag},%'").to_pandas()
     else:
@@ -308,15 +306,19 @@ def _to_dict(entries: list[SectionEntry]) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_map(
-    processed_dir: Path = PROCESSED_DIR,
+    ws: Workspace,
+    *,
+    processed_dir: Path | None = None,
     pass1: bool = True,
     pass2: bool = True,
     cosine_threshold: float = MAP_COSINE_THRESHOLD,
     top_n: int = MAP_TOP_N_NEIGHBORS,
-    output: Path = TOPICS_YAML,
+    output: Path | None = None,
     tag: str | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Dönen değer: yazılan dosya yolu."""
+    processed_dir = processed_dir or ws.processed_dir
+    output = output or ws.topics_yaml
     md_files = sorted(f for f in processed_dir.rglob("*.md") if f.name != "INDEX.md")
     if not md_files:
         raise FileNotFoundError(f"{processed_dir} içinde .md dosyası yok.")
@@ -350,7 +352,7 @@ def generate_map(
     if pass2:
         _LOG.info(f"Pass 2 — embedding cosine benzerlik... (tag filter: {tag or 'yok'})")
         thematic_map = _pass2(
-            processed_dir, all_sections, top_n=top_n, threshold=cosine_threshold, filter_tag=tag
+            ws, all_sections, top_n=top_n, threshold=cosine_threshold, filter_tag=tag
         )
         total_th = sum(len(v) for v in thematic_map.values())
         _LOG.info(f"Pass 2 tamam: {total_th} tematik bağlantı bulundu.")
