@@ -6,16 +6,21 @@ from pathlib import Path
 
 import yaml
 
-from doqqy.config import PROCESSED_DIR, TOPICS_YAML, get_logger
+from doqqy.config import get_logger
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.index_gen")
 
 
 def generate_index(
-    topics_path: Path = TOPICS_YAML,
-    output_dir: Path = PROCESSED_DIR,
+    ws: Workspace,
+    *,
+    topics_path: Path | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """topics.yaml okuyup INDEX.md yaz. Dönen değer: yazılan dosya yolu."""
+    topics_path = topics_path or ws.topics_yaml
+    output_dir = output_dir or ws.processed_dir
     if not topics_path.exists():
         raise FileNotFoundError(f"{topics_path} yok — önce `doqqy map` çalıştır.")
 

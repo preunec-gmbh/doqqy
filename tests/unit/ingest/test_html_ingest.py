@@ -7,26 +7,18 @@ import pytest
 
 from doqqy.ingest.base import IngestError
 from doqqy.ingest.html_ingest import ingest_html
+from doqqy.workspace import Workspace
 
 
-@pytest.fixture(autouse=True)
-def setup_mock_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fixture to mock project root directories.
-
-    This ensures that absolute paths created during testing fall under the
-    mocked RAW_DIR and do not cause path resolution errors in base_metadata.
-    """
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir = tmp_path / "processed"
-    processed_dir.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr("doqqy.ingest.html_ingest.PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr("doqqy.ingest.html_ingest.RAW_DIR", raw_dir)
-    monkeypatch.setattr("doqqy.ingest.html_ingest.PROCESSED_DIR", processed_dir)
+@pytest.fixture()
+def ws(tmp_path: Path) -> Workspace:
+    """Testler workspace'i açıkça alır — cwd veya monkeypatch bağımlılığı yok."""
+    workspace = Workspace(tmp_path)
+    workspace.ensure_dirs()
+    return workspace
 
 
-def test_ingest_html_valid(tmp_path: Path) -> None:
+def test_ingest_html_valid(tmp_path: Path, ws: Workspace) -> None:
     """Test that script/style/nav/site-level header/footer and comments are
     stripped, headings become ATX, and metadata has the correct parser.
     """
@@ -54,7 +46,7 @@ def test_ingest_html_valid(tmp_path: Path) -> None:
     html_file = tmp_path / "raw" / "valid.html"
     html_file.write_text(html_content, encoding="utf-8")
 
-    doc = ingest_html(html_file)
+    doc = ingest_html(html_file, ws)
 
     # Check content features
     # Script, style, nav, site-level header/footer, comments should be stripped
@@ -75,19 +67,19 @@ def test_ingest_html_valid(tmp_path: Path) -> None:
     assert "content_hash" in doc.metadata
 
 
-def test_ingest_html_empty(tmp_path: Path) -> None:
+def test_ingest_html_empty(tmp_path: Path, ws: Workspace) -> None:
     """Test that an empty or only-boilerplate HTML page raises an IngestError."""
     html_content = "<html><head><style>body{}</style></head><body><header><nav></nav></header><footer></footer></body></html>"
     html_file = tmp_path / "raw" / "empty.html"
     html_file.write_text(html_content, encoding="utf-8")
 
     with pytest.raises(IngestError) as exc_info:
-        ingest_html(html_file)
+        ingest_html(html_file, ws)
 
     assert "boş içerik" in str(exc_info.value)
 
 
-def test_ingest_html_article_header_kept(tmp_path: Path) -> None:
+def test_ingest_html_article_header_kept(tmp_path: Path, ws: Workspace) -> None:
     """Test that a <header> inside <article> (real content, not site chrome)
     is preserved while the site-level footer is stripped.
     """
@@ -101,14 +93,14 @@ def test_ingest_html_article_header_kept(tmp_path: Path) -> None:
     html_file = tmp_path / "raw" / "article.html"
     html_file.write_text(html_content, encoding="utf-8")
 
-    doc = ingest_html(html_file)
+    doc = ingest_html(html_file, ws)
 
     assert "# Makale Başlığı" in doc.content
     assert "Makale içeriği." in doc.content
     assert "Site footer" not in doc.content
 
 
-def test_ingest_html_title_fallback_when_no_h1(tmp_path: Path) -> None:
+def test_ingest_html_title_fallback_when_no_h1(tmp_path: Path, ws: Workspace) -> None:
     """Test that <title> becomes the document H1 when the body has no <h1>,
     and is recorded in metadata.
     """
@@ -119,14 +111,14 @@ def test_ingest_html_title_fallback_when_no_h1(tmp_path: Path) -> None:
     html_file = tmp_path / "raw" / "no-h1.html"
     html_file.write_text(html_content, encoding="utf-8")
 
-    doc = ingest_html(html_file)
+    doc = ingest_html(html_file, ws)
 
     assert doc.content.startswith("# Sayfa Başlığı")
     assert "Sadece paragraf var." in doc.content
     assert doc.metadata["title"] == "Sayfa Başlığı"
 
 
-def test_ingest_html_title_not_duplicated_when_h1_exists(tmp_path: Path) -> None:
+def test_ingest_html_title_not_duplicated_when_h1_exists(tmp_path: Path, ws: Workspace) -> None:
     """Test that <title> does not leak into the content (head is dropped)
     when the body already has an <h1>.
     """
@@ -137,14 +129,14 @@ def test_ingest_html_title_not_duplicated_when_h1_exists(tmp_path: Path) -> None
     html_file = tmp_path / "raw" / "with-h1.html"
     html_file.write_text(html_content, encoding="utf-8")
 
-    doc = ingest_html(html_file)
+    doc = ingest_html(html_file, ws)
 
     assert "# Gerçek Başlık" in doc.content
     assert "Tarayıcı Sekmesi Başlığı" not in doc.content
     assert doc.metadata["title"] == "Tarayıcı Sekmesi Başlığı"
 
 
-def test_ingest_html_meta_charset_detection(tmp_path: Path) -> None:
+def test_ingest_html_meta_charset_detection(tmp_path: Path, ws: Workspace) -> None:
     """Test that a windows-1254 (Turkish) page with a <meta charset> declaration
     is decoded correctly ('ş' is 0xFE in cp1254 — undecodable as utf-8).
     """
@@ -155,7 +147,7 @@ def test_ingest_html_meta_charset_detection(tmp_path: Path) -> None:
     html_file = tmp_path / "raw" / "cp1254.html"
     html_file.write_bytes(html_content.encode("cp1254"))
 
-    doc = ingest_html(html_file)
+    doc = ingest_html(html_file, ws)
 
     assert "# şeker" in doc.content
     assert "ğüşıöç" in doc.content

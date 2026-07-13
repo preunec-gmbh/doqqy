@@ -1,28 +1,19 @@
-"""Yol ve ayar sabitleri. Proje kökünü pyproject.toml'a göre tespit eder."""
+"""Ayar sabitleri (chunk boyutları, model adları, eşikler) ve logging yardımcıları.
+
+Yol sabitleri artık burada YOK — yollar `doqqy.workspace.Workspace` üzerinden
+gelir. Eski isimler (PROJECT_ROOT, RAW_DIR, ...) geçiş süreci için modül
+`__getattr__` shim'i ile hâlâ çalışır ama DeprecationWarning verir ve her
+erişimde o anki cwd'den hesaplanır.
+"""
 
 from __future__ import annotations
 
 import logging
 import os
+import warnings
+from contextlib import contextmanager
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-
-# Çalıştırılan komutun bulunduğu klasörü (CWD) proje kökü kabul et.
-PROJECT_ROOT: Path = Path.cwd()
-
-DOQQY_STATE_DIR: Path = PROJECT_ROOT / ".doqqy"
-
-RAW_DIR: Path = PROJECT_ROOT / "raw"
-PROCESSED_DIR: Path = PROJECT_ROOT / "processed"
-
-# Dışa kapalı state verilerinin .doqqy altında birleşmesi
-CHUNKS_DIR: Path = DOQQY_STATE_DIR / "chunks"
-LOGS_DIR: Path = DOQQY_STATE_DIR / "logs"
-STORE_DIR: Path = DOQQY_STATE_DIR / "store.lance"
-
-CHUNKS_PARQUET: Path = CHUNKS_DIR / "chunks.parquet"
+from typing import Callable, Iterator
 
 # Ingest scope — MVP: sadece dokümantasyon dosyaları, kod örnekleri hariç.
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".docx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"})
@@ -47,39 +38,95 @@ RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 RERANKER_BATCH_SIZE: int = 4
 
 # Map generation (Faz 3)
-TOPICS_YAML: Path = DOQQY_STATE_DIR / "topics.yaml"
 MAP_COSINE_THRESHOLD: float = 0.75   # Pass 2 minimum cosine benzerliği
 MAP_TOP_N_NEIGHBORS: int = 5         # Her section için max komşu sayısı
 
-load_dotenv(PROJECT_ROOT / ".env", override=False)
+
+# ---------------------------------------------------------------------------
+# Deprecated yol sabitleri — Workspace'e geçiş shim'i
+# ---------------------------------------------------------------------------
+
+def _ws_cwd():
+    from doqqy.workspace import Workspace  # noqa: PLC0415 — döngüsel import önlemi
+
+    return Workspace(Path.cwd())
+
+
+_DEPRECATED_PATHS: dict[str, Callable[[], Path]] = {
+    "PROJECT_ROOT": lambda: _ws_cwd().root,
+    "DOQQY_STATE_DIR": lambda: _ws_cwd().state_dir,
+    "RAW_DIR": lambda: _ws_cwd().raw_dir,
+    "PROCESSED_DIR": lambda: _ws_cwd().processed_dir,
+    "CHUNKS_DIR": lambda: _ws_cwd().chunks_parquet.parent,
+    "LOGS_DIR": lambda: _ws_cwd().logs_dir,
+    "STORE_DIR": lambda: _ws_cwd().store_dir,
+    "CHUNKS_PARQUET": lambda: _ws_cwd().chunks_parquet,
+    "TOPICS_YAML": lambda: _ws_cwd().topics_yaml,
+}
+
+
+def __getattr__(name: str) -> Path:
+    if name in _DEPRECATED_PATHS:
+        warnings.warn(
+            f"doqqy.config.{name} kullanımdan kaldırıldı — doqqy.workspace.Workspace kullanın.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _DEPRECATED_PATHS[name]()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def ensure_dirs() -> None:
-    DOQQY_STATE_DIR.mkdir(parents=True, exist_ok=True)
-    for d in (RAW_DIR, PROCESSED_DIR, CHUNKS_DIR, LOGS_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+    """Deprecated — Workspace(Path.cwd()).ensure_dirs() kullanın."""
+    warnings.warn(
+        "doqqy.config.ensure_dirs kullanımdan kaldırıldı — Workspace.ensure_dirs kullanın.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    _ws_cwd().ensure_dirs()
 
 
-def get_logger(name: str, log_file: str | None = None) -> logging.Logger:
-    logger = logging.getLogger(name)
-    if logger.handlers:
-        return logger
-    logger.setLevel(logging.INFO)
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_FORMATTER = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
+
+def _ensure_console_handler() -> None:
+    """Tüm doqqy.* logger'ları tek console handler'a propagate eder."""
+    root = logging.getLogger("doqqy")
+    if root.handlers:
+        return
+    root.setLevel(logging.INFO)
     stream = logging.StreamHandler()
-    stream.setFormatter(formatter)
-    logger.addHandler(stream)
+    stream.setFormatter(_FORMATTER)
+    root.addHandler(stream)
+    root.propagate = False
 
-    if log_file:
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(LOGS_DIR / log_file, encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
 
-    logger.propagate = False
-    return logger
+def get_logger(name: str) -> logging.Logger:
+    _ensure_console_handler()
+    return logging.getLogger(name)
+
+
+@contextmanager
+def file_log(scope: str, log_path: Path) -> Iterator[None]:
+    """Bir çalışma süresince `scope` logger'ına workspace'e özel dosya handler'ı tak.
+
+    Çıkışta handler sökülür — aynı process'te farklı workspace'lerin logları
+    birbirine karışmaz.
+    """
+    logger = logging.getLogger(scope)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(_FORMATTER)
+    logger.addHandler(handler)
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
 
 
 def detect_device() -> str:
