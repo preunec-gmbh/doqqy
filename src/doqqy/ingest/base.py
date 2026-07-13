@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from doqqy.workspace import Workspace
+
 
 @dataclass
 class Document:
@@ -52,6 +54,19 @@ class IngestError(Exception):
 
 def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def processed_path_for(source: Path, ws: Workspace) -> Path:
+    """Kaynağın processed/ altındaki kanonik .md hedef yolu.
+
+    raw/ altındaki klasör yapısı korunur; raw/ dışındaki kaynaklar
+    doğrudan processed/ köküne düşer.
+    """
+    try:
+        rel = source.resolve().relative_to(ws.raw_dir.resolve())
+    except ValueError:
+        rel = Path(source.name)
+    return (ws.processed_dir / rel).with_suffix(".md")
 
 
 def base_metadata(source: Path, project_root: Path, kind: str) -> dict[str, Any]:

@@ -1,4 +1,8 @@
-"""doqqy CLI — typer ile ingest/chunk/embed/query komutları."""
+"""doqqy CLI — typer ile ingest/chunk/embed/query komutları.
+
+Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
+(`Workspace(Path.cwd())`) — kullanıcıya görünen davranış eskisiyle aynı.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -16,11 +21,8 @@ from doqqy.config import (
     DEFAULT_TOP_K,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
-    PROCESSED_DIR,
-    RAW_DIR,
-    TOPICS_YAML,
-    ensure_dirs,
 )
+from doqqy.workspace import Workspace
 
 # Windows'ta varsayılan stdout cp1252; Türkçe karakter mojibake olur.
 if sys.platform == "win32":
@@ -29,6 +31,8 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     except (AttributeError, ValueError):
         pass
+
+load_dotenv(Path.cwd() / ".env", override=False)
 
 console = Console()
 
@@ -39,6 +43,10 @@ app = typer.Typer(
     rich_markup_mode=None,
     pretty_exceptions_enable=False,
 )
+
+
+def _workspace() -> Workspace:
+    return Workspace(Path.cwd())
 
 
 @app.command()
@@ -53,10 +61,11 @@ def ingest(
     """raw/ altındaki dosyaları processed/ altına kanonik markdown olarak yaz."""
     from doqqy.ingest import ingest_directory
 
-    ensure_dirs()
-    src = source_dir or RAW_DIR
+    ws = _workspace()
+    ws.ensure_dirs()
+    src = source_dir or ws.raw_dir
     console.print(f"[bold cyan]ingest[/bold cyan] kaynak: [dim]{src}[/dim]")
-    result = ingest_directory(src, limit=limit)
+    result = ingest_directory(ws, source_dir=source_dir, limit=limit)
 
     if result.failed:
         console.print(
@@ -92,9 +101,9 @@ def chunk(
     """processed/*.md → chunks/chunks.parquet (header-aware bölme)."""
     from doqqy.chunk import chunk_directory
 
-    ensure_dirs()
-    src = processed_dir or PROCESSED_DIR
-    chunks = chunk_directory(src)
+    ws = _workspace()
+    ws.ensure_dirs()
+    chunks = chunk_directory(ws, processed_dir=processed_dir)
     console.print(
         Panel(
             f"[green]✓[/green] {len(chunks)} chunk üretildi.",
@@ -109,8 +118,9 @@ def embed() -> None:
     """chunks/chunks.parquet → store.lance (bge-m3 dense)."""
     from doqqy.embed import build_index
 
-    ensure_dirs()
-    n = build_index()
+    ws = _workspace()
+    ws.ensure_dirs()
+    n = build_index(ws)
     console.print(
         Panel(
             f"[green]✓[/green] {n} chunk indekslendi.",
@@ -131,7 +141,8 @@ def query(
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.query import search
 
-    hits = search(text, k=k, rerank=not no_rerank, tag=tag)
+    ws = _workspace()
+    hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag)
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
@@ -179,14 +190,15 @@ def map(
     """processed/*.md → topics.yaml (regex referanslar + embedding cosine)."""
     from doqqy.map_gen import generate_map
 
-    ensure_dirs()
-    src = processed_dir or PROCESSED_DIR
+    ws = _workspace()
+    ws.ensure_dirs()
 
     do_pass1 = not pass2_only
     do_pass2 = not pass1_only
 
     out = generate_map(
-        processed_dir=src,
+        ws,
+        processed_dir=processed_dir,
         pass1=do_pass1,
         pass2=do_pass2,
         cosine_threshold=threshold,
@@ -214,10 +226,12 @@ def index(
     """topics.yaml → processed/INDEX.md (Obsidian giriş noktası)."""
     from doqqy.index_gen import generate_index
 
-    ensure_dirs()
+    ws = _workspace()
+    ws.ensure_dirs()
     out = generate_index(
-        topics_path=topics or TOPICS_YAML,
-        output_dir=output_dir or PROCESSED_DIR,
+        ws,
+        topics_path=topics,
+        output_dir=output_dir,
     )
     console.print(
         Panel(
@@ -241,10 +255,12 @@ def inject(
     """topics.yaml → processed/*.md içine [[wikilink]] enjekte et (Obsidian graph view)."""
     from doqqy.wikilink_inject import inject_links
 
-    ensure_dirs()
+    ws = _workspace()
+    ws.ensure_dirs()
     result = inject_links(
-        topics_path=topics or TOPICS_YAML,
-        processed_dir=processed_dir or PROCESSED_DIR,
+        ws,
+        topics_path=topics,
+        processed_dir=processed_dir,
         dry_run=dry_run,
     )
     prefix = "[dry-run] " if result.dry_run else ""
@@ -263,14 +279,15 @@ def tags() -> None:
     """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
     import numpy as np
     import lancedb  # type: ignore
-    from doqqy.config import STORE_DIR, LANCE_TABLE
+    from doqqy.config import LANCE_TABLE
 
-    if not STORE_DIR.exists():
+    ws = _workspace()
+    if not ws.store_dir.exists():
         console.print("[red]LanceDB bulunamadı. Önce `doqqy embed` çalıştırın.[/red]", err=True)
         raise typer.Exit(1)
 
-    db = lancedb.connect(STORE_DIR)
-    if LANCE_TABLE not in db.table_names():
+    db = lancedb.connect(ws.store_dir)
+    if LANCE_TABLE not in db.list_tables().tables:
         console.print("[red]LanceDB tablosu boş.[/red]", err=True)
         raise typer.Exit(1)
 
@@ -301,27 +318,27 @@ def tags() -> None:
 @app.command()
 def info() -> None:
     """Mevcut pipeline durumunu özetle."""
-    from doqqy.config import CHUNKS_PARQUET, STORE_DIR
+    ws = _workspace()
 
     table = Table(title="doqqy pipeline durumu", box=box.ROUNDED)
     table.add_column("Aşama", style="bold")
     table.add_column("Durum")
 
-    raw_count = _count_files(RAW_DIR)
+    raw_count = _count_files(ws.raw_dir)
     table.add_row("raw/", f"{raw_count} dosya")
 
-    proc_count = _count_files(PROCESSED_DIR, suffix=".md")
+    proc_count = _count_files(ws.processed_dir, suffix=".md")
     table.add_row("processed/", f"{proc_count} .md dosya")
 
-    if CHUNKS_PARQUET.exists():
+    if ws.chunks_parquet.exists():
         import pandas as pd
-        n = len(pd.read_parquet(CHUNKS_PARQUET, columns=["chunk_id"]))
+        n = len(pd.read_parquet(ws.chunks_parquet, columns=["chunk_id"]))
         table.add_row("chunks/", f"[green]{n} chunk[/green] (parquet mevcut)")
     else:
         table.add_row("chunks/", "[yellow](boş — `doqqy chunk` çalıştır)[/yellow]")
 
-    if STORE_DIR.exists():
-        table.add_row("store.lance", f"[green]mevcut[/green] ({STORE_DIR})")
+    if ws.store_dir.exists():
+        table.add_row("store.lance", f"[green]mevcut[/green] ({ws.store_dir})")
     else:
         table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
 

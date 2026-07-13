@@ -5,20 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
-
-
-def _processed_path(source: Path) -> Path:
-    """Derive the target path under processed/ directory for the canonical Markdown file.
-
-    Replace the original extension with '.md'.
-    """
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
 
 def _extract_leaf_texts(element: ET.Element) -> list[str]:
@@ -38,7 +26,7 @@ def _extract_leaf_texts(element: ET.Element) -> list[str]:
     return texts
 
 
-def ingest_xml(source: Path) -> Document:
+def ingest_xml(source: Path, ws: Workspace) -> Document:
     """Ingest an XML file, parse it, and produce a canonical Markdown Document.
 
     This function is format-agnostic downstream, converting XML structure to formatted markdown.
@@ -73,13 +61,13 @@ def ingest_xml(source: Path) -> Document:
     markdown_body = f"# {title}\n\n## İçerik Özeti\n\n{summary}\n\n## XML Kaynağı\n\n```xml\n{pretty_xml.strip()}\n```\n"
 
     # Derive base metadata and compute content hash
-    meta = base_metadata(source, PROJECT_ROOT, kind="xml")
+    meta = base_metadata(source, ws.root, kind="xml")
     meta["parser"] = "etree"
     meta["content_hash"] = content_hash(markdown_body)
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=markdown_body,
         metadata=meta,
     )

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
 # Her zaman atılan şablon/boilerplate etiketleri. header/footer bu listede değil:
 # onlar yalnızca site şablonuysa atılır (aşağıya bak), makale içindekiler korunur.
@@ -15,19 +15,7 @@ _BOILERPLATE_TAGS = ("script", "style", "nav", "aside", "form", "iframe", "noscr
 _CONTENT_SCOPES = ("article", "section", "main")
 
 
-def _processed_path(source: Path) -> Path:
-    """Derive the target path under processed/ directory for the canonical Markdown file.
-
-    Replace the original extension with '.md'.
-    """
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
-
-
-def ingest_html(source: Path) -> Document:
+def ingest_html(source: Path, ws: Workspace) -> Document:
     """Ingest an HTML file, pre-clean elements/comments with BeautifulSoup,
     and convert to canonical Markdown using markdownify.
     """
@@ -86,7 +74,7 @@ def ingest_html(source: Path) -> Document:
     if title and not has_h1:
         md = f"# {title}\n\n{md}"
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="html")
+    meta = base_metadata(source, ws.root, kind="html")
     meta["parser"] = "markdownify"
     if title:
         meta["title"] = title
@@ -96,7 +84,7 @@ def ingest_html(source: Path) -> Document:
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=md,
         metadata=meta,
     )

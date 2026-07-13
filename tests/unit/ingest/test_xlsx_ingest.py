@@ -7,27 +7,18 @@ import pytest
 
 from doqqy.ingest.base import IngestError
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
+from doqqy.workspace import Workspace
 
 
-@pytest.fixture(autouse=True)
-def setup_mock_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Proje kök dizinlerini simüle eden (mock) fixture.
-
-    Bu işlem, testler sırasında oluşturulan mutlak yolların simüle edilmiş
-    RAW_DIR altında kalmasını sağlar ve base_metadata içinde yol çözümleme
-    hataları oluşmasını engeller.
-    """
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir = tmp_path / "processed"
-    processed_dir.mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setattr("doqqy.ingest.xlsx_ingest.PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr("doqqy.ingest.xlsx_ingest.RAW_DIR", raw_dir)
-    monkeypatch.setattr("doqqy.ingest.xlsx_ingest.PROCESSED_DIR", processed_dir)
+@pytest.fixture()
+def ws(tmp_path: Path) -> Workspace:
+    """Testler workspace'i açıkça alır — cwd veya monkeypatch bağımlılığı yok."""
+    workspace = Workspace(tmp_path)
+    workspace.ensure_dirs()
+    return workspace
 
 
-def test_xlsx_multi_sheet_creates_sections(tmp_path: Path) -> None:
+def test_xlsx_multi_sheet_creates_sections(tmp_path: Path, ws: Workspace) -> None:
     """Çoklu sayfa -> Her sayfa için bir markdown bölümü (## <sayfa_adi>) oluşmalı."""
     import pandas as pd  
 
@@ -42,7 +33,7 @@ def test_xlsx_multi_sheet_creates_sections(tmp_path: Path) -> None:
         for sheet_name, df in sheets_data.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-    doc = ingest_xlsx(xlsx_file)
+    doc = ingest_xlsx(xlsx_file, ws)
 
     # Biçim Doğrulaması: Her sayfa için '## <sayfa_adi>' bölümü açılmış mı?
     assert "## Yazilim" in doc.content
@@ -58,7 +49,7 @@ def test_xlsx_multi_sheet_creates_sections(tmp_path: Path) -> None:
     assert "content_hash" in doc.metadata
 
 
-def test_xlsx_large_sheet_splits_into_blocks(tmp_path: Path) -> None:
+def test_xlsx_large_sheet_splits_into_blocks(tmp_path: Path, ws: Workspace) -> None:
     """200 satırlık sayfa -> Her biri en fazla 40 satırlık, başlık içeren tablo bloklarına bölünmeli."""
     import pandas as pd 
 
@@ -72,7 +63,7 @@ def test_xlsx_large_sheet_splits_into_blocks(tmp_path: Path) -> None:
     with pd.ExcelWriter(xlsx_file, engine="openpyxl") as writer:
         large_df.to_excel(writer, sheet_name="Musteriler", index=False)
 
-    doc = ingest_xlsx(xlsx_file)
+    doc = ingest_xlsx(xlsx_file, ws)
 
     # Biçim doğrulaması
     assert "## Musteriler" in doc.content
@@ -85,14 +76,14 @@ def test_xlsx_large_sheet_splits_into_blocks(tmp_path: Path) -> None:
     assert doc.content.count("|---") >= 5
 
 
-def test_xlsx_non_existent_raises(tmp_path: Path) -> None:
+def test_xlsx_non_existent_raises(tmp_path: Path, ws: Workspace) -> None:
     """Mevcut olmayan dosyaların IngestError fırlattığı doğrulanmalıdır."""
     non_existent = tmp_path / "raw" / "missing.xlsx"
     with pytest.raises(IngestError):
-        ingest_xlsx(non_existent)
+        ingest_xlsx(non_existent, ws)
 
 
-def test_xlsx_all_empty_sheets_raise(tmp_path: Path) -> None:
+def test_xlsx_all_empty_sheets_raise(tmp_path: Path, ws: Workspace) -> None:
     """Tüm çalışma sayfaları boş olduğunda IngestError fırlatılmalıdır."""
     import pandas as pd
 
@@ -102,5 +93,5 @@ def test_xlsx_all_empty_sheets_raise(tmp_path: Path) -> None:
         pd.DataFrame().to_excel(writer, sheet_name="EmptySheet", index=False)
 
     with pytest.raises(IngestError):
-        ingest_xlsx(xlsx_file)
+        ingest_xlsx(xlsx_file, ws)
 

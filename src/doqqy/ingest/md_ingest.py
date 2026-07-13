@@ -12,16 +12,8 @@ import re
 
 import frontmatter
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
-
-
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-    return (PROCESSED_DIR / rel).with_suffix(".md")
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
 
 def _try_fix_yaml_frontmatter(content: str) -> str:
@@ -47,7 +39,7 @@ def _try_fix_yaml_frontmatter(content: str) -> str:
     return content
 
 
-def ingest_md(source: Path) -> Document:
+def ingest_md(source: Path, ws: Workspace) -> Document:
     # Önce dosyayı string olarak okuyalım ve gerekiyorsa YAML'ı düzeltelim
     try:
         raw_text = source.read_text(encoding="utf-8")
@@ -62,7 +54,7 @@ def ingest_md(source: Path) -> Document:
         raise IngestError(f"frontmatter parse hatası: {exc}") from exc
 
     body = post.content
-    meta = base_metadata(source, PROJECT_ROOT, kind="md")
+    meta = base_metadata(source, ws.root, kind="md")
     # Varsa orijinal frontmatter'ı koru ama base metadata'nın üstüne yazma.
     for key, value in post.metadata.items():
         meta.setdefault(f"original_{key}", value)
@@ -70,13 +62,13 @@ def ingest_md(source: Path) -> Document:
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=body,
         metadata=meta,
     )
 
 
-def ingest_txt(source: Path) -> Document:
+def ingest_txt(source: Path, ws: Workspace) -> Document:
     try:
         raw = source.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -86,12 +78,12 @@ def ingest_txt(source: Path) -> Document:
     title = source.stem.replace("_", " ").strip()
     body = f"# {title}\n\n```\n{raw.strip()}\n```\n"
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="txt")
+    meta = base_metadata(source, ws.root, kind="txt")
     meta["content_hash"] = content_hash(body)
 
     return Document(
         source_path=source,
-        processed_path=_processed_path(source),
+        processed_path=processed_path_for(source, ws),
         content=body,
         metadata=meta,
     )

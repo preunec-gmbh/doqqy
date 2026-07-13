@@ -11,25 +11,24 @@ import pandas as pd
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
 
 from doqqy.config import (
-    CHUNKS_PARQUET,
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
     LANCE_TABLE,
-    STORE_DIR,
     detect_device,
     get_logger,
 )
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.embed")
 
 
-def _load_chunks() -> pd.DataFrame:
-    if not CHUNKS_PARQUET.exists():
+def _load_chunks(ws: Workspace) -> pd.DataFrame:
+    if not ws.chunks_parquet.exists():
         raise FileNotFoundError(
-            f"{CHUNKS_PARQUET} yok — önce `doqqy chunk` çalıştır."
+            f"{ws.chunks_parquet} yok — önce `doqqy chunk` çalıştır."
         )
-    return pd.read_parquet(CHUNKS_PARQUET)
+    return pd.read_parquet(ws.chunks_parquet)
 
 
 def _load_model():
@@ -79,9 +78,9 @@ def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
     return dense_arr, sparse_list
 
 
-def build_index(*, batch_size: int | None = None) -> int:
+def build_index(ws: Workspace, *, batch_size: int | None = None) -> int:
     """chunks.parquet → store.lance/chunks. Var olan tabloyu üzerine yazar."""
-    df = _load_chunks()
+    df = _load_chunks(ws)
     if df.empty:
         _LOG.warning("chunk yok, index oluşturulmadı.")
         return 0
@@ -119,10 +118,15 @@ def build_index(*, batch_size: int | None = None) -> int:
 
     import lancedb  # type: ignore
 
-    db = lancedb.connect(STORE_DIR)
-    if LANCE_TABLE in db.table_names():
+    db = lancedb.connect(ws.store_dir)
+    if LANCE_TABLE in db.list_tables().tables:
         db.drop_table(LANCE_TABLE)
 
     db.create_table(LANCE_TABLE, data=df_out, mode="overwrite")
-    _LOG.info("LanceDB yazıldı: %s (%d satır).", STORE_DIR / LANCE_TABLE, len(df_out))
+
+    # Aynı process'te bu workspace için açık tablo handle'ı varsa bayatladı — düşür.
+    from doqqy.query import invalidate_table_cache  # noqa: PLC0415 — döngüsel import önlemi
+
+    invalidate_table_cache(ws)
+    _LOG.info("LanceDB yazıldı: %s (%d satır).", ws.store_dir / LANCE_TABLE, len(df_out))
     return len(df_out)

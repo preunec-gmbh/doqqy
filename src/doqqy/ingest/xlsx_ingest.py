@@ -2,17 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from doqqy.config import PROCESSED_DIR, PROJECT_ROOT, RAW_DIR
-from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
-
-
-def _processed_path(source: Path) -> Path:
-    try:
-        rel = source.resolve().relative_to(RAW_DIR.resolve())
-    except ValueError:
-        rel = Path(source.name)
-        
-    return (PROCESSED_DIR / rel).with_suffix(".md")
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
+from doqqy.workspace import Workspace
 
 
 def _df_to_md_blocks(df, max_rows: int = 40) -> list[str]:
@@ -35,7 +26,7 @@ def _df_to_md_blocks(df, max_rows: int = 40) -> list[str]:
     return blocks
 
 
-def ingest_xlsx(source: Path) -> Document:
+def ingest_xlsx(source: Path, ws: Workspace) -> Document:
     import pandas as pd     # heavy imports inside functions
 
     if not source.exists():
@@ -72,13 +63,13 @@ def ingest_xlsx(source: Path) -> Document:
     
     full_content = "\n\n".join(all_blocks)
 
-    meta = base_metadata(source, PROJECT_ROOT, kind="xlsx")
+    meta = base_metadata(source, ws.root, kind="xlsx")
     meta["parser"] = "pandas"
     meta["content_hash"] = content_hash(full_content)
 
     return Document(
         source_path = source,
-        processed_path = _processed_path(source),
+        processed_path = processed_path_for(source, ws),
         content = full_content,
         metadata = meta,
     )

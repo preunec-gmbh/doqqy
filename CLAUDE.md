@@ -30,9 +30,9 @@ doqqy tags          # list tags in the store
 doqqy info          # pipeline state overview
 ```
 
-There are **no tests and no lint config yet** (MVP). If adding tests, use pytest under `tests/` (see `docs/DEVELOPER-HANDOVER.md` §5 for the expected pattern and ready-made test examples).
+Tests are pytest under `tests/` (`pip install -e ".[dev]"`, then `pytest tests/ -v`): workspace/B2-isolation regression tests, chunk/RRF/tag unit tests, and per-format ingester tests in `tests/unit/ingest/`. Tests take an explicit `Workspace(tmp_path)` fixture — never `chdir` or monkeypatch config paths. There is **no lint config yet**.
 
-**`PROJECT_ROOT` is `Path.cwd()`** (`config.py`) — doqqy operates on whatever directory you run it from. `raw/` is input; `processed/` and all state (`.doqqy/chunks/`, `.doqqy/store.lance/`, `.doqqy/topics.yaml`, `.doqqy/logs/`) live under the cwd and are gitignored. First `doqqy embed` downloads ~2 GB of models from HuggingFace (then cached). `DOQQY_DEVICE` env var overrides CPU/CUDA autodetection.
+**Paths come from `Workspace(root)`** (`workspace.py`, frozen dataclass) — every pipeline function takes `ws: Workspace` explicitly; nothing is resolved at import time, and one process can serve multiple corpora. The CLI builds `Workspace(Path.cwd())` per command, so doqqy still operates on whatever directory you run it from: `raw/` is input; `processed/` and all state (`.doqqy/chunks/`, `.doqqy/store.lance/`, `.doqqy/topics.yaml`, `.doqqy/logs/`) live under the root and are gitignored. Legacy `config.PROJECT_ROOT`-style constants are a `DeprecationWarning` shim — don't use them in new code. First `doqqy embed` downloads ~2 GB of models from HuggingFace (then cached). `DOQQY_DEVICE` env var overrides CPU/CUDA autodetection.
 
 ## Architecture
 
@@ -41,10 +41,11 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 - `ingest/` — format-specific parsers dispatched by extension in `router.py`: `.md`/`.txt` → `md_ingest.py`; `.html`/`.htm` → `html_ingest.py` (BeautifulSoup + markdownify); `.pdf` → docling with pymupdf4llm fallback; `.docx` → pandoc with mammoth fallback; `.xml` → `xml_ingest.py` (etree); `.xlsx` -> `xlsx_ingest.py` (pandas/openpyxl) renders sheets as Markdown tables with row-blocking; `.csv` → `csv_ingest.py` (pandas) reads tabular data, supports delimiter detection and encoding fallbacks, and renders CSV rows as Markdown tables with row-blocking. `base.py` defines `Document`, `content_hash`, and `base_metadata` (which derives `tags` from the folder structure under `raw/`: `raw/erp12/faturalama/x.md` → `tags: ["erp12", "faturalama"]`). Output frontmatter records `source`, `type`, `content_hash`, `parser`.
 - `chunk.py` — `MarkdownHeaderTextSplitter` on H1–H4, then oversized sections (> ~3200 chars) are split with **atomic blocks**: fenced code and GFM tables are never split; prose is greedy-packed by paragraph. Chunks within a document are linked via `prev_chunk`/`next_chunk` UUIDs.
 - `embed.py` — `BAAI/bge-m3` (1024-dim dense + sparse token weights as JSON string), written to LanceDB table `chunks` with `overwrite`. Batch size 4 / max length 1024 are deliberate RAM constraints — don't raise them casually.
-- `query.py` — dense LanceDB search + manual Python-side sparse dot product, merged with RRF (k=60), then reranked by `rerank.py` (transformers-based cross-encoder). Returns `SearchHit` list.
+- `query.py` — dense LanceDB search + manual Python-side sparse dot product, merged with RRF (k=60), then reranked by `rerank.py` (transformers-based cross-encoder). Returns `SearchHit` list. The bge-m3 model is a process-global singleton (corpus-independent); table handles are cached per workspace (`_TABLE_CACHE` keyed by root, `invalidate_table_cache(ws)` after re-embed).
 - `map_gen.py` — Pass 1 scans `processed/*.md` for explicit references (`bkz.`, `see also`, `[[WikiLink]]`, `(FILE.md)`) → `explicit_related`; Pass 2 computes per-section chunk-vector centroids and cross-file cosine similarity (threshold 0.75, top 5) → `might_be_related`.
 - `index_gen.py` / `wikilink_inject.py` — render `.doqqy/topics.yaml` to `INDEX.md` and inject `[[wikilink]]` blocks between `<!-- doqqy:links:start/end -->` markers (previous block is removed on each run; only `processed/` is touched, never `raw/`).
-- `config.py` — single source for all paths, model names, thresholds, and tuning constants. Change settings here, not inline.
+- `workspace.py` — `Workspace(root)` frozen dataclass: single source for all per-corpus paths (`raw_dir`, `processed_dir`, `state_dir`, `chunks_parquet`, `store_dir`, `topics_yaml`, `logs_dir`, `manifest_path`) + `ensure_dirs()`.
+- `config.py` — single source for model names, thresholds, and tuning constants (paths moved to `workspace.py`). Change settings here, not inline.
 
 **Tag filtering:** LanceDB can't run `LIKE`/`IN` on list columns, so tags are also serialized to `tags_str` in `",tag1,tag2,"` form (leading/trailing commas prevent partial matches); `--tag X` filters via `tags_str LIKE '%,X,%'` and applies to dense search, sparse search, and Pass 2 alike. Keep both columns in sync if touching the schema.
 
@@ -55,3 +56,13 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 - **Failure isolation:** one bad file must not stop a pipeline run — log to `.doqqy/logs/`, continue, report failures in the summary table.
 - Use `pathlib.Path` (no `os.path.join`) and always explicit `encoding="utf-8"`.
 - CLI commands use typer + rich (panels, progress bars) — match that UX in new commands.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
