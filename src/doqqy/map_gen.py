@@ -15,12 +15,12 @@ import numpy as np
 import yaml
 
 from doqqy.config import (
-    LANCE_TABLE,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
     get_logger,
 )
 from doqqy.workspace import Workspace
+from doqqy.infra.settings import Settings
 
 _LOG = get_logger("doqqy.map_gen")
 
@@ -160,20 +160,6 @@ def _pass1(processed_dir: Path, known_files: set[str]) -> dict[str, list[Explici
     return results
 
 
-# ---------------------------------------------------------------------------
-# Pass 2 — Embedding Cosine (Tematik Komşular)
-# ---------------------------------------------------------------------------
-
-def _load_table(ws: Workspace):
-    import lancedb  # type: ignore
-    if not ws.store_dir.exists():
-        raise FileNotFoundError(f"{ws.store_dir} yok — önce `doqqy embed` çalıştır.")
-    db = lancedb.connect(ws.store_dir)
-    if LANCE_TABLE not in db.list_tables().tables:
-        raise RuntimeError(f"tablo bulunamadı: {LANCE_TABLE}")
-    return db.open_table(LANCE_TABLE)
-
-
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
     if na == 0 or nb == 0:
@@ -187,37 +173,36 @@ def _pass2(
     top_n: int = MAP_TOP_N_NEIGHBORS,
     threshold: float = MAP_COSINE_THRESHOLD,
     filter_tag: str | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, list[ThematicRef]]:
-    """LanceDB'den vektörleri çek, her section için cosine komşuları bul."""
-    table = _load_table(ws)
-    if filter_tag:
-        df = table.search().where(f"tags_str LIKE '%,{filter_tag},%'").to_pandas()
-    else:
-        df = table.to_pandas()
+    """Retrieve dense vectors from vector store, find cosine neighbors for each section."""
+    from doqqy.infra.vectorstore.base import TagFilter
+    from doqqy.infra.vectorstore.factory import make_store
 
-    if "vector" not in df.columns:
-        _LOG.warning("'vector' kolonu yok — Pass 2 atlanıyor.")
+    flt = TagFilter(tags=(filter_tag,)) if filter_tag else None
+    store = make_store(ws, settings)
+    all_vecs, records = store.all_vectors(flt)
+    store.close()
+
+    if all_vecs.shape[0] == 0:
+        _LOG.warning("No vectors found - Pass 2 skipped.")
         return {}
 
-    # section_path → section centroid için chunk'ları grupluyoruz
-    # source dosya adı + heading ile eşleştirme
+    # Group chunks for section centroid by matching source filename + heading
     results: dict[str, list[ThematicRef]] = {}
 
-    # Tüm vektörleri tek seferde numpy array'e al (hız için)
-    all_vecs = np.vstack(df["vector"].tolist()).astype(np.float32)
-    all_sources = df["source"].tolist() if "source" in df.columns else [""] * len(df)
-    all_section_paths = df["section_path"].tolist() if "section_path" in df.columns else [None] * len(df)
+    all_sources = [r.source for r in records]
+    all_section_paths = [r.section_path for r in records]
 
-    # Her section için centroid hesapla
-    sec_centroids: dict[str, tuple[np.ndarray, str]] = {}  # sec_id → (centroid, source_file)
+    # Calculate centroid for each section
+    sec_centroids: dict[str, tuple[np.ndarray, str]] = {}  # sec_id -> (centroid, source_file)
 
     for entry in sections_meta:
         mask = []
         for i, src in enumerate(all_sources):
             src_name = Path(str(src)).name if src else ""
             if src_name == entry.file:
-                sp = all_section_paths[i]
-                sp_list = list(sp) if sp is not None else []
+                sp_list = all_section_paths[i]
                 heading_clean = entry.section.lstrip("#").strip()
                 if not sp_list or (sp_list and heading_clean in " > ".join(sp_list)):
                     mask.append(i)
@@ -315,18 +300,19 @@ def generate_map(
     top_n: int = MAP_TOP_N_NEIGHBORS,
     output: Path | None = None,
     tag: str | None = None,
+    settings: Settings | None = None,
 ) -> Path:
-    """processed/*.md → topics.yaml. Dönen değer: yazılan dosya yolu."""
+    """processed/*.md → topics.yaml. Returned value: written file path."""
     processed_dir = processed_dir or ws.processed_dir
     output = output or ws.topics_yaml
     md_files = sorted(f for f in processed_dir.rglob("*.md") if f.name != "INDEX.md")
     if not md_files:
-        raise FileNotFoundError(f"{processed_dir} içinde .md dosyası yok.")
+        raise FileNotFoundError(f"{processed_dir} has no .md files.")
 
     known_files = {f.name for f in md_files}
-    _LOG.info(f"{len(md_files)} dosya bulundu.")
+    _LOG.info(f"Found {len(md_files)} files.")
 
-    # Tüm section meta'yı önce çıkar
+    # Extract all section meta first
     all_sections: list[SectionEntry] = []
     for md_file in md_files:
         for heading, _, _ in _parse_sections(md_file):
@@ -337,25 +323,25 @@ def generate_map(
                 section=heading,
             ))
 
-    _LOG.info(f"{len(all_sections)} section tespit edildi.")
+    _LOG.info(f"Detected {len(all_sections)} sections.")
 
     # Pass 1
     explicit_map: dict[str, list[ExplicitRef]] = {}
     if pass1:
-        _LOG.info("Pass 1 — regex explicit referanslar...")
+        _LOG.info("Pass 1 — regex explicit references...")
         explicit_map = _pass1(processed_dir, known_files)
         total_refs = sum(len(v) for v in explicit_map.values())
-        _LOG.info(f"Pass 1 tamam: {total_refs} explicit referans bulundu.")
+        _LOG.info(f"Pass 1 done: found {total_refs} explicit references.")
 
     # Pass 2
     thematic_map: dict[str, list[ThematicRef]] = {}
     if pass2:
-        _LOG.info(f"Pass 2 — embedding cosine benzerlik... (tag filter: {tag or 'yok'})")
+        _LOG.info(f"Pass 2 — embedding cosine similarity... (tag filter: {tag or 'none'})")
         thematic_map = _pass2(
-            ws, all_sections, top_n=top_n, threshold=cosine_threshold, filter_tag=tag
+            ws, all_sections, top_n=top_n, threshold=cosine_threshold, filter_tag=tag, settings=settings
         )
         total_th = sum(len(v) for v in thematic_map.values())
-        _LOG.info(f"Pass 2 tamam: {total_th} tematik bağlantı bulundu.")
+        _LOG.info(f"Pass 2 done: found {total_th} thematic links.")
 
     # Birleştir
     for entry in all_sections:

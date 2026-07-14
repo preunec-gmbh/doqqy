@@ -114,13 +114,19 @@ def chunk(
 
 
 @app.command()
-def embed() -> None:
+def embed(
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
+    ),
+) -> None:
     """chunks/chunks.parquet → store.lance (bge-m3 dense)."""
     from doqqy.embed import build_index
+    from doqqy.infra.settings import Settings
 
     ws = _workspace()
     ws.ensure_dirs()
-    n = build_index(ws)
+    settings = Settings(vector_backend=backend) if backend else None
+    n = build_index(ws, settings=settings)
     console.print(
         Panel(
             f"[green]✓[/green] {n} chunk indekslendi.",
@@ -137,12 +143,15 @@ def query(
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
+    backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.query import search
+    from doqqy.infra.settings import Settings
 
     ws = _workspace()
-    hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag)
+    settings = Settings(vector_backend=backend) if backend else None
+    hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
@@ -186,9 +195,11 @@ def map(
     threshold: float = typer.Option(MAP_COSINE_THRESHOLD, "--threshold", help="Cosine benzerlik alt limiti."),
     top_n: int = typer.Option(MAP_TOP_N_NEIGHBORS, "--top-n", help="Her section için max komşu sayısı."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag'e sahip sectionlar arasında ilişki kur."),
+    backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
 ) -> None:
     """processed/*.md → topics.yaml (regex referanslar + embedding cosine)."""
     from doqqy.map_gen import generate_map
+    from doqqy.infra.settings import Settings
 
     ws = _workspace()
     ws.ensure_dirs()
@@ -196,6 +207,7 @@ def map(
     do_pass1 = not pass2_only
     do_pass2 = not pass1_only
 
+    settings = Settings(vector_backend=backend) if backend else None
     out = generate_map(
         ws,
         processed_dir=processed_dir,
@@ -204,6 +216,7 @@ def map(
         cosine_threshold=threshold,
         top_n=top_n,
         tag=tag,
+        settings=settings,
     )
     console.print(
         Panel(
@@ -275,34 +288,26 @@ def inject(
 
 
 @app.command()
-def tags() -> None:
+def tags(
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
+    ),
+) -> None:
     """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
-    import numpy as np
-    import lancedb  # type: ignore
-    from doqqy.config import LANCE_TABLE
+    from doqqy.infra.settings import Settings
+    from doqqy.infra.vectorstore.factory import make_store
 
     ws = _workspace()
-    if not ws.store_dir.exists():
-        console.print("[red]LanceDB bulunamadı. Önce `doqqy embed` çalıştırın.[/red]", err=True)
+    settings = Settings(vector_backend=backend) if backend else None
+    store = make_store(ws, settings)
+
+    try:
+        all_tags = store.list_tags()
+    except Exception as e:
+        console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]", err=True)
         raise typer.Exit(1)
-
-    db = lancedb.connect(ws.store_dir)
-    if LANCE_TABLE not in db.list_tables().tables:
-        console.print("[red]LanceDB tablosu boş.[/red]", err=True)
-        raise typer.Exit(1)
-
-    table = db.open_table(LANCE_TABLE)
-    df = table.search().limit(100000).to_pandas()
-
-    if "tags" not in df.columns:
-        console.print("[yellow]Kayıtlı tag bulunamadı (Eski index kullanılıyor olabilir).[/yellow]")
-        raise typer.Exit()
-
-    all_tags: set[str] = set()
-    for t_list in df["tags"].dropna():
-        if isinstance(t_list, (list, tuple, np.ndarray)):
-            for t in t_list:
-                all_tags.add(t)
+    finally:
+        store.close()
 
     if not all_tags:
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
