@@ -113,14 +113,14 @@ class Chunk:
 
 ### 2.3 Embed (`doqqy embed`) — `src/doqqy/embed.py`
 
-`chunks.parquet` → LanceDB table `chunks` in `.doqqy/store.lance/`.
+`chunks.parquet` → pluggable `VectorStore` adapter (defaulting to LanceDB table `chunks` in `.doqqy/store.lance/`).
 
 1. `BAAI/bge-m3` is loaded through `FlagEmbedding.BGEM3FlagModel`. Device auto-detected (`detect_device()`: `DOQQY_DEVICE` env override → `torch.cuda.is_available()` → CPU). fp16 on CUDA.
 2. Each batch (`EMBEDDING_BATCH_SIZE = 4`, `max_length=1024` — deliberate RAM constraints for consumer machines) is encoded with `return_dense=True, return_sparse=True`.
-3. Dense vectors: `float32[1024]`. Sparse vectors: token-id → weight dicts, **serialized to JSON strings** (LanceDB has no native sparse type).
-4. Table is dropped and recreated (`mode="overwrite"`) — embedding is currently **all-or-nothing**, no incremental update.
+3. Dense vectors: `float32[1024]`. Sparse vectors: token-id → weight dicts, normalized to `dict[int, float]` at the port level.
+4. Table is dropped and recreated (`store.recreate(dim)`) and records are upserted (`store.upsert(records)`).
 
-Two derived columns are added at write time:
+Two derived columns are added by the LanceDB adapter at write time:
 
 - `section_path_str` — `"H1 > H2 > H3"` for display.
 - `tags_str` — `",tag1,tag2,"` (note leading/trailing commas). LanceDB cannot run SQL `LIKE`/`IN` against `list<string>` columns, so tags are also serialized to a delimited string; the comma-wrapping makes `LIKE '%,erp12,%'` an **exact** tag match (prevents `bulut` matching `bulut-saha`). **If you touch the schema, keep `tags` and `tags_str` in sync.**
@@ -148,20 +148,22 @@ The retrieval pipeline, end to end:
 ```
 query text
    │  _embed_query()  (bge-m3, cached via lru_cache)
-   ├──► dense vec (1024) ──► LanceDB ANN search, metric=cosine, top 50 ──┐
-   └──► sparse weights ───► Python-side dot product over ALL chunks,    ├─► RRF (k=60)
-                            top 50                                      ─┘      │
-                                                                     top 50 fused
-                                                                                │
-                                                          bge-reranker-v2-m3 (cross-encoder,
-                                                          sigmoid(logit), batch 4, max_len 512)
-                                                                                │
-                                                                          top-k SearchHits
+   ├──► dense vec (1024) ──► VectorStore hybrid search ────────┐
+   └──► sparse weights ───► (client-side or server-side RRF)  ├─► fused list
+                                                               │       │
+                                                                   top 50 fused
+                                                                               │
+                                                         bge-reranker-v2-m3 (cross-encoder,
+                                                         sigmoid(logit), batch 4, max_len 512)
+                                                                               │
+                                                                         top-k SearchHits
 ```
 
-- **Dense**: `table.search(qvec).metric("cosine").limit(50)`; score = `1 - distance`. Tag filter applied as a LanceDB `where()` clause.
-- **Sparse**: there is no server-side sparse index — `_sparse_search` loads the (tag-filtered) table into pandas and computes `Σ query_weight[tok] * chunk_weight[tok]` per chunk in Python. Correct, but **O(total chunks) per query** (see DEVELOPER-HANDOVER §known-issues).
-- **RRF** (`_rrf`): per chunk_id, `score += 1/(60 + rank)` for each list it appears in; also records `dense_rank` / `sparse_rank` for the UI.
+- **Pluggable Vector Store Search**: `query.py` delegates retrieval to `store.hybrid_search(...)` which returns RRF-fused results.
+- **LanceDB Adapter Path**:
+  - **Dense**: `table.search(qvec).metric("cosine").limit(limit)`; score = `1 - distance`. Tag filter applied as a `where()` clause.
+  - **Sparse**: computed client-side by loading the tag-filtered table into pandas and computing `Σ query_weight[tok] * chunk_weight[tok]` per chunk in Python.
+  - **RRF**: per chunk_id, `score += 1/(60 + rank)` for each list it appears in; also records `dense_rank` / `sparse_rank` for the UI.
 - **Rerank** (`rerank.py`): `AutoModelForSequenceClassification` over `(query, content)` pairs; scores squashed with sigmoid; top-k returned. `--no-rerank` skips this and returns RRF order. Note: the reranker is loaded **without device placement** — it always runs on CPU today.
 - Result type:
 
@@ -176,7 +178,7 @@ class SearchHit:
     extra: dict                # chunk_id, doc_type, dense_rank, sparse_rank, rrf_score, rerank_score
 ```
 
-The embedding model is an `@lru_cache(maxsize=1)` process-global singleton (it's corpus-independent) — first query in a process pays the model-load cost, subsequent ones don't. LanceDB table handles are cached **per workspace** in a dict keyed by resolved root path (`query._TABLE_CACHE`); `invalidate_table_cache(ws)` drops a workspace's handle after `build_index` rewrites its store. (A long-running server reuses both caches; see ROADMAP.)
+The embedding model is an `@lru_cache(maxsize=1)` process-global singleton (it's corpus-independent) — first query in a process pays the model-load cost, subsequent ones don't. Table handles are cached per workspace and automatically invalidated within the `LanceDBStore` adapter class when updates occur.
 
 ### 2.5 Map (`doqqy map`) — `src/doqqy/map_gen.py`
 

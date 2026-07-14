@@ -14,7 +14,6 @@ from doqqy.config import (
     EMBEDDING_BATCH_SIZE,
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
-    LANCE_TABLE,
     detect_device,
     get_logger,
 )
@@ -78,8 +77,8 @@ def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
     return dense_arr, sparse_list
 
 
-def build_index(ws: Workspace, *, batch_size: int | None = None) -> int:
-    """chunks.parquet → store.lance/chunks. Var olan tabloyu üzerine yazar."""
+def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Settings | None = None) -> int:
+    """chunks.parquet → store.lance/chunks. Overwrites the existing table."""
     df = _load_chunks(ws)
     if df.empty:
         _LOG.warning("chunk yok, index oluşturulmadı.")
@@ -107,26 +106,51 @@ def build_index(ws: Workspace, *, batch_size: int | None = None) -> int:
         total_sparse_tokens / len(sparse_jsons) if sparse_jsons else 0,
     )
 
-    df_out = df.copy()
-    df_out["vector"] = list(dense_vecs)
-    df_out["sparse_vector"] = sparse_jsons
-    df_out["section_path_str"] = df_out["section_path"].apply(lambda xs: " > ".join(xs))
-    # Array olan tags alanını LanceDB'nin kolay filtreleyebilmesi için
-    # string (virgülle ayrılmış değerler) formatına çevirelim.
-    # Örn: ["bulut-saha", "x"] -> ",bulut-saha,x,"
-    df_out["tags_str"] = df_out["tags"].apply(lambda ts: f",{','.join(ts)}," if ts is not None and len(ts) > 0 else "")
+    # Build ChunkRecord list
+    from doqqy.infra.vectorstore.base import ChunkRecord
+    from doqqy.infra.vectorstore.factory import make_store
+    from doqqy.infra.settings import Settings
 
-    import lancedb  # type: ignore
+    records = []
+    for i, (_, row) in enumerate(df.iterrows()):
+        sparse_vec = {int(k): float(v) for k, v in json.loads(sparse_jsons[i]).items()}
+        
+        tags = list(row["tags"]) if row.get("tags") is not None else []
+        section_path = list(row["section_path"]) if row.get("section_path") is not None else []
+        
+        prev_chunk = row.get("prev_chunk")
+        if pd.isna(prev_chunk) or prev_chunk is None:
+            prev_chunk = None
+        else:
+            prev_chunk = str(prev_chunk)
 
-    db = lancedb.connect(ws.store_dir)
-    if LANCE_TABLE in db.list_tables().tables:
-        db.drop_table(LANCE_TABLE)
+        next_chunk = row.get("next_chunk")
+        if pd.isna(next_chunk) or next_chunk is None:
+            next_chunk = None
+        else:
+            next_chunk = str(next_chunk)
 
-    db.create_table(LANCE_TABLE, data=df_out, mode="overwrite")
+        rec = ChunkRecord(
+            chunk_id=str(row["chunk_id"]),
+            doc_id=str(row["doc_id"]),
+            source=str(row["source"]),
+            doc_type=str(row["doc_type"]),
+            tags=tags,
+            content=str(row["content"]),
+            section_path=section_path,
+            char_count=int(row["char_count"]),
+            prev_chunk=prev_chunk,
+            next_chunk=next_chunk,
+            dense=np.asarray(dense_vecs[i], dtype=np.float32),
+            sparse=sparse_vec,
+        )
+        records.append(rec)
 
-    # Aynı process'te bu workspace için açık tablo handle'ı varsa bayatladı — düşür.
-    from doqqy.query import invalidate_table_cache  # noqa: PLC0415 — döngüsel import önlemi
+    # Initialize store via factory and upsert records
+    store = make_store(ws, settings)
+    store.recreate(EMBEDDING_DIM)
+    n = store.upsert(records)
+    store.close()
 
-    invalidate_table_cache(ws)
-    _LOG.info("LanceDB yazıldı: %s (%d satır).", ws.store_dir / LANCE_TABLE, len(df_out))
-    return len(df_out)
+    _LOG.info("Vector store updated with %d records.", n)
+    return n
