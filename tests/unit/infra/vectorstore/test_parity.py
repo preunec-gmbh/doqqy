@@ -11,6 +11,7 @@ from doqqy.workspace import Workspace
 from doqqy.embed import build_index
 from doqqy.infra.vectorstore.base import ChunkRecord, TagFilter
 from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
+from doqqy.config import RRF_K
 
 
 def legacy_dense_search(store_dir: Path, qvec: np.ndarray, k: int, filter_tag: str | None = None) -> list[dict]:
@@ -61,7 +62,7 @@ def legacy_sparse_search(store_dir: Path, query_sparse: dict[str, float], k: int
     return results
 
 
-def legacy_rrf(dense_rows: list[dict], sparse_rows: list[dict], k: int = 60) -> list[dict]:
+def legacy_rrf(dense_rows: list[dict], sparse_rows: list[dict], k: int = RRF_K) -> list[dict]:
     by_id: dict[str, dict] = {}
 
     for rank, row in enumerate(dense_rows):
@@ -123,7 +124,7 @@ def test_search_results_parity(tmp_path: Path):
     # Test with tag filtering
     legacy_dense = legacy_dense_search(store_dir, query_dense, k=5, filter_tag="even")
     legacy_sparse = legacy_sparse_search(store_dir, query_sparse_str, k=5, filter_tag="even")
-    legacy_fused = legacy_rrf(legacy_dense, legacy_sparse, k=60)[:5]
+    legacy_fused = legacy_rrf(legacy_dense, legacy_sparse, k=RRF_K)[:5]
 
     flt = TagFilter(tags=("even",))
     new_results = store.hybrid_search(query_dense, query_sparse, limit=5, flt=flt)
