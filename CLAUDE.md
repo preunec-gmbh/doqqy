@@ -21,12 +21,12 @@ Pipeline (each stage is an independent, idempotent command — rerun any stage a
 ```powershell
 doqqy ingest        # raw/ → processed/ (canonical markdown + YAML frontmatter)
 doqqy chunk         # processed/ → .doqqy/chunks/chunks.parquet
-doqqy embed         # → .doqqy/store.lance/ (LanceDB, dense + sparse vectors)
-doqqy map           # → .doqqy/topics.yaml (Pass 1 regex + Pass 2 cosine; --pass1/--pass2/--threshold/--top-n)
+doqqy embed         # → .doqqy/store.lance/ (LanceDB/Qdrant, dense + sparse vectors) --backend
+doqqy map           # → .doqqy/topics.yaml (Pass 1 regex + Pass 2 cosine; --backend)
 doqqy index         # .doqqy/topics.yaml → processed/INDEX.md (Obsidian entry point)
 doqqy inject        # inject [[wikilinks]] into processed/*.md (idempotent marker blocks; --dry-run)
-doqqy query "..."   # hybrid search (--top-k, --full, --no-rerank, --tag)
-doqqy tags          # list tags in the store
+doqqy query "..."   # hybrid search (--top-k, --full, --no-rerank, --tag, --backend)
+doqqy tags          # list tags in the store (--backend)
 doqqy info          # pipeline state overview
 ```
 
@@ -40,14 +40,15 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 
 - `ingest/` — format-specific parsers dispatched by extension in `router.py`: `.md`/`.txt` → `md_ingest.py`; `.html`/`.htm` → `html_ingest.py` (BeautifulSoup + markdownify); `.pdf` → docling with pymupdf4llm fallback; `.docx` → pandoc with mammoth fallback; `.xml` → `xml_ingest.py` (etree); `.xlsx` -> `xlsx_ingest.py` (pandas/openpyxl) renders sheets as Markdown tables with row-blocking; `.csv` → `csv_ingest.py` (pandas) reads tabular data, supports delimiter detection and encoding fallbacks, and renders CSV rows as Markdown tables with row-blocking. `base.py` defines `Document`, `content_hash`, and `base_metadata` (which derives `tags` from the folder structure under `raw/`: `raw/erp12/faturalama/x.md` → `tags: ["erp12", "faturalama"]`). Output frontmatter records `source`, `type`, `content_hash`, `parser`.
 - `chunk.py` — `MarkdownHeaderTextSplitter` on H1–H4, then oversized sections (> ~3200 chars) are split with **atomic blocks**: fenced code and GFM tables are never split; prose is greedy-packed by paragraph. Chunks within a document are linked via `prev_chunk`/`next_chunk` UUIDs.
-- `embed.py` — `BAAI/bge-m3` (1024-dim dense + sparse token weights as JSON string), written to LanceDB table `chunks` with `overwrite`. Batch size 4 / max length 1024 are deliberate RAM constraints — don't raise them casually.
-- `query.py` — dense LanceDB search + manual Python-side sparse dot product, merged with RRF (k=60), then reranked by `rerank.py` (transformers-based cross-encoder). Returns `SearchHit` list. The bge-m3 model is a process-global singleton (corpus-independent); table handles are cached per workspace (`_TABLE_CACHE` keyed by root, `invalidate_table_cache(ws)` after re-embed).
-- `map_gen.py` — Pass 1 scans `processed/*.md` for explicit references (`bkz.`, `see also`, `[[WikiLink]]`, `(FILE.md)`) → `explicit_related`; Pass 2 computes per-section chunk-vector centroids and cross-file cosine similarity (threshold 0.75, top 5) → `might_be_related`.
-- `index_gen.py` / `wikilink_inject.py` — render `.doqqy/topics.yaml` to `INDEX.md` and inject `[[wikilink]]` blocks between `<!-- doqqy:links:start/end -->` markers (previous block is removed on each run; only `processed/` is touched, never `raw/`).
-- `workspace.py` — `Workspace(root)` frozen dataclass: single source for all per-corpus paths (`raw_dir`, `processed_dir`, `state_dir`, `chunks_parquet`, `store_dir`, `topics_yaml`, `logs_dir`, `manifest_path`) + `ensure_dirs()`.
-- `config.py` — single source for model names, thresholds, and tuning constants (paths moved to `workspace.py`). Change settings here, not inline.
+- `embed.py` — `BAAI/bge-m3` (1024-dim dense + sparse token weights), written via the pluggable `VectorStore` adapter (`store.recreate(dim)` and `store.upsert(records)`). Batch size 4 / max length 1024 are deliberate RAM constraints — don't raise them casually.
+- `query.py` — hybrid search using the pluggable `VectorStore` adapter (`store.hybrid_search(...)`), returning `SearchHit` list. Reranking (bge-reranker-v2-m3) stays in `query.py`. Table handles are cached and invalidated internally within `LanceDBStore`.
+- `map_gen.py` — Pass 1 scans `processed/*.md` for explicit references; Pass 2 retrieves all vectors via the pluggable `VectorStore` adapter (`store.all_vectors(...)`), computes per-section chunk-vector centroids, and calculates cross-file cosine similarity.
+- `index_gen.py` / `wikilink_inject.py` — render `.doqqy/topics.yaml` to `INDEX.md` and inject `[[wikilink]]` blocks between `<!-- doqqy:links:start/end -->` markers.
+- `workspace.py` — `Workspace(root)` frozen dataclass: single source for all per-corpus paths.
+- `infra/` — central infrastructure layer containing configuration/settings loading (`infra/settings.py`) and the pluggable vector store port + adapters (`infra/vectorstore/`).
 
-**Tag filtering:** LanceDB can't run `LIKE`/`IN` on list columns, so tags are also serialized to `tags_str` in `",tag1,tag2,"` form (leading/trailing commas prevent partial matches); `--tag X` filters via `tags_str LIKE '%,X,%'` and applies to dense search, sparse search, and Pass 2 alike. Keep both columns in sync if touching the schema.
+**Pluggable Vector Store:** Vector storage and querying are decoupled behind a `VectorStore` port interface (`infra/vectorstore/base.py`). `LanceDBStore` implements local-first daemonless search. `QdrantStore` acts as a pluggable server backend. Settings are resolved using precedence: CLI flag > Environment variable > Defaults.
+**Tag filtering:** Structured query tag filtering is achieved via `TagFilter` objects passing tag structures directly to the store backend without SQL string interpolation. The LanceDB adapter maps this to LIKE conditions securely.
 
 ## Conventions (see docs/DEVELOPER-HANDOVER.md §1)
 
