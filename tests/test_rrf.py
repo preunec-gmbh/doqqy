@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from doqqy.query import _rrf
+from doqqy.infra.vectorstore.lancedb_store import _rrf
 
 
 def test_rrf_rewards_presence_in_both_lists():

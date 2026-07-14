@@ -80,11 +80,10 @@ def test_two_workspaces_ingest_and_chunk_without_crosstalk(tmp_path):
 
 
 def test_table_cache_is_per_workspace(tmp_path):
-    """B2 regresyonu (store tarafı): _table artık tek girişli lru_cache değil —
-    iki workspace'in tablo handle'ları root'a göre ayrışmalı."""
+    """B2 regression (store side): _table cache must isolate handles by store directory."""
     import lancedb
 
-    from doqqy import query as q
+    from doqqy.infra.vectorstore.lancedb_store import LanceDBStore, invalidate_table_cache_by_path
 
     ws_a = _make_workspace(tmp_path, "corpus_a")
     ws_b = _make_workspace(tmp_path, "corpus_b")
@@ -100,18 +99,20 @@ def test_table_cache_is_per_workspace(tmp_path):
     _seed(ws_a, 2)
     _seed(ws_b, 5)
 
-    table_a = q._table(ws_a)
-    table_b = q._table(ws_b)
+    store_a = LanceDBStore(ws_a.store_dir)
+    store_b = LanceDBStore(ws_b.store_dir)
+
+    table_a = store_a._table()
+    table_b = store_b._table()
 
     assert table_a.count_rows() == 2
     assert table_b.count_rows() == 5
 
-    # Tekrarlanan çağrı cache'ten aynı handle'ı döndürmeli (yeniden bağlanma yok)
-    assert q._table(ws_a) is table_a
-    assert q._table(ws_b) is table_b
+    # Repeated calls should return same handle from cache
+    assert store_a._table() is table_a
+    assert store_b._table() is table_b
 
-    # Invalidation sadece ilgili workspace'i düşürmeli
-    q.invalidate_table_cache(ws_a)
-    assert q._table(ws_b) is table_b
-    assert q._table(ws_a) is not table_a
-    assert q._table(ws_a).count_rows() == 2
+    invalidate_table_cache_by_path(ws_a.store_dir)
+    assert store_b._table() is table_b
+    assert store_a._table() is not table_a
+    assert store_a._table().count_rows() == 2

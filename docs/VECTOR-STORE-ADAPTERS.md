@@ -225,15 +225,17 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 
 ## 5. What changes in existing modules
 
-| Module | Change |
-|---|---|
-| `embed.py` | Stops importing lancedb; builds `ChunkRecord`s (sparse as `dict[int,float]`) and calls `store.recreate(dim)` + `store.upsert(records)`. The `tags_str`/`section_path_str` derived columns move into `LanceDBStore` (its private storage concern) |
-| `query.py` | `_dense_search`, `_sparse_search`, `_rrf` move into `LanceDBStore` (unchanged logic); `search()` becomes: embed query → `store.hybrid_search(...)` → rerank → `SearchHit`s |
-| `map_gen.py` | `_load_table()`/`to_pandas()` replaced by `store.all_vectors(flt)` |
-| `cli.py` | `tags` command reads the manifest; `--backend` flag added to `embed`/`query`/`map` |
-| `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this |
+| Module | Change | Status |
+|---|---|---|
+| `embed.py` | Stops importing lancedb; builds `ChunkRecord`s (sparse as `dict[int,float]`) and calls `store.recreate(dim)` + `store.upsert(records)`. The `tags_str`/`section_path_str` derived columns move into `LanceDBStore` (its private storage concern) | **Implemented** |
+| `query.py` | `_dense_search`, `_sparse_search`, `_rrf` move into `LanceDBStore` (unchanged logic); `search()` becomes: embed query → `store.hybrid_search(...)` → rerank → `SearchHit`s | **Implemented** |
+| `map_gen.py` | `_load_table()`/`to_pandas()` replaced by `store.all_vectors(flt)` | **Implemented** |
+| `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
+| `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-Estimated effort: port + LanceDB adapter (logic relocation, no new behavior) ~2–3 days; Qdrant adapter + parity tests ~3–4 days; migration tool ~1 day.
+**Phase 1 Status:** Completed. Decoupling port and LanceDB adapter logic relocation is fully implemented, verified via unit and parity testing.
+
+Estimated remaining effort (Phase 1.5): Qdrant adapter + parity tests ~3–4 days; migration tool ~1 day.
 
 ## 6. Migration: LanceDB → Qdrant without re-embedding
 
