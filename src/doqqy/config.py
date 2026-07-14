@@ -32,6 +32,7 @@ LANCE_TABLE: str = "chunks"
 # Query
 DEFAULT_TOP_K: int = 5
 RETRIEVAL_TOP_K: int = 50  # dense + sparse her biri bu kadar getirir, RRF sonrası reranker'a gider
+RRF_K: int = 60            # Reciprocal Rank Fusion k parametresi
 
 # Reranker
 RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"

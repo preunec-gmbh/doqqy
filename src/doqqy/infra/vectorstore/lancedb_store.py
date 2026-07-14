@@ -10,7 +10,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-from doqqy.config import LANCE_TABLE, get_logger
+from doqqy.config import LANCE_TABLE, RRF_K, get_logger
 from doqqy.infra.vectorstore.base import ChunkRecord, ScoredChunk, TagFilter, VectorStore
 
 _LOG = get_logger("doqqy.infra.vectorstore.lancedb")
@@ -25,7 +25,7 @@ def invalidate_table_cache_by_path(store_dir: Path) -> None:
     _TABLE_CACHE.pop(store_dir.resolve(), None)
 
 
-def _rrf(dense_rows: list[dict], sparse_rows: list[dict], k: int = 60) -> list[dict]:
+def _rrf(dense_rows: list[dict], sparse_rows: list[dict], k: int = RRF_K) -> list[dict]:
     by_id: dict[str, dict] = {}
 
     for rank, row in enumerate(dense_rows):
@@ -293,17 +293,7 @@ class LanceDBStore(VectorStore):
         return vecs, records
 
     def list_tags(self) -> list[str]:
-        """List all unique tags, checking workspace manifest first before scanning the store."""
-        manifest_path = self._store_dir.parent / "manifest.json"
-        if manifest_path.exists():
-            try:
-                with open(manifest_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    return data.get("tags", [])
-            except Exception:
-                pass
-
-        # Fallback to database scan if manifest is not found.
+        """List all unique tags by scanning the store table."""
         table = self._table()
         df = table.to_pandas()
         if "tags" in df.columns:
