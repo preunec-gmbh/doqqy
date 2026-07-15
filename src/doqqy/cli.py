@@ -151,7 +151,12 @@ def query(
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
+    try:
+        hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
+    except ValueError as e:
+        console.print(f"[bold red]Hata: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
@@ -208,16 +213,20 @@ def map(
     do_pass2 = not pass1_only
 
     settings = Settings(vector_backend=backend) if backend else None
-    out = generate_map(
-        ws,
-        processed_dir=processed_dir,
-        pass1=do_pass1,
-        pass2=do_pass2,
-        cosine_threshold=threshold,
-        top_n=top_n,
-        tag=tag,
-        settings=settings,
-    )
+    try:
+        out = generate_map(
+            ws,
+            processed_dir=processed_dir,
+            pass1=do_pass1,
+            pass2=do_pass2,
+            cosine_threshold=threshold,
+            top_n=top_n,
+            tag=tag,
+            settings=settings,
+        )
+    except ValueError as e:
+        console.print(f"[bold red]Hata: {e}[/bold red]")
+        raise typer.Exit(code=1)
     console.print(
         Panel(
             f"[green]✓[/green] Harita oluşturuldu: [dim]{out}[/dim]",

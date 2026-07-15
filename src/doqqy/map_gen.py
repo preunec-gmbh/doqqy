@@ -303,6 +303,9 @@ def generate_map(
     settings: Settings | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Returned value: written file path."""
+    if tag is not None and not re.match(r"^[\w-]+\Z", tag):
+        raise ValueError(f"Tag format must match ^[\\w-]+\\Z, got {tag!r}")
+
     processed_dir = processed_dir or ws.processed_dir
     output = output or ws.topics_yaml
     md_files = sorted(f for f in processed_dir.rglob("*.md") if f.name != "INDEX.md")
