@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
+import re
 
 import numpy as np
 
@@ -71,6 +72,9 @@ def search(
     tag: str | None = None,
     settings: Settings | None = None,
 ) -> list[SearchHit]:
+    if tag is not None and not re.match(r"^[\w-]+\Z", tag):
+        raise ValueError(f"Tag format must match ^[\\w-]+\\Z, got {tag!r}")
+
     dense_vec, sparse_vec = _embed_query(query)
 
     from doqqy.infra.vectorstore.base import TagFilter
