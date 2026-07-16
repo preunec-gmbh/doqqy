@@ -22,6 +22,7 @@ from doqqy.config import (
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
 )
+from doqqy.infra.vectorstore.base import InvalidTagError
 from doqqy.workspace import Workspace
 
 # Windows'ta varsayılan stdout cp1252; Türkçe karakter mojibake olur.
@@ -35,6 +36,7 @@ if sys.platform == "win32":
 load_dotenv(Path.cwd() / ".env", override=False)
 
 console = Console()
+err_console = Console(stderr=True)  # for error messages sent to stderr
 
 app = typer.Typer(
     add_completion=False,
@@ -153,8 +155,8 @@ def query(
     settings = Settings(vector_backend=backend) if backend else None
     try:
         hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
-    except ValueError as e:
-        console.print(f"[bold red]Hata: {e}[/bold red]")
+    except InvalidTagError as e:
+        err_console.print(f"[bold red]Hata: {e}[/bold red]")
         raise typer.Exit(code=1)
 
     if not hits:
@@ -224,8 +226,8 @@ def map(
             tag=tag,
             settings=settings,
         )
-    except ValueError as e:
-        console.print(f"[bold red]Hata: {e}[/bold red]")
+    except InvalidTagError as e:
+        err_console.print(f"[bold red]Hata: {e}[/bold red]")
         raise typer.Exit(code=1)
     console.print(
         Panel(
@@ -313,7 +315,7 @@ def tags(
     try:
         all_tags = store.list_tags()
     except Exception as e:
-        console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]", err=True)
+        err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
         raise typer.Exit(1)
     finally:
         store.close()

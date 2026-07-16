@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-import re
 
 import numpy as np
 
@@ -72,15 +71,14 @@ def search(
     tag: str | None = None,
     settings: Settings | None = None,
 ) -> list[SearchHit]:
-    if tag is not None and not re.match(r"^[\w-]+\Z", tag):
-        raise ValueError(f"Tag format must match ^[\\w-]+\\Z, got {tag!r}")
-
-    dense_vec, sparse_vec = _embed_query(query)
 
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
+    # Validate tag early — raises InvalidTagError before loading the embedding model.
     flt = TagFilter(tags=(tag,)) if tag else None
+
+    dense_vec, sparse_vec = _embed_query(query)
     store = make_store(ws, settings)
     fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
     store.close()
