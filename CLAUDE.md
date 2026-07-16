@@ -30,7 +30,7 @@ doqqy tags          # list tags in the store (--backend)
 doqqy info          # pipeline state overview
 ```
 
-Tests are pytest under `tests/` (`pip install -e ".[dev]"`, then `pytest tests/ -v`): workspace/B2-isolation regression tests, chunk/RRF/tag unit tests, and per-format ingester tests in `tests/unit/ingest/`. Tests take an explicit `Workspace(tmp_path)` fixture — never `chdir` or monkeypatch config paths. There is **no lint config yet**.
+Tests are pytest under `tests/` (`pip install -e ".[dev]"`, then `pytest tests/ -v`): workspace/B2-isolation regression tests, chunk/RRF/tag unit tests, and per-format ingester tests in `tests/unit/ingest/`. Tests take an explicit `Workspace(tmp_path)` fixture — never `chdir` or monkeypatch config paths. To run fast unit tests (excluding slow model downloads/database integration tests): `pytest tests/ -v -m "not slow"`. To run the complete integration suite (including embedding downloads): `pytest tests/ -v`. There is **no lint config yet**.
 
 **Paths come from `Workspace(root)`** (`workspace.py`, frozen dataclass) — every pipeline function takes `ws: Workspace` explicitly; nothing is resolved at import time, and one process can serve multiple corpora. The CLI builds `Workspace(Path.cwd())` per command, so doqqy still operates on whatever directory you run it from: `raw/` is input; `processed/` and all state (`.doqqy/chunks/`, `.doqqy/store.lance/`, `.doqqy/topics.yaml`, `.doqqy/logs/`) live under the root and are gitignored. Legacy `config.PROJECT_ROOT`-style constants are a `DeprecationWarning` shim — don't use them in new code. First `doqqy embed` downloads ~2 GB of models from HuggingFace (then cached). `DOQQY_DEVICE` env var overrides CPU/CUDA autodetection.
 
