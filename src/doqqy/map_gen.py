@@ -76,12 +76,13 @@ def _parse_sections(md_path: Path) -> list[tuple[str, int, list[str]]]:
     current_line = 0
     current_body: list[str] = []
 
+    in_fm = False
     for i, line in enumerate(lines):
         # frontmatter atla
         if i == 0 and line.strip() == "---":
             in_fm = True
             continue
-        if "in_fm" in dir() and in_fm:  # noqa: F821
+        if in_fm:
             if line.strip() == "---":
                 in_fm = False
             continue
@@ -121,7 +122,11 @@ _PATTERNS: list[re.Pattern] = [
 def _normalize_target(raw: str, known_files: set[str]) -> Optional[str]:
     """Ham referans metnini bilinen dosya adına normalize et. Bulunamazsa None."""
     candidate = raw.upper().removesuffix(".MD")
-    for f in known_files:
+    sorted_files = sorted(
+        known_files,
+        key=lambda f: (not (Path(f).stem.upper() == candidate), len(f), f)
+    )
+    for f in sorted_files:
         stem = Path(f).stem.upper()
         if stem == candidate or stem.startswith(candidate) or candidate.startswith(stem):
             return f
