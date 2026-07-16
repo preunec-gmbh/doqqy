@@ -157,7 +157,7 @@ def query(
         hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
     except InvalidTagError as e:
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
@@ -228,7 +228,7 @@ def map(
         )
     except InvalidTagError as e:
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     console.print(
         Panel(
             f"[green]✓[/green] Harita oluşturuldu: [dim]{out}[/dim]",

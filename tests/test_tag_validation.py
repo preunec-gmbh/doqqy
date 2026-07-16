@@ -10,7 +10,6 @@ import pytest
 
 from doqqy.infra.vectorstore.base import InvalidTagError, TagFilter
 
-
 # ---------------------------------------------------------------------------
 # Rejected tag values — every one must raise InvalidTagError
 # ---------------------------------------------------------------------------
@@ -104,6 +103,7 @@ def test_tagfilter_one_invalid_in_many_raises() -> None:
 def test_cli_query_invalid_tag_exits_with_code_1() -> None:
     """query command with invalid tag must exit 1 and print a red error."""
     from typer.testing import CliRunner
+
     from doqqy.cli import app
 
     runner = CliRunner()
@@ -117,6 +117,7 @@ def test_cli_query_invalid_tag_exits_with_code_1() -> None:
 def test_cli_map_invalid_tag_exits_with_code_1() -> None:
     """map command with invalid tag must exit 1 and print a red error."""
     from typer.testing import CliRunner
+
     from doqqy.cli import app
 
     runner = CliRunner()
