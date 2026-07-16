@@ -47,6 +47,7 @@ llm = [
 ]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.15,<0.16",     # CI ile aynı linter sürümü; minor'a pinli ki yeni kurallar CI'ı kırmasın
 ]
 
 [project.scripts]
@@ -61,5 +62,16 @@ where = ["src"]
 [tool.pytest.ini_options]
 markers = [
     "slow: marks integration tests that are slower to run",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "BLE", "PLC"]
+ignore = [
+    "B008",         # Typer tasarımsal zorunluluğu için bunu kapat
+    "PLC0415"       # Projedeki mevcut local import tercihini meşrulaştırmak için
 ]
 

@@ -20,7 +20,7 @@ from pathlib import Path
 import frontmatter
 import pandas as pd
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import (
     CHUNK_MAX_TOKENS,
@@ -145,7 +145,7 @@ def chunk_file(md_path: Path, ws: Workspace) -> list[Chunk]:
 
     source = fm.get("source", doc_id)
     doc_type = fm.get("type", "md")
-    
+
     tags_raw = fm.get("tags")
     if tags_raw is None:
         tags = []

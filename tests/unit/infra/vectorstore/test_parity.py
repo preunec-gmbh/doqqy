@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import numpy as np
 import pytest
 
-from doqqy.workspace import Workspace
-from doqqy.embed import build_index
+from doqqy.config import RRF_K
 from doqqy.infra.vectorstore.base import ChunkRecord, TagFilter
 from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
-from doqqy.config import RRF_K
 
 
 def legacy_dense_search(store_dir: Path, qvec: np.ndarray, k: int, filter_tag: str | None = None) -> list[dict]:
@@ -131,7 +130,7 @@ def test_search_results_parity(tmp_path: Path):
 
     # 3. Assert rankings, IDs, and scores are exactly equal
     assert len(legacy_fused) == len(new_results)
-    for leg_hit, new_hit in zip(legacy_fused, new_results):
+    for leg_hit, new_hit in zip(legacy_fused, new_results, strict=True):
         assert leg_hit["chunk_id"] == new_hit.record.chunk_id
         assert leg_hit.get("dense_rank") == new_hit.dense_rank
         assert leg_hit.get("sparse_rank") == new_hit.sparse_rank

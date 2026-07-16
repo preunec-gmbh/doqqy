@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from doqqy.map_gen import _slug, _section_id, _normalize_target, _parse_sections
+from doqqy.map_gen import _normalize_target, _parse_sections, _section_id, _slug
 
 
 def test_slug():

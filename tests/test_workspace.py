@@ -40,15 +40,16 @@ def test_ensure_dirs_creates_layout(tmp_path):
 
 def test_workspace_is_frozen(tmp_path):
     ws = Workspace(tmp_path)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):    # noqa: B017
         ws.root = tmp_path / "other"  # type: ignore[misc]
 
 
 def test_two_workspaces_ingest_and_chunk_without_crosstalk(tmp_path):
     """B2 regresyonu (pipeline tarafı): aynı process'te iki korpus karışmamalı."""
+    import pandas as pd
+
     from doqqy.chunk import chunk_directory
     from doqqy.ingest import ingest_directory
-    import pandas as pd
 
     ws_a = _make_workspace(tmp_path, "corpus_a")
     ws_b = _make_workspace(tmp_path, "corpus_b")

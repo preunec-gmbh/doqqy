@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
 from doqqy.ingest.base import IngestError
@@ -37,7 +38,7 @@ def test_ingest_xml_valid(tmp_path: Path, ws: Workspace) -> None:
             </section>
         </body>
     </root>"""
-    
+
     xml_file = tmp_path / "raw" / "valid_sample_doc.xml"
     xml_file.write_text(xml_content, encoding="utf-8")
 
@@ -76,7 +77,7 @@ def test_ingest_xml_invalid(tmp_path: Path, ws: Workspace) -> None:
 
     with pytest.raises(IngestError) as exc_info:
         ingest_xml(xml_file, ws)
-    
+
     assert "XML parsing failed" in str(exc_info.value)
 
 
