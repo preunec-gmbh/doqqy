@@ -14,8 +14,8 @@ from doqqy.config import (
     detect_device,
     get_logger,
 )
-from doqqy.workspace import Workspace
 from doqqy.infra.settings import Settings
+from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.query")
 

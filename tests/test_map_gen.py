@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from doqqy.map_gen import _slug, _section_id, _normalize_target
+from doqqy.map_gen import _normalize_target, _section_id, _slug
+
 
 def test_slug():
     # Türkçe ve özel karakterler içeren bir başlığı slug formatına dönüştürmeyi test eder
@@ -24,15 +24,15 @@ def test_section_id():
 def test_normalize_target():
     # Link hedeflerinin (target) temizlenmesini ve standartlaştırılmasını test eder
     input_target = "muhasebe_raporu.md"
-    
+
     # map_gen.py içinde known_files, f.name değerlerinden oluşur (yani klasörsüz, sadece dosya adı + uzantı)
     known_files = {
         "muhasebe_raporu.md",
         "baska_dosya.md"
     }
-    
+
     result = _normalize_target(input_target, known_files)
-    
+
     assert result is not None
     assert result == "muhasebe_raporu.md"
 

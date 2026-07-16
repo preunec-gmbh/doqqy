@@ -1,5 +1,7 @@
 # doqqy
 
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+
 Local-first document knowledge system. Ingests PDF, Markdown, HTML, DOCX and TXT files, splits them into header-aware chunks, generates local embeddings with **bge-m3** (dense + sparse), and serves instant natural-language search via hybrid retrieval with **bge-reranker-v2-m3** cross-encoder reranking. It also builds an automatic cross-document relationship map (`.doqqy/topics.yaml` + `INDEX.md`) from bge-m3 embedding cosine similarity.
 
 It makes **no LLM calls** — not for queries, not for map generation. Queries return raw chunks + sources; the map is built with pure embedding math. Nothing leaves your machine.
