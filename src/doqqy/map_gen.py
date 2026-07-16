@@ -308,6 +308,12 @@ def generate_map(
     settings: Settings | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Returned value: written file path."""
+    # Validate tag early — TagFilter.__post_init__ raises InvalidTagError for
+    # any value that doesn't match TAG_PATTERN, before any filesystem I/O.
+    from doqqy.infra.vectorstore.base import TagFilter as _TagFilter
+    if tag is not None:
+        _TagFilter(tags=(tag,))  # raises InvalidTagError if format is wrong
+
     processed_dir = processed_dir or ws.processed_dir
     output = output or ws.topics_yaml
     md_files = sorted(f for f in processed_dir.rglob("*.md") if f.name != "INDEX.md")

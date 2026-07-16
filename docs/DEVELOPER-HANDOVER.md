@@ -212,7 +212,7 @@ Ordered roughly by how likely they are to bite you.
 12. **The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)** — an installer artifact that predates the `pypandoc.download_pandoc()` auto-install. It's committed to git; consider removing it from history if repo size matters.
 13. **`pyproject.toml` readme field points at the deleted `memory-bank/`** — `readme = { text = "Bkz. memory-bank/", ... }`; harmless but stale, point it at `README.md` when touching packaging. (The README itself was rewritten in English in July 2026 and no longer references memory-bank.)
 
-## 5. Testing
+## 5. Testing [IMPLEMENTED]
 
 Tests live under `tests/` (pytest; install with `pip install -e ".[dev]"`). Current coverage: `tests/test_workspace.py` (Workspace paths + the multi-corpus/B2 isolation regression tests), `tests/test_chunk.py`, `tests/test_rrf.py`, `tests/test_tags.py`, and per-format ingester tests under `tests/unit/ingest/`. Ingester tests take a `ws` fixture (`Workspace(tmp_path)`) — no `monkeypatch` of config paths, no `chdir`. The examples below are the original plan and now exist in the suite:
 

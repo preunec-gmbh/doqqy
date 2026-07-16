@@ -22,6 +22,7 @@ from doqqy.config import (
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
 )
+from doqqy.infra.vectorstore.base import InvalidTagError
 from doqqy.workspace import Workspace
 
 # Windows'ta varsayılan stdout cp1252; Türkçe karakter mojibake olur.
@@ -35,6 +36,7 @@ if sys.platform == "win32":
 load_dotenv(Path.cwd() / ".env", override=False)
 
 console = Console()
+err_console = Console(stderr=True)  # for error messages sent to stderr
 
 app = typer.Typer(
     add_completion=False,
@@ -151,7 +153,12 @@ def query(
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
+    try:
+        hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
+    except InvalidTagError as e:
+        err_console.print(f"[bold red]Hata: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
@@ -208,16 +215,20 @@ def map(
     do_pass2 = not pass1_only
 
     settings = Settings(vector_backend=backend) if backend else None
-    out = generate_map(
-        ws,
-        processed_dir=processed_dir,
-        pass1=do_pass1,
-        pass2=do_pass2,
-        cosine_threshold=threshold,
-        top_n=top_n,
-        tag=tag,
-        settings=settings,
-    )
+    try:
+        out = generate_map(
+            ws,
+            processed_dir=processed_dir,
+            pass1=do_pass1,
+            pass2=do_pass2,
+            cosine_threshold=threshold,
+            top_n=top_n,
+            tag=tag,
+            settings=settings,
+        )
+    except InvalidTagError as e:
+        err_console.print(f"[bold red]Hata: {e}[/bold red]")
+        raise typer.Exit(code=1)
     console.print(
         Panel(
             f"[green]✓[/green] Harita oluşturuldu: [dim]{out}[/dim]",
@@ -304,7 +315,7 @@ def tags(
     try:
         all_tags = store.list_tags()
     except Exception as e:
-        console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]", err=True)
+        err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
         raise typer.Exit(1)
     finally:
         store.close()
