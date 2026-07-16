@@ -303,8 +303,11 @@ def generate_map(
     settings: Settings | None = None,
 ) -> Path:
     """processed/*.md → topics.yaml. Returned value: written file path."""
-    if tag is not None and not re.match(r"^[\w-]+\Z", tag):
-        raise ValueError(f"Tag format must match ^[\\w-]+\\Z, got {tag!r}")
+    # Validate tag early — TagFilter.__post_init__ raises InvalidTagError for
+    # any value that doesn't match TAG_PATTERN, before any filesystem I/O.
+    from doqqy.infra.vectorstore.base import TagFilter as _TagFilter
+    if tag is not None:
+        _TagFilter(tags=(tag,))  # raises InvalidTagError if format is wrong
 
     processed_dir = processed_dir or ws.processed_dir
     output = output or ws.topics_yaml

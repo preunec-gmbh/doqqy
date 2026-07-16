@@ -11,7 +11,14 @@ from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
 
 
 def test_tag_filter_exact_match_and_escaping(tmp_path: Path):
-    """Verify that TagFilter exact matching behaves correctly and escapes single quotes safely."""
+    """Verify TagFilter exact matching and that invalid tags (e.g. with quotes) are rejected.
+
+    Design note: TagFilter.__post_init__ validates all tags against TAG_PATTERN, so
+    a tag containing a single quote (SQL injection risk) is rejected before it can
+    ever reach a LanceDB where() clause.
+    """
+    from doqqy.infra.vectorstore.base import InvalidTagError
+
     store = LanceDBStore(tmp_path / "store.lance")
     store.recreate(dim=128)
 
@@ -43,24 +50,10 @@ def test_tag_filter_exact_match_and_escaping(tmp_path: Path):
         dense=np.ones(128, dtype=np.float32) * 0.2,
         sparse={101: 1.0},
     )
-    rec_quote = ChunkRecord(
-        chunk_id="chunk-quote",
-        doc_id="doc-1",
-        source="doc1.md",
-        doc_type="markdown",
-        tags=["bulut'lar"],
-        content="quote in tag match",
-        section_path=["Root"],
-        char_count=18,
-        prev_chunk=None,
-        next_chunk=None,
-        dense=np.ones(128, dtype=np.float32) * 0.3,
-        sparse={101: 1.0},
-    )
 
-    store.upsert([rec_exact, rec_partial, rec_quote])
+    store.upsert([rec_exact, rec_partial])
 
-    # 1. Search with "bulut" filter: must match rec_exact, but NOT rec_partial
+    # 1. Exact match: "bulut" must match rec_exact only, NOT "bulut-saha"
     flt_exact = TagFilter(tags=("bulut",))
     res_exact = store.hybrid_search(
         dense=np.ones(128, dtype=np.float32) * 0.1,
@@ -71,16 +64,10 @@ def test_tag_filter_exact_match_and_escaping(tmp_path: Path):
     assert len(res_exact) == 1
     assert res_exact[0].record.chunk_id == "chunk-exact"
 
-    # 2. Search with "bulut'lar" filter containing a single quote: must match rec_quote safely
-    flt_quote = TagFilter(tags=("bulut'lar",))
-    res_quote = store.hybrid_search(
-        dense=np.ones(128, dtype=np.float32) * 0.1,
-        sparse={101: 1.0},
-        limit=5,
-        flt=flt_quote,
-    )
-    assert len(res_quote) == 1
-    assert res_quote[0].record.chunk_id == "chunk-quote"
+    # 2. Tags containing a single quote are rejected at TagFilter construction —
+    #    the SQL injection path (where() clause) is never reached.
+    with pytest.raises(InvalidTagError, match="Tag format must match"):
+        TagFilter(tags=("bulut'lar",))
 
     store.close()
 

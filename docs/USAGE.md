@@ -84,7 +84,7 @@ doqqy query "how does JWT refresh work?"
 doqqy query "invoice refund flow" --top-k 10       # more results (default 5)
 doqqy query "invoice states" --full              # full chunk text (default: 400-char preview)
 doqqy query "invoice states" --no-rerank         # skip reranker (faster, RRF order)
-doqqy query "refund process" --tag erp12         # restrict to one corpus/folder (must match ^[\w-]+$)
+doqqy query "refund process" --tag erp12         # restrict to one corpus/folder (must match ^[\w-]+\Z)
 ```
 
 Each hit shows the source file, section path, and score breakdown (`dense=<rank> | sparse=<rank> | rrf=<score> | rerank=<score>`). Exit code 1 when nothing is found.
@@ -99,7 +99,7 @@ doqqy map --pass1                # regex only (no store needed)
 doqqy map --pass2                # cosine only
 doqqy map --threshold 0.80       # stricter thematic links (default 0.75)
 doqqy map --top-n 3              # max neighbors per section (default 5)
-doqqy map --tag erp12            # thematic pass restricted to a tag (must match ^[\w-]+$)
+doqqy map --tag erp12            # thematic pass restricted to a tag (must match ^[\w-]+\Z)
 ```
 
 ### `doqqy index`
@@ -234,7 +234,7 @@ df = tbl.search().where("tags_str LIKE '%,erp12,%'").limit(100).to_pandas()
 
 **Turkish characters garbled on Windows** — the CLI reconfigures stdout to UTF-8 automatically; if piping output, set `$env:PYTHONIOENCODING = "utf-8"`.
 
-**`tags` shows nothing / tag filter returns nothing** — tags are captured at **ingest** time from the folder structure and stored at **embed** time. If you restructured `raw/`, re-run ingest → chunk → embed. Also note tags are exact folder names (case-sensitive) and must match the pattern `^[\w-]+$` (alphanumeric, underscores, or hyphens only). Tag values not matching this pattern will be rejected with a `ValueError`.
+**`tags` shows nothing / tag filter returns nothing** — tags are captured at **ingest** time from the folder structure and stored at **embed** time. If you restructured `raw/`, re-run ingest → chunk → embed. Also note tags are exact folder names (case-sensitive) and must match the pattern `^[\w-]+\Z` (Unicode letters including Turkish, digits, underscores, or hyphens). Tag values not matching this pattern will be rejected with an `InvalidTagError` before any store query is issued.
 
 **Out-of-memory during embed** — batch size is already small (4). Lower `EMBEDDING_BATCH_SIZE` in `config.py`, or set `DOQQY_DEVICE=cpu` (GPU VRAM is usually the constraint).
 

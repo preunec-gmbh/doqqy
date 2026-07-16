@@ -1,114 +1,127 @@
-"""Unit tests for tag parameter validation in search and map generation."""
+"""Unit tests for tag parameter validation.
+
+All tests call TagFilter directly — no model loading, no filesystem I/O.
+CLI integration tests verify exit code and error output via Typer's CliRunner.
+"""
 
 from __future__ import annotations
 
-from pathlib import Path
 import pytest
 
-from doqqy.workspace import Workspace
-from doqqy.query import search
-from doqqy.map_gen import generate_map
+from doqqy.infra.vectorstore.base import InvalidTagError, TagFilter
 
 
-@pytest.mark.parametrize(
-    "invalid_tag",
-    [
-        "x'",
-        "a b",
-        "x,y",
-        "%",
-        "",
-        "tag; DROP TABLE chunks;",
-        "tag\"",
-        "tag\\",
-        "tag/",
-        "tag?",
-        "tag\n",
-        "tag\t",
-        "tag*",
-        "tag#",
-        "tag$",
-        "tag@",
-        "tag!",
-        "tag(1)",
-        "tag[2]",
-        "tag{3}",
-    ],
-)
-def test_search_and_map_reject_invalid_tags(tmp_path: Path, invalid_tag: str):
-    """Verify that invalid tag values raise a ValueError."""
-    ws = Workspace(tmp_path)
+# ---------------------------------------------------------------------------
+# Rejected tag values — every one must raise InvalidTagError
+# ---------------------------------------------------------------------------
 
-    # 1. Test search() rejects the invalid tag before executing further
-    with pytest.raises(ValueError) as exc_info:
-        search(ws, "test query", tag=invalid_tag)
-    assert "Tag format must match" in str(exc_info.value)
-
-    # 2. Test generate_map() rejects the invalid tag before executing further
-    with pytest.raises(ValueError) as exc_info:
-        generate_map(ws, tag=invalid_tag)
-    assert "Tag format must match" in str(exc_info.value)
+INVALID_TAGS = [
+    "x'",                      # SQL single-quote injection
+    'tag"',                    # SQL double-quote injection
+    "tag\\",                   # backslash escape
+    "a b",                     # space (path separator risk)
+    "x,y",                     # comma (our delimiter in tags_str)
+    "%",                       # SQL LIKE wildcard
+    "",                        # empty string — no meaningful tag
+    "tag; DROP TABLE chunks;", # classic SQL injection payload
+    "tag/",                    # path traversal
+    "tag?",                    # glob wildcard
+    "tag\n",                   # newline — would bypass $ anchor
+    "tag\t",                   # tab character
+    "tag*",                    # glob wildcard
+    "tag#",                    # URL fragment / comment char
+    "tag$",                    # shell variable expansion
+    "tag@",                    # email-like injection
+    "tag!",                    # shell history expansion
+    "tag(1)",                  # parentheses — SQL grouping
+    "tag[2]",                  # brackets — SQL / glob
+    "tag{3}",                  # braces — shell brace expansion
+    " leading-space",          # leading whitespace
+    "trailing-space ",         # trailing whitespace
+    "a\x00b",                  # null byte
+    "../etc/passwd",           # path traversal
+    "tag\r",                   # carriage return
+]
 
 
-@pytest.mark.parametrize(
-    "valid_tag",
-    [
-        "erp12",
-        "bulut-saha",
-        "smart_farming2",
-        "TAG-123_abc",
-        "a",
-        "1",
-        "_",
-        "-",
-        "TAG_with_UPPERCASE_and_numbers_987",
-        "tag--",
-    ],
-)
-def test_search_and_map_accept_valid_tags(tmp_path: Path, valid_tag: str):
-    """Verify that valid tag formats do not raise a tag-validation ValueError."""
-    ws = Workspace(tmp_path)
-
-    # Valid tags shouldn't fail validation. If search() runs past validation,
-    # it tries to load FlagEmbedding (which is mocked or might trigger on first load),
-    # but to isolate validation we can catch other errors or let it run.
-    # Note: search() calls _embed_query, which might download/load models.
-    # Let's verify it doesn't raise ValueError due to tag validation.
-    try:
-        search(ws, "test query", tag=valid_tag)
-    except ValueError as e:
-        # If it raises a ValueError, verify it is not the tag format validation error
-        assert "Tag format must match" not in str(e)
-    except Exception:
-        # Any other exception (like FileNotFoundError, model loading, etc.) is fine
-        pass
-
-    try:
-        generate_map(ws, tag=valid_tag)
-    except ValueError as e:
-        assert "Tag format must match" not in str(e)
-    except Exception:
-        # generate_map expects processed/ files or a store, so FileNotFoundError or other errors are fine
-        pass
+@pytest.mark.parametrize("invalid_tag", INVALID_TAGS)
+def test_tagfilter_rejects_invalid_tag(invalid_tag: str) -> None:
+    """TagFilter must raise InvalidTagError for every disallowed value."""
+    with pytest.raises(InvalidTagError, match="Tag format must match"):
+        TagFilter(tags=(invalid_tag,))
 
 
-def test_cli_query_invalid_tag_exits_red():
-    """Verify that query command with invalid tag exits with code 1 and prints a red error message."""
+# ---------------------------------------------------------------------------
+# Accepted tag values — must construct without raising
+# ---------------------------------------------------------------------------
+
+VALID_TAGS = [
+    "erp12",                          # typical slug
+    "bulut-saha",                     # hyphen allowed
+    "smart_farming2",                 # underscore allowed
+    "TAG-123_abc",                    # mixed case + digits
+    "a",                              # single char
+    "1",                              # single digit
+    "_",                              # single underscore
+    "-",                              # single hyphen
+    "TAG_with_UPPERCASE_and_numbers_987",
+    "tag--",                          # double hyphen (still valid)
+    "türkçe",                         # Turkish Unicode letters — \w covers them
+    "BÜYÜK",                          # Turkish uppercase Unicode
+    "İstanbul",                       # Turkish İ (U+0130)
+]
+
+
+@pytest.mark.parametrize("valid_tag", VALID_TAGS)
+def test_tagfilter_accepts_valid_tag(valid_tag: str) -> None:
+    """TagFilter must construct without error for every allowed value."""
+    flt = TagFilter(tags=(valid_tag,))
+    assert flt.tags == (valid_tag,)
+
+
+def test_tagfilter_empty_tags_allowed() -> None:
+    """An empty tags tuple means 'no filter' — must never raise."""
+    flt = TagFilter()
+    assert flt.tags == ()
+
+
+def test_tagfilter_multiple_valid_tags() -> None:
+    """Multiple valid tags in one TagFilter must all be validated."""
+    flt = TagFilter(tags=("erp12", "bulut-saha", "smart_farming2"))
+    assert len(flt.tags) == 3
+
+
+def test_tagfilter_one_invalid_in_many_raises() -> None:
+    """A single bad tag among otherwise valid tags must still raise."""
+    with pytest.raises(InvalidTagError):
+        TagFilter(tags=("erp12", "bad tag", "bulut"))
+
+
+# ---------------------------------------------------------------------------
+# CLI integration — error output and exit code
+# ---------------------------------------------------------------------------
+
+def test_cli_query_invalid_tag_exits_with_code_1() -> None:
+    """query command with invalid tag must exit 1 and print a red error."""
     from typer.testing import CliRunner
     from doqqy.cli import app
 
     runner = CliRunner()
     result = runner.invoke(app, ["query", "test query", "--tag", "x'"])
     assert result.exit_code == 1
-    assert "Hata: Tag format must match" in result.stdout
+    # CliRunner captures both stdout and stderr in result.output
+    assert "Hata:" in result.output
+    assert "Tag format must match" in result.output
 
 
-def test_cli_map_invalid_tag_exits_red():
-    """Verify that map command with invalid tag exits with code 1 and prints a red error message."""
+def test_cli_map_invalid_tag_exits_with_code_1() -> None:
+    """map command with invalid tag must exit 1 and print a red error."""
     from typer.testing import CliRunner
     from doqqy.cli import app
 
     runner = CliRunner()
     result = runner.invoke(app, ["map", "--tag", "a b"])
     assert result.exit_code == 1
-    assert "Hata: Tag format must match" in result.stdout
+    # CliRunner captures both stdout and stderr in result.output
+    assert "Hata:" in result.output
+    assert "Tag format must match" in result.output
