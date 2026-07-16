@@ -279,10 +279,23 @@ pip install -e ".[dev]"
 pytest tests/ -v -m "not slow"
 ```
 
-**No linter is configured.** Suggested: `ruff` (the codebase already carries `# noqa: BLE001, PLC0415` markers in ruff's vocabulary — someone ran it locally without committing config). Add `[tool.ruff]` to `pyproject.toml`.
+**Linter and Formatting**: We use **Ruff** as our official linter and formatter, with the ruleset configured in `pyproject.toml`. The standard line length is set to 140 characters to prevent unwanted code wraps during markdown data processing, inline queries, and dense data structures.
+
+Before committing, make sure to run the check locally to keep the codebase clean:
+```bash
+ruff check .
+```
+
+To automatically fix safe violations (such as import sorting errors): 
+```bash
+ruff check . --fix
+```
 
 ## 6. Release / versioning
 
 - Version lives in `pyproject.toml` (`0.1.6`) and `src/doqqy/__init__.py`. Keep them in sync when bumping.
-- No CI, no publishing pipeline — installs are `pip install -e .` from source.
+- **Continuous Integration (CI):** We have a fully automated CI workflow configured in GitHub Actions (`.github/workflows/ci.yml`). 
+  - Every `push` and `pull_request` on target branches triggers the pipeline.
+  - Tests are run against a matrix of both **Ubuntu** (`ubuntu-latest`) and **Windows** (`windows-latest`) to ensure absolute cross-platform compatibility (supporting pathing differences).
+  - The pipeline runs `ruff check .` and unit tests (`pytest -m "not slow"`) to avoid downloading heavy ML embedding models (~2GB) inside the runner.
 - Dependencies are floor-pinned (`>=`); `docling` is the heaviest and most volatile — pin tighter if a release breaks PDF parsing.

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
+
+if TYPE_CHECKING:
+    from doqqy.config import Settings  # Settings sadece tip kontrolü için import ediliyor
 
 import numpy as np
 import pandas as pd
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import (
     EMBEDDING_BATCH_SIZE,
@@ -109,15 +111,14 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
     # Build ChunkRecord list
     from doqqy.infra.vectorstore.base import ChunkRecord
     from doqqy.infra.vectorstore.factory import make_store
-    from doqqy.infra.settings import Settings
 
     records = []
     for i, (_, row) in enumerate(df.iterrows()):
         sparse_vec = {int(k): float(v) for k, v in json.loads(sparse_jsons[i]).items()}
-        
+
         tags = list(row["tags"]) if row.get("tags") is not None else []
         section_path = list(row["section_path"]) if row.get("section_path") is not None else []
-        
+
         prev_chunk = row.get("prev_chunk")
         if pd.isna(prev_chunk) or prev_chunk is None:
             prev_chunk = None

@@ -20,7 +20,7 @@ from pathlib import Path
 import frontmatter
 import pandas as pd
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import (
     CHUNK_MAX_TOKENS,
