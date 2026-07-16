@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import pytest
 
 from doqqy.ingest.base import IngestError
-from doqqy.ingest.router import _DISPATCH, ingest_file
-from doqqy.workspace import Workspace
-from doqqy.ingest.xml_ingest import ingest_xml
-from doqqy.ingest.xlsx_ingest import ingest_xlsx
 from doqqy.ingest.csv_ingest import ingest_csv
 from doqqy.ingest.html_ingest import ingest_html
+from doqqy.ingest.router import _DISPATCH, ingest_file
+from doqqy.ingest.xlsx_ingest import ingest_xlsx
+from doqqy.ingest.xml_ingest import ingest_xml
+from doqqy.workspace import Workspace
 
 
 def test_router_html_dispatch_registration() -> None:
@@ -45,5 +46,5 @@ def test_router_unsupported_raises(tmp_path: Path) -> None:
     unsupported_file = Path("dummy.json")
     with pytest.raises(IngestError) as exc_info:
         ingest_file(unsupported_file, Workspace(tmp_path))
-    
+
     assert "desteklenmeyen uzantı" in str(exc_info.value)

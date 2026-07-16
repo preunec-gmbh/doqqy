@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from doqqy.ingest.base import (Document, IngestError, base_metadata, content_hash, processed_path_for)
+from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.ingest.xlsx_ingest import _df_to_md_blocks
 from doqqy.workspace import Workspace
 
@@ -60,7 +60,7 @@ def ingest_csv(source: Path, ws: Workspace) -> Document:
         df = df.dropna(axis = 1, how = "all")
         df = df.fillna("")
 
-    except Exception as exc: 
+    except Exception as exc:
         raise IngestError(f"CSV okunurken pandas hatası oluştu: {exc}") from exc
 
     if df.empty:

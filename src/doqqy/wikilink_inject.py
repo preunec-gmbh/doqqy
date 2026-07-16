@@ -74,7 +74,7 @@ def _load_file_links(topics_path: Path) -> dict[str, FileLinks]:
             if not target_id:
                 continue
             # target_id: "FILENAME_section-slug" → stem = ilk "_" öncesi
-            target_stem = target_id.split("_")[0]
+            target_stem = target_id.split("_", maxsplit=1)[0]
             label = ref.get("target_section") or target_stem
             pair = (target_stem, label)
             if pair not in fl.explicit:

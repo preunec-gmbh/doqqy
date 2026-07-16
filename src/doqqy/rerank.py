@@ -92,7 +92,7 @@ def rerank(query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
             all_scores.extend(_sigmoid(v) for v in logits.tolist())
 
     ranked = sorted(
-        zip(all_scores, candidates),
+        zip(all_scores, candidates, strict=True),
         key=lambda x: x[0],
         reverse=True,
     )
