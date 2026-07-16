@@ -18,7 +18,7 @@ An engineering analysis of where doqqy can go: what the codebase already support
 |---|---|---|---|
 | B1 | ✅ **Fixed (issue #5)** — ~~`PROJECT_ROOT = Path.cwd()` resolved at import time~~ paths now come from an explicit `Workspace(root)` | `workspace.py` | A server process must serve *many* corpora; paths must be per-request, not per-process |
 | B2 | ✅ **Fixed (issue #5)** — ~~`lru_cache` singletons for store table (`_table`)~~ table handles are per-workspace (`_TABLE_CACHE` keyed by root) | `query.py` | Caches one corpus's table handle forever — wrong corpus after the first request |
-| B3 | Unsanitized string interpolation into LanceDB `where()` | `query.py`, `map_gen.py` | Injection surface the moment input comes from a network |
+| B3 | ✅ **Fixed (issue #7)** — ~~Unsanitized string interpolation into LanceDB `where()`~~ | `query.py`, `map_gen.py` | Injection surface the moment input comes from a network |
 | B4 | Full-table rebuild on embed; full-table scan on sparse search | `embed.py`, `query.py` | Per-upload re-embedding cost and per-query latency both scale with corpus size |
 | B5 | No auth, no user model, no quotas | everywhere | Table stakes for multi-tenant |
 
@@ -26,7 +26,7 @@ None of these are deep — B1/B2 are a one-week refactor, B3 is an afternoon.
 
 ## 1. Phase 1 — The `Workspace` refactor (enabler for everything)
 
-> **Status: shipped (issue #5, July 2026).** `workspace.py` exists as sketched below, every pipeline function takes `ws: Workspace`, the CLI builds `Workspace(Path.cwd())`, table handles are per-workspace, and legacy `config` path constants survive only as a `DeprecationWarning` shim. The B3 tag-sanitation fix and reranker-to-GPU items below are still open.
+> **Status: shipped (issue #5, July 2026).** `workspace.py` exists as sketched below, every pipeline function takes `ws: Workspace`, the CLI builds `Workspace(Path.cwd())`, table handles are per-workspace, and legacy `config` path constants survive only as a `DeprecationWarning` shim. The reranker-to-GPU item below is still open.
 
 Replace module-level path constants with an explicit workspace object. This is the single highest-leverage change in the codebase.
 

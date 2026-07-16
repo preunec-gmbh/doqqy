@@ -71,12 +71,14 @@ def search(
     tag: str | None = None,
     settings: Settings | None = None,
 ) -> list[SearchHit]:
-    dense_vec, sparse_vec = _embed_query(query)
 
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
+    # Validate tag early — raises InvalidTagError before loading the embedding model.
     flt = TagFilter(tags=(tag,)) if tag else None
+
+    dense_vec, sparse_vec = _embed_query(query)
     store = make_store(ws, settings)
     fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
     store.close()
