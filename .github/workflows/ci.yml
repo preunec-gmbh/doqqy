@@ -24,12 +24,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip" # pip bağımlılıklarını önbelleğe alarak CI hızlandırılır
+          cache: "pip"
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[dev] || pip install -e . # geliştirme araçlarıyla birlikte yükle
+          # pip install -e .[dev] bazı kabuklarda tırnak gerektirebilir, o yüzden tırnaklıyoruz ve ruff/pytest'i garantiye alıyoruz
+          pip install -e ".[dev]" || (pip install -e . && pip install ruff pytest)
 
       - name: Run Ruff Linter
         run: ruff check .
