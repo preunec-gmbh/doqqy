@@ -24,7 +24,6 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 
 from doqqy.config import (
     CHUNK_MAX_TOKENS,
-    CHUNK_MIN_MERGE_TOKENS,
     get_logger,
 )
 from doqqy.workspace import Workspace
@@ -33,7 +32,6 @@ _LOG = get_logger("doqqy.chunk")
 
 # Approx 4 karakter ≈ 1 token (multilingual ortalama). Tam tokenizer Faz 2'de.
 _MAX_CHARS = CHUNK_MAX_TOKENS * 4
-_MIN_CHARS = CHUNK_MIN_MERGE_TOKENS * 4
 
 _HEADERS_TO_SPLIT = [
     ("#", "h1"),
@@ -147,7 +145,21 @@ def chunk_file(md_path: Path, ws: Workspace) -> list[Chunk]:
 
     source = fm.get("source", doc_id)
     doc_type = fm.get("type", "md")
-    tags = fm.get("tags", [])
+
+    tags_raw = fm.get("tags")
+    if tags_raw is None:
+        tags = []
+    elif isinstance(tags_raw, str):
+        tags = [tags_raw]
+    elif isinstance(tags_raw, list):
+        if not all(isinstance(t, str) for t in tags_raw):
+            _LOG.warning("Geçersiz etiket formatı: etiket listesi string olmayan elemanlar içeriyor. Boş listeye çevriliyor: %s", tags_raw)
+            tags = []
+        else:
+            tags = tags_raw
+    else:
+        _LOG.warning("Geçersiz etiket tipi: %s. Boş listeye çevriliyor.", type(tags_raw))
+        tags = []
 
     # Tek satırda tamamen bold olan ifadeleri ## başlığa çevir (Word'de Heading stili yerine
     # bold kullanan dokümanlar için: __A224. Toplantı__ → ## A224. Toplantı)

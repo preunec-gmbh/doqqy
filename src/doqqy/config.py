@@ -20,8 +20,6 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".
 
 # Chunking
 CHUNK_MAX_TOKENS: int = 800  # yaklaşık; recursive splitter karakter bazlı çalışır
-CHUNK_OVERLAP: int = 100
-CHUNK_MIN_MERGE_TOKENS: int = 100
 
 # Embedding
 EMBEDDING_MODEL: str = "BAAI/bge-m3"
