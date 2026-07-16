@@ -31,11 +31,11 @@ def test_oversized_single_block_is_own_chunk():
 
 
 def test_chunk_file_tags_coercion(tmp_path):
-    from doqqy.workspace import Workspace
     from doqqy.chunk import chunk_file
+    from doqqy.workspace import Workspace
     ws = Workspace(tmp_path)
     ws.ensure_dirs()
-    
+
     # 1. String -> [str]
     md_str_tags = tmp_path / "processed" / "doc1.md"
     md_str_tags.parent.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ def test_chunk_file_tags_coercion(tmp_path):
     )
     chunks = chunk_file(md_str_tags, ws)
     assert chunks[0].tags == ["erp12"]
-    
+
     # 2. List of strings stays list of strings
     md_list_tags = tmp_path / "processed" / "doc2.md"
     md_list_tags.write_text(
@@ -54,7 +54,7 @@ def test_chunk_file_tags_coercion(tmp_path):
     )
     chunks = chunk_file(md_list_tags, ws)
     assert chunks[0].tags == ["erp12", "billing"]
-    
+
     # 3. Anything else (e.g. dict) -> []
     md_invalid_tags = tmp_path / "processed" / "doc3.md"
     md_invalid_tags.write_text(
@@ -66,8 +66,9 @@ def test_chunk_file_tags_coercion(tmp_path):
 
 
 def test_removed_constants():
-    from doqqy import config
     import pytest
+
+    from doqqy import config
     with pytest.raises(AttributeError):
         _ = config.CHUNK_OVERLAP
     with pytest.raises(AttributeError):

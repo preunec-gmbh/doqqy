@@ -12,10 +12,10 @@ from typing import Optional
 
 import typer
 from dotenv import load_dotenv
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import box
 
 from doqqy.config import (
     DEFAULT_TOP_K,
@@ -148,8 +148,8 @@ def query(
     backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
-    from doqqy.query import search
     from doqqy.infra.settings import Settings
+    from doqqy.query import search
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
@@ -157,7 +157,7 @@ def query(
         hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
     except InvalidTagError as e:
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
@@ -205,8 +205,8 @@ def map(
     backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
 ) -> None:
     """processed/*.md → topics.yaml (regex referanslar + embedding cosine)."""
-    from doqqy.map_gen import generate_map
     from doqqy.infra.settings import Settings
+    from doqqy.map_gen import generate_map
 
     ws = _workspace()
     ws.ensure_dirs()
@@ -228,7 +228,7 @@ def map(
         )
     except InvalidTagError as e:
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     console.print(
         Panel(
             f"[green]✓[/green] Harita oluşturuldu: [dim]{out}[/dim]",
@@ -314,9 +314,9 @@ def tags(
 
     try:
         all_tags = store.list_tags()
-    except Exception as e:
+    except Exception as e:      # noqa: BLE001
         err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
     finally:
         store.close()
 
