@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from doqqy.workspace import Workspace
 from doqqy.infra.settings import Settings
 from doqqy.infra.vectorstore.base import VectorStore
+from doqqy.workspace import Workspace
 
 
 def make_store(ws: Workspace, settings: Settings | None = None) -> VectorStore:

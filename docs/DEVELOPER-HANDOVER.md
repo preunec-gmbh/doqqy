@@ -205,9 +205,9 @@ Ordered roughly by how likely they are to bite you.
 5. ~~**The reranker always runs on CPU**~~ — **Fixed (issue #8).** `rerank.py` now calls `detect_device()` and moves both model and input tensors to the detected device. Optional fp16 via `DOQQY_RERANKER_FP16=1` (default off). CPU path is unchanged on machines without CUDA.
 6. ~~**`map_gen._parse_sections` frontmatter skip is a hack**~~ **Fixed (July 2026)** by replacing the `"in_fm" in dir()` check with a proper boolean `in_fm = False` initialized before the loop. It also only skips frontmatter when the *very first line* is `---`.
 7. **Pass 2 section↔chunk matching is heuristic** (`map_gen._pass2`): a chunk belongs to a section if the source filenames match and the heading text appears in `" > ".join(section_path)` — substring containment, so heading "API" also matches "API Keys". Duplicate heading texts across a file collapse into one centroid. Good enough in practice; know it's fuzzy.
-8. **`chunk.py` reads tags from frontmatter written by ingest** — if a user hand-writes files into `processed/` without `tags`, they get `[]` (fine), but if they write `tags: "erp12"` (string, not list) it flows through as a string and `tags_str` becomes `",e,r,p,1,2,"` at embed time (`','.join("erp12")`). Validate or coerce in `chunk_file` if this becomes a support issue.
-9. **`_normalize_target` in Pass 1 is prefix-tolerant both ways** — `AUTH` matches `AUTHENTICATION.md` *and* `AUTH.md`; first match in set-iteration order wins (nondeterministic across runs). Sort `known_files` before matching if you need determinism.
-10. **Unused config**: `CHUNK_OVERLAP`, `CHUNK_MIN_MERGE_TOKENS` are declared but not implemented. Don't assume overlap exists.
+8. ~~**`chunk.py` reads tags from frontmatter written by ingest**~~ **Fixed (July 2026)** by validating/coercing string tags in `chunk_file` to a single-element list, checking that lists contain only strings, and warning + falling back to `[]` for other types.
+9. ~~**`_normalize_target` in Pass 1 is prefix-tolerant both ways**~~ **Fixed (July 2026)** by sorting `known_files` before matching (prioritizing exact matches, then shortest filename, then alphabetical order) to ensure reference matching is deterministic.
+10. ~~**Unused config**~~ **Fixed (July 2026)** by removing `CHUNK_OVERLAP` and `CHUNK_MIN_MERGE_TOKENS` from `config.py` and `chunk.py`.
 11. **Windows specifics**: `cli.py` reconfigures stdout/stderr to UTF-8 (Turkish characters under cp1252); `doc_id` normalizes backslashes to `/`. Keep both behaviors when refactoring.
 12. **The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)** — an installer artifact that predates the `pypandoc.download_pandoc()` auto-install. It's committed to git; consider removing it from history if repo size matters.
 13. **`pyproject.toml` readme field points at the deleted `memory-bank/`** — `readme = { text = "Bkz. memory-bank/", ... }`; harmless but stale, point it at `README.md` when touching packaging. (The README itself was rewritten in English in July 2026 and no longer references memory-bank.)
@@ -279,10 +279,23 @@ pip install -e ".[dev]"
 pytest tests/ -v -m "not slow"
 ```
 
-**No linter is configured.** Suggested: `ruff` (the codebase already carries `# noqa: BLE001, PLC0415` markers in ruff's vocabulary — someone ran it locally without committing config). Add `[tool.ruff]` to `pyproject.toml`.
+**Linter and Formatting**: We use **Ruff** as our official linter and formatter, with the ruleset configured in `pyproject.toml`. The standard line length is set to 140 characters to prevent unwanted code wraps during markdown data processing, inline queries, and dense data structures.
+
+Before committing, make sure to run the check locally to keep the codebase clean:
+```bash
+ruff check .
+```
+
+To automatically fix safe violations (such as import sorting errors): 
+```bash
+ruff check . --fix
+```
 
 ## 6. Release / versioning
 
 - Version lives in `pyproject.toml` (`0.1.6`) and `src/doqqy/__init__.py`. Keep them in sync when bumping.
-- No CI, no publishing pipeline — installs are `pip install -e .` from source.
+- **Continuous Integration (CI):** We have a fully automated CI workflow configured in GitHub Actions (`.github/workflows/ci.yml`). 
+  - Every `push` and `pull_request` on target branches triggers the pipeline.
+  - Tests are run against a matrix of both **Ubuntu** (`ubuntu-latest`) and **Windows** (`windows-latest`) to ensure absolute cross-platform compatibility (supporting pathing differences).
+  - The pipeline runs `ruff check .` and unit tests (`pytest -m "not slow"`) to avoid downloading heavy ML embedding models (~2GB) inside the runner.
 - Dependencies are floor-pinned (`>=`); `docling` is the heaviest and most volatile — pin tighter if a release breaks PDF parsing.

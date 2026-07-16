@@ -5,19 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import SUPPORTED_EXTENSIONS, file_log, get_logger
 from doqqy.ingest.base import Document, IngestError, IngestResult
+from doqqy.ingest.csv_ingest import ingest_csv
 from doqqy.ingest.docx_ingest import ingest_docx
+from doqqy.ingest.html_ingest import ingest_html
 from doqqy.ingest.md_ingest import ingest_md, ingest_txt
 from doqqy.ingest.pdf_ingest import ingest_pdf
-from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
-from doqqy.ingest.csv_ingest import ingest_csv
-from doqqy.ingest.html_ingest import ingest_html
+from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.workspace import Workspace
-
 
 _LOG = get_logger("doqqy.ingest.router")
 
