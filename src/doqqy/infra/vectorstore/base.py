@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Protocol, Sequence
 
@@ -36,11 +37,27 @@ class ScoredChunk:
     fused_score: float = 0.0                   # Reciprocal Rank Fusion score
 
 
+class InvalidTagError(ValueError):
+    """Raised when a tag value does not conform to the allowed pattern (TAG_PATTERN)."""
+
+
 @dataclass(frozen=True)
 class TagFilter:
-    """Structured tag filter value object supporting exact match AND query semantics."""
+    """Structured tag filter value object supporting exact match AND query semantics.
+
+    All tag values are validated on construction against TAG_PATTERN from config.
+    Raises InvalidTagError for any tag that does not conform.
+    """
 
     tags: tuple[str, ...] = ()                 # AND semantics
+
+    def __post_init__(self) -> None:
+        from doqqy.config import TAG_PATTERN  # late import to avoid circular deps
+        for tag in self.tags:
+            if not re.match(TAG_PATTERN, tag):
+                raise InvalidTagError(
+                    f"Tag format must match {TAG_PATTERN!r}, got {tag!r}"
+                )
 
 
 class VectorStore(Protocol):
