@@ -57,3 +57,9 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "doqqy" = ["py.typed"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks integration tests that are slower to run",
+]
+
