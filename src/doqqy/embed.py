@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
-    from doqqy.config import Settings  # Settings sadece tip kontrolü için import ediliyor
+    from doqqy.infra.settings import Settings  # Settings sadece tip kontrolü için import ediliyor
 
 import numpy as np
 import pandas as pd
