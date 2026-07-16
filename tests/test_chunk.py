@@ -28,3 +28,48 @@ def test_oversized_single_block_is_own_chunk():
     giant = "```\n" + "x = 1\n" * 2000 + "```"
     chunks = _pack_blocks([giant, "small"], max_chars=3200)
     assert chunks[0].startswith("```")
+
+
+def test_chunk_file_tags_coercion(tmp_path):
+    from doqqy.workspace import Workspace
+    from doqqy.chunk import chunk_file
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    
+    # 1. String -> [str]
+    md_str_tags = tmp_path / "processed" / "doc1.md"
+    md_str_tags.parent.mkdir(parents=True, exist_ok=True)
+    md_str_tags.write_text(
+        "---\ntags: erp12\n---\nBody text.",
+        encoding="utf-8"
+    )
+    chunks = chunk_file(md_str_tags, ws)
+    assert chunks[0].tags == ["erp12"]
+    
+    # 2. List of strings stays list of strings
+    md_list_tags = tmp_path / "processed" / "doc2.md"
+    md_list_tags.write_text(
+        "---\ntags:\n  - erp12\n  - billing\n---\nBody text.",
+        encoding="utf-8"
+    )
+    chunks = chunk_file(md_list_tags, ws)
+    assert chunks[0].tags == ["erp12", "billing"]
+    
+    # 3. Anything else (e.g. dict) -> []
+    md_invalid_tags = tmp_path / "processed" / "doc3.md"
+    md_invalid_tags.write_text(
+        "---\ntags:\n  key: value\n---\nBody text.",
+        encoding="utf-8"
+    )
+    chunks = chunk_file(md_invalid_tags, ws)
+    assert chunks[0].tags == []
+
+
+def test_removed_constants():
+    from doqqy import config
+    import pytest
+    with pytest.raises(AttributeError):
+        _ = config.CHUNK_OVERLAP
+    with pytest.raises(AttributeError):
+        _ = config.CHUNK_MIN_MERGE_TOKENS
+
