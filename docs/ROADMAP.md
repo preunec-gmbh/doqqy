@@ -57,7 +57,7 @@ Then thread it through: `ingest_directory(ws)`, `chunk_directory(ws)`, `build_in
 
 Also in this phase:
 - **B3 fix**: validate tags against `^[\w-]+$` (they're folder names — this is safe) before interpolation.
-- **Reranker on GPU** (`model.to(detect_device())`) — free 5–10× rerank speedup on CUDA boxes.
+- ~~**Reranker on GPU**~~ (`model.to(detect_device())`) — **Shipped (issue #8).** Free 5–10× rerank speedup on CUDA boxes; fp32 default, fp16 opt-in via `DOQQY_RERANKER_FP16=1`.
 - Tests (the handover doc's plan) — the refactor is the forcing function.
 
 ## 2. Phase 2 — Incremental indexing (the most-requested missing feature)

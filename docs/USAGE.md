@@ -20,7 +20,8 @@ The first `doqqy embed` downloads ~2 GB of models (bge-m3 + reranker) from Huggi
 
 | Variable | Effect |
 |---|---|
-| `DOQQY_DEVICE` | Force `cuda` or `cpu` (default: auto-detect) |
+| `DOQQY_DEVICE` | Force `cuda` or `cpu` (default: auto-detect); applies to both embedder and reranker |
+| `DOQQY_RERANKER_FP16` | Set to `1` to run the reranker in fp16 on CUDA (default: `0` — fp32 safe mode) |
 | `HF_HOME` | HuggingFace model cache directory |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | **Unused by the pipeline.** Reserved in `.env.example` for optional future LLM extras (`pip install -e .[llm]`); no current code path calls them |
 
