@@ -109,8 +109,6 @@ class Chunk:
     next_chunk: str | None
 ```
 
-`CHUNK_OVERLAP` and `CHUNK_MIN_MERGE_TOKENS` exist in config but are **not implemented yet** (no overlap, no short-section merging).
-
 ### 2.3 Embed (`doqqy embed`) — `src/doqqy/embed.py`
 
 `chunks.parquet` → pluggable `VectorStore` adapter (defaulting to LanceDB table `chunks` in `.doqqy/store.lance/`).
