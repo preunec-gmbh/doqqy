@@ -1,7 +1,8 @@
 """Tests for rerank.py — device placement, score correctness, and fp16 mode.
 
-All tests are CI-safe (no real GPU required):
-- CPU smoke tests run the real model on CPU.
+No real GPU required:
+- CPU smoke tests run the real model on CPU (marked @pytest.mark.slow —
+  they download bge-reranker-v2-m3, so CI's `pytest -m "not slow"` skips them).
 - Device placement tests use unittest.mock to verify model.to() and
   input tensor .to() calls without loading a GPU.
 - fp16 tests verify model.half() is called when DOQQY_RERANKER_FP16=1.
@@ -9,10 +10,9 @@ All tests are CI-safe (no real GPU required):
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -35,9 +35,10 @@ QUERY = "how does JWT refresh token work?"
 
 
 # ---------------------------------------------------------------------------
-# CPU smoke test — real model, real scores (CI-safe)
+# CPU smoke test — real model, real scores (loads bge-reranker-v2-m3)
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestRerankScoresOnCPU:
     """Run rerank() on CPU and verify output contract."""
 
