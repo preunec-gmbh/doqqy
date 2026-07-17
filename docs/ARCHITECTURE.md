@@ -162,7 +162,7 @@ query text
   - **Dense**: `table.search(qvec).metric("cosine").limit(limit)`; score = `1 - distance`. Tag filter applied as a `where()` clause.
   - **Sparse**: computed client-side by loading the tag-filtered table into pandas and computing `Σ query_weight[tok] * chunk_weight[tok]` per chunk in Python.
   - **RRF**: per chunk_id, `score += 1/(60 + rank)` for each list it appears in; also records `dense_rank` / `sparse_rank` for the UI.
-- **Rerank** (`rerank.py`): `AutoModelForSequenceClassification` over `(query, content)` pairs; scores squashed with sigmoid; top-k returned. `--no-rerank` skips this and returns RRF order. Note: the reranker is loaded **without device placement** — it always runs on CPU today.
+- **Rerank** (`rerank.py`): `AutoModelForSequenceClassification` over `(query, content)` pairs; scores squashed with sigmoid; top-k returned. `--no-rerank` skips this and returns RRF order. The reranker uses `detect_device()` (same as the embedder) and runs on CUDA when available — set `DOQQY_DEVICE=cpu` to force CPU. Optional fp16 on CUDA via `DOQQY_RERANKER_FP16=1` (default off — fp32 is safe across all hardware).
 - Result type:
 
 ```python
