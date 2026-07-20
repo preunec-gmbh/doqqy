@@ -71,6 +71,17 @@ class VectorStore(Protocol):
         """Upsert a sequence of chunk records into the store. Returns the number of upserted records."""
         ...
 
+    def full_rebuild(self, records: Sequence[ChunkRecord], dim: int) -> int:
+        """Atomically replace the entire store contents with *records* in a single operation.
+
+        This is the correct method to call for a full re-index (doqqy embed). It must leave
+        the store in a consistent, searchable state even if interrupted — unlike the
+        recreate()+upsert() sequence which has a crash window between the two calls.
+        recreate()+upsert() is reserved for the incremental path (doqqy sync / issue #16).
+        Returns the number of written records.
+        """
+        ...
+
     def delete_by_doc(self, doc_id: str) -> int:
         """Delete all chunks belonging to a document ID. Returns the number of deleted records."""
         ...

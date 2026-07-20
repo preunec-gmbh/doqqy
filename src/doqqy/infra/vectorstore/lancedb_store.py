@@ -8,6 +8,7 @@ from typing import Sequence
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from doqqy.config import LANCE_TABLE, RRF_K, get_logger
 from doqqy.infra.vectorstore.base import ChunkRecord, ScoredChunk, TagFilter, VectorStore
@@ -42,6 +43,40 @@ def _rrf(dense_rows: list[dict], sparse_rows: list[dict], k: int = RRF_K) -> lis
     return sorted(by_id.values(), key=lambda x: x.get("rrf_score", 0.0), reverse=True)
 
 
+# ---------------------------------------------------------------------------
+# Schema — single source of truth for column types and nullability.
+# The vector field dimension is resolved at runtime; _build_schema(dim)
+# takes this base and overrides the vector field with the exact fixed-size list.
+# ---------------------------------------------------------------------------
+_LANCE_SCHEMA_BASE = pa.schema([
+    pa.field("chunk_id",         pa.utf8(),              nullable=False),
+    pa.field("doc_id",           pa.utf8(),              nullable=False),
+    pa.field("source",           pa.utf8(),              nullable=False),
+    pa.field("doc_type",         pa.utf8(),              nullable=False),
+    pa.field("tags",             pa.list_(pa.utf8()),    nullable=False),
+    pa.field("section_path",     pa.list_(pa.utf8()),    nullable=False),
+    pa.field("char_count",       pa.int64(),             nullable=False),
+    pa.field("prev_chunk",       pa.utf8(),              nullable=True),   # None for first/last chunk
+    pa.field("next_chunk",       pa.utf8(),              nullable=True),
+    pa.field("content",          pa.utf8(),              nullable=False),
+    pa.field("vector",           pa.list_(pa.float32()), nullable=False),  # dim overridden in _build_schema
+    pa.field("sparse_vector",    pa.utf8(),              nullable=False),  # JSON string: {token_id: weight}
+    pa.field("section_path_str", pa.utf8(),              nullable=False),  # " > ".join(section_path)
+    pa.field("tags_str",         pa.utf8(),              nullable=False),  # ",tag1,tag2," — query filter
+])
+
+
+def _build_schema(dim: int) -> pa.Schema:
+    """Return a schema identical to _LANCE_SCHEMA_BASE with the vector field fixed to *dim* elements."""
+    fields = []
+    for field in _LANCE_SCHEMA_BASE:
+        if field.name == "vector":
+            fields.append(pa.field("vector", pa.list_(pa.float32(), list_size=dim), nullable=False))
+        else:
+            fields.append(field)
+    return pa.schema(fields)
+
+
 class LanceDBStore(VectorStore):
     """Adapter implementing local-first vector search using LanceDB."""
 
@@ -71,7 +106,13 @@ class LanceDBStore(VectorStore):
         invalidate_table_cache_by_path(self._store_dir)
 
     def recreate(self, dim: int) -> None:
-        """Drop the LanceDB table if it exists and recreate an empty table with the correct schema."""
+        """Drop the LanceDB table if it exists and recreate an empty table with the correct schema.
+
+        Schema is derived from the module-level _LANCE_SCHEMA_BASE constant — no dummy row,
+        no post-create delete. Column types and nullability are explicit and stable.
+        Use full_rebuild() for doqqy embed (atomic overwrite). This method is reserved
+        for the incremental path (doqqy sync / issue #16).
+        """
         import lancedb  # type: ignore
 
         self._invalidate_cache()
@@ -81,25 +122,9 @@ class LanceDBStore(VectorStore):
         if LANCE_TABLE in db.list_tables().tables:
             db.drop_table(LANCE_TABLE)
 
-        dummy_row = {
-            "chunk_id": "dummy",
-            "doc_id": "dummy",
-            "source": "dummy",
-            "doc_type": "dummy",
-            "tags": ["dummy"],
-            "section_path": ["dummy"],
-            "char_count": 0,
-            "prev_chunk": "dummy",
-            "next_chunk": "dummy",
-            "content": "dummy",
-            "vector": np.zeros(dim, dtype=np.float32),
-            "sparse_vector": "{}",
-            "section_path_str": "dummy",
-            "tags_str": ",dummy,",
-        }
-        df = pd.DataFrame([dummy_row])
-        table = db.create_table(LANCE_TABLE, data=df, mode="overwrite")
-        table.delete("chunk_id = 'dummy'")
+        schema = _build_schema(dim)
+        db.create_table(LANCE_TABLE, schema=schema)
+        _LOG.debug("Empty table created: %s (dim=%d)", LANCE_TABLE, dim)
 
     def upsert(self, records: Sequence[ChunkRecord]) -> int:
         """Insert or update chunks, deriving storage-specific columns (tags_str, section_path_str)."""
@@ -142,6 +167,54 @@ class LanceDBStore(VectorStore):
             table = db.open_table(LANCE_TABLE)
             table.merge_insert(on="chunk_id").when_matched_update_all().when_not_matched_insert_all().execute(df)
 
+        return len(records)
+
+    def full_rebuild(self, records: Sequence[ChunkRecord], dim: int) -> int:
+        """Atomically replace the entire store contents with *records* in a single operation.
+
+        Uses LanceDB's create_table(mode="overwrite"), which replaces the old table atomically
+        — the previous data remains readable until the write is complete. This restores the
+        pre-#32 "all-or-nothing" guarantee for doqqy embed.
+
+        recreate()+upsert() is reserved for the incremental sync path (issue #16).
+        Returns the number of written records.
+        """
+        if not records:
+            return 0
+
+        import lancedb  # type: ignore
+
+        self._invalidate_cache()
+        self._store_dir.mkdir(parents=True, exist_ok=True)
+
+        data = []
+        for rec in records:
+            section_path_str = " > ".join(rec.section_path)
+            tags_str = f",{','.join(rec.tags)}," if rec.tags else ""
+            sparse_json = json.dumps({str(k): float(v) for k, v in rec.sparse.items()}) if rec.sparse else "{}"
+
+            data.append({
+                "chunk_id": rec.chunk_id,
+                "doc_id": rec.doc_id,
+                "source": rec.source,
+                "doc_type": rec.doc_type,
+                "tags": rec.tags,
+                "section_path": rec.section_path,
+                "char_count": rec.char_count,
+                "prev_chunk": rec.prev_chunk,
+                "next_chunk": rec.next_chunk,
+                "content": rec.content,
+                "vector": rec.dense,
+                "sparse_vector": sparse_json,
+                "section_path_str": section_path_str,
+                "tags_str": tags_str,
+            })
+
+        schema = _build_schema(dim)
+        df = pd.DataFrame(data)
+        db = lancedb.connect(self._store_dir)
+        db.create_table(LANCE_TABLE, data=df, schema=schema, mode="overwrite")
+        _LOG.debug("Full rebuild complete: %d records written to %s", len(records), LANCE_TABLE)
         return len(records)
 
     def delete_by_doc(self, doc_id: str) -> int:
