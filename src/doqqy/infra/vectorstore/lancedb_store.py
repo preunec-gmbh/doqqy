@@ -169,6 +169,54 @@ class LanceDBStore(VectorStore):
 
         return len(records)
 
+    def full_rebuild(self, records: Sequence[ChunkRecord], dim: int) -> int:
+        """Atomically replace the entire store contents with *records* in a single operation.
+
+        Uses LanceDB's create_table(mode="overwrite"), which replaces the old table atomically
+        — the previous data remains readable until the write is complete. This restores the
+        pre-#32 "all-or-nothing" guarantee for doqqy embed.
+
+        recreate()+upsert() is reserved for the incremental sync path (issue #16).
+        Returns the number of written records.
+        """
+        if not records:
+            return 0
+
+        import lancedb  # type: ignore
+
+        self._invalidate_cache()
+        self._store_dir.mkdir(parents=True, exist_ok=True)
+
+        data = []
+        for rec in records:
+            section_path_str = " > ".join(rec.section_path)
+            tags_str = f",{','.join(rec.tags)}," if rec.tags else ""
+            sparse_json = json.dumps({str(k): float(v) for k, v in rec.sparse.items()}) if rec.sparse else "{}"
+
+            data.append({
+                "chunk_id": rec.chunk_id,
+                "doc_id": rec.doc_id,
+                "source": rec.source,
+                "doc_type": rec.doc_type,
+                "tags": rec.tags,
+                "section_path": rec.section_path,
+                "char_count": rec.char_count,
+                "prev_chunk": rec.prev_chunk,
+                "next_chunk": rec.next_chunk,
+                "content": rec.content,
+                "vector": rec.dense,
+                "sparse_vector": sparse_json,
+                "section_path_str": section_path_str,
+                "tags_str": tags_str,
+            })
+
+        schema = _build_schema(dim)
+        df = pd.DataFrame(data)
+        db = lancedb.connect(self._store_dir)
+        db.create_table(LANCE_TABLE, data=df, schema=schema, mode="overwrite")
+        _LOG.debug("Full rebuild complete: %d records written to %s", len(records), LANCE_TABLE)
+        return len(records)
+
     def delete_by_doc(self, doc_id: str) -> int:
         """Remove all chunks associated with doc_id from the store."""
         import lancedb  # type: ignore
