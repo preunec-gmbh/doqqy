@@ -14,8 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from doqqy.infra.vectorstore.base import ChunkRecord
-from doqqy.infra.vectorstore.lancedb_store import LanceDBStore, _LANCE_SCHEMA_BASE, _build_schema
-
+from doqqy.infra.vectorstore.lancedb_store import _LANCE_SCHEMA_BASE, LanceDBStore, _build_schema
 
 # ---------------------------------------------------------------------------
 # Helpers
