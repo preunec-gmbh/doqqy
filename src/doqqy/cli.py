@@ -21,6 +21,7 @@ from doqqy.config import (
     DEFAULT_TOP_K,
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
+    OCR_ENABLED,
 )
 from doqqy.infra.vectorstore.base import InvalidTagError
 from doqqy.workspace import Workspace
@@ -59,6 +60,9 @@ def ingest(
     limit: Optional[int] = typer.Option(
         None, "--limit", "-n", help="İlk N dosyayı al (test için)."
     ),
+    ocr: bool = typer.Option(
+        OCR_ENABLED, "--ocr", help="Enable OCR fallback for scanned or image-only PDFs (slower)."
+    ),
 ) -> None:
     """raw/ altındaki dosyaları processed/ altına kanonik markdown olarak yaz."""
     from doqqy.ingest import ingest_directory
@@ -67,7 +71,7 @@ def ingest(
     ws.ensure_dirs()
     src = source_dir or ws.raw_dir
     console.print(f"[bold cyan]ingest[/bold cyan] kaynak: [dim]{src}[/dim]")
-    result = ingest_directory(ws, source_dir=source_dir, limit=limit)
+    result = ingest_directory(ws, source_dir=source_dir, limit=limit, ocr=ocr)
 
     if result.failed:
         console.print(

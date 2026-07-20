@@ -35,11 +35,14 @@ _DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
 }
 
 
-def ingest_file(source: Path, ws: Workspace) -> Document:
+def ingest_file(source: Path, ws: Workspace, ocr: bool = False) -> Document:
     ext = source.suffix.lower()
     parser = _DISPATCH.get(ext)
     if parser is None:
         raise IngestError(f"desteklenmeyen uzantı: {ext}")
+    # Sadece .pdf için ocr parametresini iletiyoruz
+    if ext == ".pdf":
+        return parser(source, ws, ocr=ocr)
     return parser(source, ws)
 
 
@@ -51,7 +54,7 @@ def _iter_supported(root: Path) -> list[Path]:
     )
 
 
-def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: int | None = None) -> IngestResult:
+def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: int | None = None, ocr: bool = False) -> IngestResult:
     """Kaynak klasördeki (varsayılan: ws.raw_dir) tüm desteklenen dosyaları ingest et.
 
     Bir dosya hata verirse durmaz — log + raporda failed listesine eklenir.
@@ -76,7 +79,7 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
         for path in files:
             progress.update(task, description=f"[dim]{path.name}[/dim]", advance=1)
             try:
-                doc = ingest_file(path, ws)
+                doc = ingest_file(path, ws, ocr=ocr)
                 doc.write()
                 result.succeeded.append(path)
             except IngestError as exc:
