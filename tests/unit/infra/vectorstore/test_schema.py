@@ -12,7 +12,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from doqqy.infra.vectorstore.base import ChunkRecord
 from doqqy.infra.vectorstore.lancedb_store import LanceDBStore, _LANCE_SCHEMA_BASE, _build_schema
