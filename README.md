@@ -121,3 +121,11 @@ Full analysis and sequencing: [docs/ROADMAP.md](docs/ROADMAP.md).
 ## License / Privacy
 
 Local-first: at query time **no** data is sent to the internet. Embedding, reranking, and map generation run entirely on your local CPU/GPU. There are no external API calls.
+
+doqqy is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE). Copyright 2026 Preunec GmbH.
+
+### Third-party licences
+
+The default install is permissive: docling (MIT), transformers / LanceDB / PyArrow / easyocr (Apache-2.0), pandas (BSD), typer / rich / pypandoc / markdownify / langchain-text-splitters (MIT), mammoth (BSD). The bge-m3 weights are MIT and bge-reranker-v2-m3 is Apache-2.0.
+
+One optional extra is **not** permissive: `pip install -e ".[pdf-fallback]"` pulls in PyMuPDF, which is dual licensed **AGPL-3.0 or a commercial Artifex licence**. It is only the last-resort PDF parser (docling handles PDFs and does not depend on it), so it is kept out of the default dependency set — install it only if you accept those terms.

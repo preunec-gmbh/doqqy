@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]     # >=77: PEP 639 SPDX license alanı
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,8 @@ dynamic = ["version"]
 description = "Yerel doküman bilgi sistemi — hibrit semantik+lexical arama + harita üretimi."
 requires-python = ">=3.10"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     # Core
     "typer>=0.12",
