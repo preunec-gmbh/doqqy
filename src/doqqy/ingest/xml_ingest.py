@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
-
 from typing import Any
+
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
 

@@ -7,8 +7,8 @@ mammoth saf Python — kurulum gerekmiyor, ama tablo/karmaşık layout'larda pan
 from __future__ import annotations
 
 from pathlib import Path
-
 from typing import Any
+
 from doqqy.config import get_logger
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
