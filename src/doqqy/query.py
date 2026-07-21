@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -71,9 +72,6 @@ def search(
     tag: str | None = None,
     settings: Settings | None = None,
 ) -> list[SearchHit]:
-
-    import contextlib
-
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 

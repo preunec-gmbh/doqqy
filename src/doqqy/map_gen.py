@@ -6,6 +6,7 @@ Pass 2: LanceDB dense vektörlerinden section centroid cosine benzerliği.
 
 from __future__ import annotations
 
+import contextlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +24,7 @@ from doqqy.infra.settings import Settings
 from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.map_gen")
+
 
 # ---------------------------------------------------------------------------
 # Veri yapıları
@@ -181,8 +183,6 @@ def _pass2(
     settings: Settings | None = None,
 ) -> dict[str, list[ThematicRef]]:
     """Retrieve dense vectors from vector store, find cosine neighbors for each section."""
-    import contextlib
-
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
@@ -194,8 +194,8 @@ def _pass2(
         _LOG.warning("No vectors found - Pass 2 skipped.")
         return {}
 
-
     # Group chunks for section centroid by matching source filename + heading
+
     results: dict[str, list[ThematicRef]] = {}
 
     all_sources = [r.source for r in records]

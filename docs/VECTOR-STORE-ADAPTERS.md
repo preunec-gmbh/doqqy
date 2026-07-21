@@ -93,8 +93,8 @@ Design notes:
 - **`sparse` keys become `int`.** bge-m3's `lexical_weights` keys are token ids serialized as strings today; the port normalizes to `dict[int, float]`, which is exactly Qdrant's `SparseVector(indices, values)` shape. The LanceDB adapter keeps JSON-string serialization internally.
 - **`TagFilter` is a value object**, translated per backend: Qdrant → `FieldCondition(key="tags", match=...)`; LanceDB → the validated `tags_str LIKE` clause. The injection surface disappears from core code entirely.
 
-
 ## 3. Factory & configuration
+
 
 `src/doqqy/infra/vectorstore/factory.py` — selected by settings, resolved per workspace:
 

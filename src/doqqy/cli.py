@@ -6,6 +6,7 @@ Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 from typing import Optional
@@ -304,9 +305,7 @@ def tags(
         None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
     ),
 ) -> None:
-    """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
-    import contextlib
-
+    """Sistemde kayıtlı olan tag'ler listeler."""
     from doqqy.infra.settings import Settings
     from doqqy.infra.vectorstore.factory import make_store
 
@@ -321,9 +320,9 @@ def tags(
         raise typer.Exit(1) from e
 
     if not all_tags:
-
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
     else:
+
         table_view = Table(title=f"Bulunan Tag'ler ({len(all_tags)} adet)", box=box.ROUNDED)
         table_view.add_column("Tag", style="cyan")
         for t in sorted(all_tags):
