@@ -11,6 +11,10 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1        # Windows
 # source .venv/bin/activate         # Linux/macOS
 pip install -e .
+
+# Optional: install OCR dependencies for scanned PDFs
+pip install -e ".[ocr]"
+
 doqqy --help
 ```
 
@@ -230,7 +234,7 @@ df = tbl.search().where("tags_str LIKE '%,erp12,%'").limit(100).to_pandas()
 
 **Query is slow the first time** — model load (bge-m3 + reranker) happens once per process. Subsequent queries in the same process are fast; each new CLI invocation is a new process. (A serve mode is on the roadmap.)
 
-**A PDF produced garbage / empty output** — probably a scanned (image-only) PDF. Run `doqqy ingest --ocr` to enable OCR fallback via Docling's OCR pipeline (requires EasyOCR / Tesseract bindings). Normal flow falls back from docling to pymupdf4llm; if both yield empty output, `--ocr` will attempt image text extraction before declaring failure. 
+**A PDF produced garbage / empty output** — probably a scanned (image-only) PDF. Install OCR extras via `pip install -e ".[ocr]"` and run `doqqy ingest --ocr` to enable OCR fallback via Docling's OCR pipeline (requires EasyOCR / Tesseract bindings). Normal flow falls back from docling to pymupdf4llm; if both yield empty output, `--ocr` will attempt image text extraction before declaring failure.
 
 **DOCX tables look broken** — mammoth (the fallback) is weaker than pandoc for tables. Check the file's frontmatter `parser:` field; if it says `mammoth`, install pandoc (`winget install pandoc`) and re-ingest.
 

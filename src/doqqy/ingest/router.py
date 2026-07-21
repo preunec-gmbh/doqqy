@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
@@ -35,15 +36,16 @@ _DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
 }
 
 
-def ingest_file(source: Path, ws: Workspace, ocr: bool = False) -> Document:
+def ingest_file(source: Path, ws: Workspace, **kwargs: Any) -> Document:
     ext = source.suffix.lower()
     parser = _DISPATCH.get(ext)
     if parser is None:
         raise IngestError(f"desteklenmeyen uzantı: {ext}")
-    # Sadece .pdf için ocr parametresini iletiyoruz
-    if ext == ".pdf":
-        return parser(source, ws, ocr=ocr)
-    return parser(source, ws)
+    # Format-agnostic dispatch: parser'ın imzasını incele sadece kabul ettiği opsiyonları ilet
+    sig = inspect.signature(parser)
+    valid_args = {k: v for k, v in kwargs.items() if k in sig.parameters}
+
+    return parser(source, ws, **valid_args)
 
 
 def _iter_supported(root: Path) -> list[Path]:
