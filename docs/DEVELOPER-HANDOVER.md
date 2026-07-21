@@ -293,7 +293,7 @@ ruff check . --fix
 
 ## 6. Release / versioning
 
-- Version lives in `pyproject.toml` (`0.1.6`) and `src/doqqy/__init__.py`. Keep them in sync when bumping.
+- Version lives only in src/doqqy/__init__.py. pyproject.toml reads it via [tool.setuptools.dynamic] version = { attr = "doqqy.__version__" }, so bump the one place.
 - **Continuous Integration (CI):** We have a fully automated CI workflow configured in GitHub Actions (`.github/workflows/ci.yml`). 
   - Every `push` and `pull_request` on target branches triggers the pipeline.
   - Tests are run against a matrix of both **Ubuntu** (`ubuntu-latest`) and **Windows** (`windows-latest`) to ensure absolute cross-platform compatibility (supporting pathing differences).
