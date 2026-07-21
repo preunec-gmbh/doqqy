@@ -305,6 +305,8 @@ def tags(
     ),
 ) -> None:
     """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
+    import contextlib
+
     from doqqy.infra.settings import Settings
     from doqqy.infra.vectorstore.factory import make_store
 
@@ -312,14 +314,14 @@ def tags(
     settings = Settings(vector_backend=backend) if backend else None
 
     try:
-        with make_store(ws, settings) as store:
+        with contextlib.closing(make_store(ws, settings)) as store:
             all_tags = store.list_tags()
     except Exception as e:      # noqa: BLE001
         err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
         raise typer.Exit(1) from e
 
-
     if not all_tags:
+
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
     else:
         table_view = Table(title=f"Bulunan Tag'ler ({len(all_tags)} adet)", box=box.ROUNDED)

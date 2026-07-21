@@ -72,6 +72,8 @@ def search(
     settings: Settings | None = None,
 ) -> list[SearchHit]:
 
+    import contextlib
+
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
@@ -79,12 +81,12 @@ def search(
     flt = TagFilter(tags=(tag,)) if tag else None
 
     dense_vec, sparse_vec = _embed_query(query)
-    with make_store(ws, settings) as store:
+    with contextlib.closing(make_store(ws, settings)) as store:
         fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
 
     if rerank and fused_chunks:
-
         from doqqy.rerank import rerank as do_rerank
+
         candidates = []
         for c in fused_chunks:
             rec = c.record
