@@ -116,7 +116,7 @@ class Chunk:
 1. `BAAI/bge-m3` is loaded through `FlagEmbedding.BGEM3FlagModel`. Device auto-detected (`detect_device()`: `DOQQY_DEVICE` env override → `torch.cuda.is_available()` → CPU). fp16 on CUDA.
 2. Each batch (`EMBEDDING_BATCH_SIZE = 4`, `max_length=1024` — deliberate RAM constraints for consumer machines) is encoded with `return_dense=True, return_sparse=True`.
 3. Dense vectors: `float32[1024]`. Sparse vectors: token-id → weight dicts, normalized to `dict[int, float]` at the port level.
-4. Table is dropped and recreated (`store.recreate(dim)`) and records are upserted (`store.upsert(records)`).
+4. Table is atomically rebuilt from scratch via `store.full_rebuild(records, dim=1024)`. Using LanceDB's single `create_table(mode="overwrite")` operation preserves the previous table until the new write is complete, eliminating any crash window. (`store.recreate + store.upsert` is reserved for incremental indexing / `doqqy sync`).
 
 Two derived columns are added by the LanceDB adapter at write time:
 
