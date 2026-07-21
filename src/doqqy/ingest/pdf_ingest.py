@@ -1,10 +1,11 @@
-"""PDF ingester'ı: docling (ana) → pymupdf4llm (fallback)."""
+"""PDF ingester'ı: docling → docling-ocr (if --ocr) → pymupdf4llm."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
 
+from typing import Any
 from doqqy.config import get_logger
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
@@ -24,6 +25,7 @@ def _get_docling_converter():
 def _get_docling_ocr_converter():
     """OCR özellikli Docling converter'ı tek seferlik belleğe yükler."""
     try:
+        import easyocr # type: ignore
         from docling.datamodel.base_models import InputFormat  # type: ignore
         from docling.datamodel.pipeline_options import PdfPipelineOptions  # type: ignore
         from docling.document_converter import DocumentConverter, PdfFormatOption  # type: ignore
@@ -54,7 +56,7 @@ def _parse_with_pymupdf4llm(source: Path) -> str:
     return pymupdf4llm.to_markdown(str(source))
 
 
-def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False) -> Document:
+def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False, **_kwargs: Any) -> Document:
     md: str | None = None
     parser_used: str | None = None
     docling_error: Exception | None = None
@@ -79,8 +81,8 @@ def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False) -> Document:
         except Exception as exc:  # noqa: BLE001
             _LOG.warning("docling-ocr başarısız (%s): %s", source.name, exc)
 
-    # 3. Hala sonuç yoksa ve ocr istenmediyse pymupdf4llm dene
-    if (md is None or not md.strip()) and not ocr:
+    # 3. Hala sonuç yoksa pymupdf4llm dene
+    if md is None or not md.strip():
         try:
             md = _parse_with_pymupdf4llm(source)
             parser_used = "pymupdf4llm"
@@ -96,9 +98,9 @@ def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False) -> Document:
             )
         raise IngestError("Parser boş içerik döndürdü (taranmış PDF olabilir).")
 
-    meta=base_metadata(source, ws.root, kind="pdf")
-    meta["parser"]=parser_used
-    meta["content_hash"]=content_hash(md)
+    meta = base_metadata(source, ws.root, kind="pdf")
+    meta["parser"] = parser_used
+    meta["content_hash"] = content_hash(md)
 
     return Document(
         source_path=source,

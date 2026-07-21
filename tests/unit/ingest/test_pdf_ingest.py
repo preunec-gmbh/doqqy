@@ -11,6 +11,20 @@ from doqqy.ingest.pdf_ingest import ingest_pdf
 from doqqy.workspace import Workspace
 
 
+def test_pdf_ingest_standard_docling_success(tmp_path):
+    """Standart Docling başarılı olduğunda doğrudan sonucu dönmeli."""
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    fake_pdf = tmp_path / "normal.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value="# Normal Text Content"):
+        doc = ingest_pdf(fake_pdf, ws, ocr=False)
+
+        assert doc.content == "# Normal Text Content"
+        assert doc.metadata["parser"] == "docling"
+
+
 def test_pdf_ingest_without_ocr_fails_on_empty_content(tmp_path):
     """OCR kapalıyken (ocr=False) boş/taranmış PDF'ler IngestError fırlatmalı."""
     ws = Workspace(tmp_path)
@@ -44,3 +58,34 @@ def test_pdf_ingest_with_ocr_fallback_success(tmp_path):
         assert doc.content == "# Scanned Text Content"
         assert doc.metadata["parser"] == "docling-ocr"
 
+
+def test_pdf_ingest_with_ocr_enabled_but_falls_back_to_pymupdf4llm(tmp_path):
+    """OCR açık (ocr=True) olmasına rağmen Docling ve Docling-OCR boş dönerse pymupdf4llm devreye girmeli."""
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    fake_pdf = tmp_path / "scanned.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_docling_ocr", return_value=""
+    ), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value="# PyMuPDF Fallback Content"
+    ):
+        doc = ingest_pdf(fake_pdf, ws, ocr=True)
+
+        assert doc.content == "# PyMuPDF Fallback Content"
+        assert doc.metadata["parser"] == "pymupdf4llm"
+
+
+def test_pdf_ingest_with_ocr_fails_when_all_parsers_return_empty(tmp_path):
+    """OCR açık (ocr=True) iken tüm parser'lar boş dönerse OCR hata mesajı fırlatılmalı."""
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    fake_pdf = tmp_path / "empty.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_docling_ocr", return_value=""
+    ), patch("doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value=""):
+        with pytest.raises(IngestError, match="OCR çalıştırılmasına rağmen içerik çıkarılamadı"):
+            ingest_pdf(fake_pdf, ws, ocr=True)

@@ -72,9 +72,8 @@ target-version = "py310"
 line-length = 140
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "BLE", "PLC"]
+select = ["E", "E2", "F", "W", "I", "B", "BLE", "PLC"]
 ignore = [
     "B008",         # Typer tasarımsal zorunluluğu için bunu kapat
     "PLC0415"       # Projedeki mevcut local import tercihini meşrulaştırmak için
 ]
-
