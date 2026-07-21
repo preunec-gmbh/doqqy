@@ -34,3 +34,6 @@ env/
 .claude/
 graphify-out/
 TODO.md
+
+# Binary installers
+*.msi

@@ -209,8 +209,8 @@ Ordered roughly by how likely they are to bite you.
 9. ~~**`_normalize_target` in Pass 1 is prefix-tolerant both ways**~~ **Fixed (July 2026)** by sorting `known_files` before matching (prioritizing exact matches, then shortest filename, then alphabetical order) to ensure reference matching is deterministic.
 10. ~~**Unused config**~~ **Fixed (July 2026)** by removing `CHUNK_OVERLAP` and `CHUNK_MIN_MERGE_TOKENS` from `config.py` and `chunk.py`.
 11. **Windows specifics**: `cli.py` reconfigures stdout/stderr to UTF-8 (Turkish characters under cp1252); `doc_id` normalizes backslashes to `/`. Keep both behaviors when refactoring.
-12. **The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)** — an installer artifact that predates the `pypandoc.download_pandoc()` auto-install. It's committed to git; consider removing it from history if repo size matters.
-13. **`pyproject.toml` readme field points at the deleted `memory-bank/`** — `readme = { text = "Bkz. memory-bank/", ... }`; harmless but stale, point it at `README.md` when touching packaging. (The README itself was rewritten in English in July 2026 and no longer references memory-bank.)
+12. ~~**The repo root contains `pandoc-3.9.0.2-windows-x86_64.msi` (~40 MB)**~~ **Fixed (#12)** by removing the binary from the working tree. Note: Existing Git history was kept intact to avoid breaking active clones/branches, so the ~40 MB blob remains in historical pack files (git clone size is unchanged).
+13. ~~**`pyproject.toml` readme field points at the deleted `memory-bank/`**~~ **Fixed (#12)** by pointing `readme` directly to `README.md`.
 
 ## 5. Testing [IMPLEMENTED]
 
