@@ -115,3 +115,17 @@ class VectorStore(Protocol):
     def close(self) -> None:
         """Release database connections or handles."""
         ...
+
+    def __enter__(self) -> VectorStore:
+        """Enter context manager."""
+        ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Exit context manager, guaranteeing close() is invoked."""
+        ...
+
