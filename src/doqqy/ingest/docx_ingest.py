@@ -7,6 +7,7 @@ mammoth saf Python — kurulum gerekmiyor, ama tablo/karmaşık layout'larda pan
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from doqqy.config import get_logger
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
@@ -45,7 +46,7 @@ def _parse_with_mammoth(source: Path) -> str:
     return result.value
 
 
-def ingest_docx(source: Path, ws: Workspace) -> Document:
+def ingest_docx(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     md: str | None = None
     parser_used: str | None = None
     pandoc_error: Exception | None = None

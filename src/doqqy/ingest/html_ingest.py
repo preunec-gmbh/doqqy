@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
@@ -15,7 +16,7 @@ _BOILERPLATE_TAGS = ("script", "style", "nav", "aside", "form", "iframe", "noscr
 _CONTENT_SCOPES = ("article", "section", "main")
 
 
-def ingest_html(source: Path, ws: Workspace) -> Document:
+def ingest_html(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     """Ingest an HTML file, pre-clean elements/comments with BeautifulSoup,
     and convert to canonical Markdown using markdownify.
     """

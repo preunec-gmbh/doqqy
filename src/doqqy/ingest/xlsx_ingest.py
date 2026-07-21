@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
@@ -26,7 +27,7 @@ def _df_to_md_blocks(df, max_rows: int = 40) -> list[str]:
     return blocks
 
 
-def ingest_xlsx(source: Path, ws: Workspace) -> Document:
+def ingest_xlsx(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     import pandas as pd  # heavy imports inside functions
 
     if not source.exists():
@@ -73,4 +74,3 @@ def ingest_xlsx(source: Path, ws: Workspace) -> Document:
         content = full_content,
         metadata = meta,
     )
-

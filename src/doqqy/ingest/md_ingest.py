@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 
@@ -38,7 +39,7 @@ def _try_fix_yaml_frontmatter(content: str) -> str:
     return content
 
 
-def ingest_md(source: Path, ws: Workspace) -> Document:
+def ingest_md(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     # Önce dosyayı string olarak okuyalım ve gerekiyorsa YAML'ı düzeltelim
     try:
         raw_text = source.read_text(encoding="utf-8")
@@ -67,7 +68,7 @@ def ingest_md(source: Path, ws: Workspace) -> Document:
     )
 
 
-def ingest_txt(source: Path, ws: Workspace) -> Document:
+def ingest_txt(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     try:
         raw = source.read_text(encoding="utf-8")
     except UnicodeDecodeError:

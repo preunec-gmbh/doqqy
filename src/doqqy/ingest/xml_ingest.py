@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
@@ -26,7 +27,7 @@ def _extract_leaf_texts(element: ET.Element) -> list[str]:
     return texts
 
 
-def ingest_xml(source: Path, ws: Workspace) -> Document:
+def ingest_xml(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     """Ingest an XML file, parse it, and produce a canonical Markdown Document.
 
     This function is format-agnostic downstream, converting XML structure to formatted markdown.

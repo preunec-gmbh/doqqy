@@ -54,7 +54,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 |---|---|---|---|
 | `.md`, `.markdown` | `python-frontmatter` | — | Original frontmatter preserved as `original_<key>`; broken YAML (unquoted colons in `title:`/`project:`/`team:`) auto-repaired by `_try_fix_yaml_frontmatter` |
 | `.txt` | UTF-8 read, body wrapped in a fenced code block | latin-1 on `UnicodeDecodeError` | Filename becomes the H1 title |
-| `.pdf` | **docling** (layout-aware) | **pymupdf4llm** (fast, simple) | Empty output → `IngestError` ("scanned PDF?") |
+| `.pdf` | **docling** (layout-aware) | **docling-ocr** (when `--ocr` enabled) → **pymupdf4llm** (fast, simple) | Empty output without `--ocr` triggers `IngestError` ("scanned PDF?") |
 | `.docx` | **pandoc** via pypandoc (GFM output, `--wrap=none`) | **mammoth** (pure Python) | Missing pandoc binary triggers `pypandoc.download_pandoc()` auto-install; if that fails, mammoth |
 | `.xml` | `xml.etree.ElementTree` | — | Pretty-printed XML inside a fenced block, extracts leaf nodes text to a content summary section |
 | `.html`, `.htm` | `BeautifulSoup` + `markdownify` | Encoding auto-detected from BOM / `<meta charset>` (UnicodeDammit) | Drops boilerplate (`<script>`, `<style>`, `<nav>`, `<aside>`, `<form>`, `<iframe>`, `<noscript>`, `<svg>`, comments); `<header>`/`<footer>` removed only outside `<article>`/`<section>`/`<main>`; `<title>` → frontmatter `title` and fallback H1 when body has none; ATX headers |

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
@@ -21,7 +21,7 @@ from doqqy.workspace import Workspace
 _LOG = get_logger("doqqy.ingest.router")
 
 
-_DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
+_DISPATCH: dict[str, Callable[..., Document]] = {
     ".md": ingest_md,
     ".markdown": ingest_md,
     ".txt": ingest_txt,
@@ -35,12 +35,13 @@ _DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
 }
 
 
-def ingest_file(source: Path, ws: Workspace) -> Document:
+def ingest_file(source: Path, ws: Workspace, **kwargs: Any) -> Document:
     ext = source.suffix.lower()
     parser = _DISPATCH.get(ext)
     if parser is None:
         raise IngestError(f"desteklenmeyen uzantı: {ext}")
-    return parser(source, ws)
+
+    return parser(source, ws, **kwargs)
 
 
 def _iter_supported(root: Path) -> list[Path]:
@@ -51,7 +52,7 @@ def _iter_supported(root: Path) -> list[Path]:
     )
 
 
-def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: int | None = None) -> IngestResult:
+def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: int | None = None, ocr: bool = False) -> IngestResult:
     """Kaynak klasördeki (varsayılan: ws.raw_dir) tüm desteklenen dosyaları ingest et.
 
     Bir dosya hata verirse durmaz — log + raporda failed listesine eklenir.
@@ -76,7 +77,7 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
         for path in files:
             progress.update(task, description=f"[dim]{path.name}[/dim]", advance=1)
             try:
-                doc = ingest_file(path, ws)
+                doc = ingest_file(path, ws, ocr=ocr)
                 doc.write()
                 result.succeeded.append(path)
             except IngestError as exc:
