@@ -76,8 +76,8 @@ def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False, **_kwargs: Any) -
             md = _parse_with_docling_ocr(source)
             if md and md.strip():
                 parser_used = "docling-ocr"
-        except IngestError:
-            raise
+        # OCR bağımlılıkları eksikse de (IngestError) durmuyoruz: --ocr bir deneme ekler,
+        # pymupdf4llm denemesini ortadan kaldırmaz. Hepsi boş dönerse adım 4 doğru mesajı verir.
         except Exception as exc:  # noqa: BLE001
             _LOG.warning("docling-ocr başarısız (%s): %s", source.name, exc)
 

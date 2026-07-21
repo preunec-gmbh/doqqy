@@ -77,6 +77,23 @@ def test_pdf_ingest_with_ocr_enabled_but_falls_back_to_pymupdf4llm(tmp_path):
         assert doc.metadata["parser"] == "pymupdf4llm"
 
 
+def test_pdf_ingest_missing_ocr_deps_still_falls_back_to_pymupdf4llm(tmp_path):
+    """OCR paketleri kurulu değilse bile pymupdf4llm denemesi atlanmamalı — --ocr deneme ekler, kaldırmaz."""
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    fake_pdf = tmp_path / "scanned.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_docling_ocr",
+        side_effect=IngestError("OCR bağımlılıkları eksik."),
+    ), patch("doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value="# PyMuPDF Fallback Content"):
+        doc = ingest_pdf(fake_pdf, ws, ocr=True)
+
+        assert doc.content == "# PyMuPDF Fallback Content"
+        assert doc.metadata["parser"] == "pymupdf4llm"
+
+
 def test_pdf_ingest_with_ocr_fails_when_all_parsers_return_empty(tmp_path):
     """OCR açık (ocr=True) iken tüm parser'lar boş dönerse OCR hata mesajı fırlatılmalı."""
     ws = Workspace(tmp_path)
