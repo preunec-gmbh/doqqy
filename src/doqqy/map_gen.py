@@ -195,8 +195,8 @@ def _pass2(
         return {}
 
     # Group chunks for section centroid by matching source filename + heading
-
     results: dict[str, list[ThematicRef]] = {}
+
 
     all_sources = [r.source for r in records]
     all_section_paths = [r.section_path for r in records]
