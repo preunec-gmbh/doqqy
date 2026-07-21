@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "doqqy"
-version = "0.1.6"
+dynamic = ["version"]
 description = "Yerel doküman bilgi sistemi — hibrit semantik+lexical arama + harita üretimi."
 requires-python = ">=3.10"
-readme = { text = "Bkz. memory-bank/", content-type = "text/plain" }
+readme = "README.md"
 dependencies = [
     # Core
     "typer>=0.12",
@@ -75,3 +75,5 @@ ignore = [
     "PLC0415"       # Projedeki mevcut local import tercihini meşrulaştırmak için
 ]
 
+[tool.setuptools.dynamic]
+version = { attr = "doqqy.__version__" }
