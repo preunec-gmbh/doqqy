@@ -1,11 +1,12 @@
-"""Unit tests verifying context manager support (__enter__ / __exit__) for VectorStore adapters.
+"""Unit tests verifying contextlib.closing usage for VectorStore adapters.
 
-Tests guarantee that store.close() is unconditionally called upon exiting a `with` block,
+Guarantees that store.close() is unconditionally invoked upon exiting a `with contextlib.closing(store)` block,
 both on normal completion and when an exception occurs inside the block.
 """
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Sequence
 
@@ -17,11 +18,11 @@ from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
 from doqqy.infra.vectorstore.qdrant_store import QdrantStore
 
 # ---------------------------------------------------------------------------
-# Spy VectorStore Implementation (inherits __enter__ and __exit__ from VectorStore)
+# Spy VectorStore Implementation
 # ---------------------------------------------------------------------------
 
 class SpyVectorStore(VectorStore):
-    """Spy implementation of VectorStore to verify base protocol context manager lifecycle."""
+    """Spy implementation of VectorStore to verify contextlib.closing lifecycle."""
 
     def __init__(self) -> None:
         self.close_called = False
@@ -64,88 +65,78 @@ class SpyVectorStore(VectorStore):
 # Test Suites
 # ---------------------------------------------------------------------------
 
-class TestVectorStoreContextManager:
-    """Verify generic context manager behavior on the VectorStore Protocol."""
+class TestClosingVectorStore:
+    """Verify contextlib.closing behavior on VectorStore implementations."""
 
-    def test_normal_exit_calls_close(self) -> None:
-        """Exiting a `with` block normally must call close()."""
+    def test_spy_store_normal_exit_calls_close(self) -> None:
+        """Exiting a contextlib.closing block normally must call close()."""
         store = SpyVectorStore()
         assert not store.close_called
 
-        with store as s:
+        with contextlib.closing(store) as s:
             assert s is store
             assert not store.close_called
 
         assert store.close_called
 
-    def test_exception_in_with_block_calls_close(self) -> None:
-        """An exception raised inside a `with` block must still trigger close()."""
+    def test_spy_store_exception_exit_calls_close(self) -> None:
+        """An exception raised inside contextlib.closing must still trigger close()."""
         store = SpyVectorStore()
 
-        with pytest.raises(RuntimeError, match="Search operation failed"):
-            with store:
-                raise RuntimeError("Search operation failed")
+        with pytest.raises(RuntimeError, match="Operation failed"):
+            with contextlib.closing(store):
+                raise RuntimeError("Operation failed")
 
         assert store.close_called
 
-
-class TestLanceDBStoreContextManager:
-    """Verify LanceDBStore context manager implementation."""
-
-    def test_lancedb_store_context_manager_normal_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """LanceDBStore must call close() on normal exit."""
+    def test_lancedb_store_closing_normal_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LanceDBStore wrapped in contextlib.closing must call close() on normal exit."""
         store = LanceDBStore(tmp_path / "store.lance")
         store.recreate(dim=128)
 
         calls = []
         monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
-        with store as s:
-            assert s is store
-            assert store.count() == 0
+        with contextlib.closing(store) as s:
+            assert s.count() == 0
 
         assert calls == [1]
 
-    def test_lancedb_store_context_manager_exception_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """LanceDBStore must call close() and re-raise exception on error."""
+    def test_lancedb_store_closing_exception_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LanceDBStore wrapped in contextlib.closing must call close() and propagate exceptions."""
         store = LanceDBStore(tmp_path / "store.lance")
         store.recreate(dim=128)
 
         calls = []
         monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
-        with pytest.raises(ValueError, match="Simulated hybrid_search error"):
-            with store:
-                raise ValueError("Simulated hybrid_search error")
+        with pytest.raises(ValueError, match="Database query error"):
+            with contextlib.closing(store):
+                raise ValueError("Database query error")
 
         assert calls == [1]
 
-
-class TestQdrantStoreContextManager:
-    """Verify QdrantStore stub context manager implementation."""
-
-    def test_qdrant_store_context_manager_normal_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """QdrantStore stub must call close() on normal exit."""
+    def test_qdrant_store_closing_normal_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """QdrantStore stub wrapped in contextlib.closing must call close() on normal exit."""
         store = QdrantStore("http://localhost:6333", "key", "collection", "tenant")
 
         calls = []
         monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
-        with store as s:
-            assert s is store
-            assert store.collection == "collection"
+        with contextlib.closing(store) as s:
+            assert s.collection == "collection"
 
         assert calls == [1]
 
-    def test_qdrant_store_context_manager_exception_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """QdrantStore stub must call close() and re-raise exception on error."""
+    def test_qdrant_store_closing_exception_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """QdrantStore stub wrapped in contextlib.closing must call close() and propagate exceptions."""
         store = QdrantStore("http://localhost:6333", "key", "collection", "tenant")
 
         calls = []
         monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
-        with pytest.raises(RuntimeError, match="Qdrant error"):
-            with store:
-                raise RuntimeError("Qdrant error")
+        with pytest.raises(RuntimeError, match="Network timeout"):
+            with contextlib.closing(store):
+                raise RuntimeError("Network timeout")
 
         assert calls == [1]
