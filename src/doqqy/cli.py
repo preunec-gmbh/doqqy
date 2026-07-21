@@ -322,8 +322,8 @@ def tags(
     if not all_tags:
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
     else:
-
         table_view = Table(title=f"Bulunan Tag'ler ({len(all_tags)} adet)", box=box.ROUNDED)
+
         table_view.add_column("Tag", style="cyan")
         for t in sorted(all_tags):
             table_view.add_row(t)
