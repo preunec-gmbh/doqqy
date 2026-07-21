@@ -310,15 +310,14 @@ def tags(
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    store = make_store(ws, settings)
 
     try:
-        all_tags = store.list_tags()
+        with make_store(ws, settings) as store:
+            all_tags = store.list_tags()
     except Exception as e:      # noqa: BLE001
         err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
         raise typer.Exit(1) from e
-    finally:
-        store.close()
+
 
     if not all_tags:
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
