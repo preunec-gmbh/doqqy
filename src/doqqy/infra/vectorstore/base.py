@@ -118,7 +118,7 @@ class VectorStore(Protocol):
 
     def __enter__(self) -> VectorStore:
         """Enter context manager."""
-        ...
+        return self
 
     def __exit__(
         self,
@@ -127,5 +127,4 @@ class VectorStore(Protocol):
         exc_tb: object | None,
     ) -> None:
         """Exit context manager, guaranteeing close() is invoked."""
-        ...
-
+        self.close()
