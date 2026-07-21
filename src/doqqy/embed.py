@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING, Iterator
 
@@ -147,8 +148,6 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
         )
         records.append(rec)
 
-    import contextlib
-
     # Initialize store via factory and atomically rebuild from scratch.
     # full_rebuild() uses create_table(mode="overwrite") — a single LanceDB operation
     # that keeps the old table readable until the new one is fully written (no crash window).
@@ -158,4 +157,3 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 
     _LOG.info("Vector store updated with %d records.", n)
     return n
-
