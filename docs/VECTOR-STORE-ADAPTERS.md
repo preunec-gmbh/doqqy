@@ -95,8 +95,8 @@ Design notes:
 
 ## 3. Factory & configuration
 
-
 `src/doqqy/infra/vectorstore/factory.py` — selected by settings, resolved per workspace:
+
 
 ```python
 def make_store(ws: Workspace, settings: Settings) -> VectorStore:
