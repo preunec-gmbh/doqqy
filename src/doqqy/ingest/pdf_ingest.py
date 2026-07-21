@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-
 from typing import Any
+
 from doqqy.config import get_logger
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.workspace import Workspace
@@ -25,7 +25,7 @@ def _get_docling_converter():
 def _get_docling_ocr_converter():
     """OCR özellikli Docling converter'ı tek seferlik belleğe yükler."""
     try:
-        import easyocr # type: ignore
+        import easyocr  # noqa: F401        # type: ignore
         from docling.datamodel.base_models import InputFormat  # type: ignore
         from docling.datamodel.pipeline_options import PdfPipelineOptions  # type: ignore
         from docling.document_converter import DocumentConverter, PdfFormatOption  # type: ignore
