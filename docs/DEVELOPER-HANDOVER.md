@@ -35,7 +35,7 @@ src/doqqy/
 │   │                      IngestError, content_hash, base_metadata (TAG DERIVATION lives here)
 │   ├── router.py       ← _DISPATCH {ext → callable}; ingest_directory (batch + failure isolation)
 │   ├── md_ingest.py    ← .md + .txt; YAML frontmatter auto-repair (_try_fix_yaml_frontmatter)
-│   ├── pdf_ingest.py   ← docling → pymupdf4llm fallback chain
+│   ├── pdf_ingest.py   ← docling → docling-ocr → pymupdf4llm (optional) chain
 │   └── docx_ingest.py  ← pandoc (auto-download!) → mammoth fallback chain
 ├── chunk.py            ← Chunk dataclass; _atomic_blocks / _pack_blocks / _split_section;
 │                          bold-heading → ## normalization (_BOLD_HEADING_RE)

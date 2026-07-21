@@ -106,3 +106,18 @@ def test_pdf_ingest_with_ocr_fails_when_all_parsers_return_empty(tmp_path):
     ), patch("doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value=""):
         with pytest.raises(IngestError, match="OCR çalıştırılmasına rağmen içerik çıkarılamadı"):
             ingest_pdf(fake_pdf, ws, ocr=True)
+
+
+def test_pdf_ingest_skips_pymupdf4llm_when_extra_not_installed(tmp_path):
+    """pymupdf4llm opsiyonel bir extra — kurulu değilse çökmemeli, temiz hata mesajı vermeli."""
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    fake_pdf = tmp_path / "scanned.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm",
+        side_effect=ModuleNotFoundError("No module named 'pymupdf4llm'"),
+    ):
+        with pytest.raises(IngestError, match="taranmış PDF"):
+            ingest_pdf(fake_pdf, ws, ocr=False)

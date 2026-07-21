@@ -67,7 +67,7 @@ doqqy/
 │       ├── base.py          # Document, IngestResult, content_hash, tag derivation
 │       ├── router.py        # extension → parser dispatch + batch ingest (failure-isolated)
 │       ├── md_ingest.py     # .md (frontmatter + YAML auto-repair) and .txt
-│       ├── pdf_ingest.py    # docling → pymupdf4llm fallback
+│       ├── pdf_ingest.py    # docling → docling-ocr → pymupdf4llm (optional)
 │       ├── docx_ingest.py   # pandoc (auto-download) → mammoth fallback
 │       ├── xml_ingest.py    # etree (stdlib)
 │       ├── xlsx_ingest.py   # pandas + openpyxl (splits large sheets)
@@ -96,7 +96,7 @@ doqqy/
 
 Phases 1–5 complete. Shipped features:
 
-- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling + pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.html`/`.htm` (BeautifulSoup + markdownify), `.xml` (etree), `.xlsx` (pandas + openpyxl), `.csv` (pandas with delimiter detection and encoding fallback)
+- ✅ Ingest: `.md`, `.txt`, `.pdf` (docling, optional pymupdf4llm fallback), `.docx` (pandoc + mammoth fallback), `.html`/`.htm` (BeautifulSoup + markdownify), `.xml` (etree), `.xlsx` (pandas + openpyxl), `.csv` (pandas with delimiter detection and encoding fallback)
 - ✅ Header-aware chunking (code blocks and tables kept atomic; Word bold-heading recovery)
 - ✅ bge-m3 dense + sparse embeddings → LanceDB
 - ✅ RAM-constrained defaults (embedding batch size 4 / max length 1024)

@@ -18,7 +18,6 @@ dependencies = [
 
     # Ingest
     "docling>=2.0",
-    "pymupdf4llm>=0.0.17",
     "pypandoc>=1.13",          # pandoc binary'sini sarar; binary kurulu değilse mammoth fallback
     "mammoth>=1.8",
     "python-frontmatter>=1.1",
@@ -51,6 +50,13 @@ dev = [
 ]
 ocr = [
     "easyocr>=1.7.0",
+]
+# PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
+# pymupdf4llm yalnızca docling boş/hatalı döndüğünde devreye giriyor.
+# Opsiyonel tutuluyor çünkü PyMuPDF AGPL-3.0 / Artifex ticari ikili lisanslı —
+# varsayılan kurulumun lisans profilini kirletmesin, isteyen bilerek opt-in etsin.
+pdf-fallback = [
+    "pymupdf4llm>=0.0.17",
 ]
 
 [project.scripts]

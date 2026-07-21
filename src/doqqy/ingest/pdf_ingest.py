@@ -1,4 +1,4 @@
-"""PDF ingester'ı: docling → docling-ocr (if --ocr) → pymupdf4llm."""
+"""PDF ingester'ı: docling → docling-ocr (--ocr ile) → pymupdf4llm (opsiyonel: .[pdf-fallback])."""
 
 from __future__ import annotations
 
@@ -81,11 +81,15 @@ def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False, **_kwargs: Any) -
         except Exception as exc:  # noqa: BLE001
             _LOG.warning("docling-ocr başarısız (%s): %s", source.name, exc)
 
-    # 3. Hala sonuç yoksa pymupdf4llm dene
+    # 3. Hala sonuç yoksa pymupdf4llm dene (opsiyonel: pip install -e ".[pdf-fallback]")
     if md is None or not md.strip():
         try:
             md = _parse_with_pymupdf4llm(source)
             parser_used = "pymupdf4llm"
+        except ModuleNotFoundError:
+            # Paket bilerek opsiyonel (PyMuPDF AGPL-3.0). Kurulu değilse bu bir hata değil,
+            # sadece zincirin son halkası eksik — adım 4 doğru mesajı veriyor.
+            _LOG.info("pymupdf4llm kurulu değil, fallback atlanıyor: %s", source.name)
         except Exception as exc:  # noqa: BLE001
             raise IngestError(f"Hem docling hem pymupdf4llm başarısız. docling: {docling_error}. pymupdf4llm: {exc}") from exc
 
@@ -96,7 +100,10 @@ def ingest_pdf(source: Path, ws: Workspace, ocr: bool = False, **_kwargs: Any) -
                 "OCR çalıştırılmasına rağmen içerik çıkarılamadı. "
                 "OCR paketlerinin kurulu olduğundan emin olun: 'pip install -e \".[ocr]\"'"
             )
-        raise IngestError("Parser boş içerik döndürdü (taranmış PDF olabilir).")
+        raise IngestError(
+            "Parser boş içerik döndürdü (taranmış PDF olabilir). "
+            "'--ocr' ile OCR'ı deneyebilir, ek bir parser için 'pip install -e \".[pdf-fallback]\"' kurabilirsiniz."
+        )
 
     meta = base_metadata(source, ws.root, kind="pdf")
     meta["parser"] = parser_used
