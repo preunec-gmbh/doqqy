@@ -17,10 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PR'larda sadece ubuntu; main'e push ve elle tetiklemede windows da koşar.
-        # Windows dakikaları 2x çarpanla faturalanıyor — Actions kotasının çoğunu o yiyordu.
-        # Windows'a özgü hatalar (path ayracı, cp1252 encoding, açık dosya silinemez) merge anında yakalanır.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest"]') }}
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10"]
 
     steps:
