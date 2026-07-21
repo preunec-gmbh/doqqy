@@ -3,12 +3,13 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+from typing import Any
 from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash, processed_path_for
 from doqqy.ingest.xlsx_ingest import _df_to_md_blocks
 from doqqy.workspace import Workspace
 
 
-def ingest_csv(source: Path, ws: Workspace) -> Document:
+def ingest_csv(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     import pandas as pd  # heavy import inside function
 
     if not source.exists():
@@ -85,4 +86,3 @@ def ingest_csv(source: Path, ws: Workspace) -> Document:
         content = full_content,
         metadata = meta,
     )
-

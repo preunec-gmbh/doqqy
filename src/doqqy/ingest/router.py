@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,7 +21,7 @@ from doqqy.workspace import Workspace
 _LOG = get_logger("doqqy.ingest.router")
 
 
-_DISPATCH: dict[str, Callable[[Path, Workspace], Document]] = {
+_DISPATCH: dict[str, Callable[..., Document]] = {
     ".md": ingest_md,
     ".markdown": ingest_md,
     ".txt": ingest_txt,
@@ -41,11 +40,8 @@ def ingest_file(source: Path, ws: Workspace, **kwargs: Any) -> Document:
     parser = _DISPATCH.get(ext)
     if parser is None:
         raise IngestError(f"desteklenmeyen uzantı: {ext}")
-    # Format-agnostic dispatch: parser'ın imzasını incele sadece kabul ettiği opsiyonları ilet
-    sig = inspect.signature(parser)
-    valid_args = {k: v for k, v in kwargs.items() if k in sig.parameters}
 
-    return parser(source, ws, **valid_args)
+    return parser(source, ws, **kwargs)
 
 
 def _iter_supported(root: Path) -> list[Path]:
