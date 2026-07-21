@@ -22,11 +22,10 @@ def test_pdf_ingest_without_ocr_fails_on_empty_content(tmp_path):
     with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
         "doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value=""
     ):
-        with pytest.raises(IngestError, match="scanned PDF"):
+        with pytest.raises(IngestError, match="taranmış PDF"):
             ingest_pdf(fake_pdf, ws, ocr=False)
 
 
-@pytest.mark.slow
 def test_pdf_ingest_with_ocr_fallback_success(tmp_path):
     """OCR açıkken (ocr=True) standart parse boş dönse bile OCR fallback devreye girmeli."""
     ws = Workspace(tmp_path)
@@ -34,7 +33,10 @@ def test_pdf_ingest_with_ocr_fallback_success(tmp_path):
     fake_pdf = tmp_path / "scanned.pdf"
     fake_pdf.write_bytes(b"%PDF-1.4 fake pdf content")
 
+    # Tüm standart parser'lar (docling ve pymupdf4llm) boş dönüyor yalnızca OCR başarılı dönüyor
     with patch("doqqy.ingest.pdf_ingest._parse_with_docling", return_value=""), patch(
+        "doqqy.ingest.pdf_ingest._parse_with_pymupdf4llm", return_value=""
+    ), patch(
         "doqqy.ingest.pdf_ingest._parse_with_docling_ocr", return_value="# Scanned Text Content"
     ):
         doc = ingest_pdf(fake_pdf, ws, ocr=True)
