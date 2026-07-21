@@ -17,15 +17,14 @@ from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
 from doqqy.infra.vectorstore.qdrant_store import QdrantStore
 
 # ---------------------------------------------------------------------------
-# Spy VectorStore Implementation
+# Spy VectorStore Implementation (inherits __enter__ and __exit__ from VectorStore)
 # ---------------------------------------------------------------------------
 
 class SpyVectorStore(VectorStore):
-    """Spy implementation of VectorStore to verify context manager lifecycle and close() calls."""
+    """Spy implementation of VectorStore to verify base protocol context manager lifecycle."""
 
     def __init__(self) -> None:
         self.close_called = False
-        self.entered = False
 
     def recreate(self, dim: int) -> None:
         pass
@@ -60,18 +59,6 @@ class SpyVectorStore(VectorStore):
     def close(self) -> None:
         self.close_called = True
 
-    def __enter__(self) -> SpyVectorStore:
-        self.entered = True
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: object | None,
-    ) -> None:
-        self.close()
-
 
 # ---------------------------------------------------------------------------
 # Test Suites
@@ -83,12 +70,10 @@ class TestVectorStoreContextManager:
     def test_normal_exit_calls_close(self) -> None:
         """Exiting a `with` block normally must call close()."""
         store = SpyVectorStore()
-        assert not store.entered
         assert not store.close_called
 
         with store as s:
             assert s is store
-            assert store.entered
             assert not store.close_called
 
         assert store.close_called
@@ -107,40 +92,60 @@ class TestVectorStoreContextManager:
 class TestLanceDBStoreContextManager:
     """Verify LanceDBStore context manager implementation."""
 
-    def test_lancedb_store_context_manager_normal_exit(self, tmp_path: Path) -> None:
-        """LanceDBStore must support `with` statement and close on exit."""
+    def test_lancedb_store_context_manager_normal_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LanceDBStore must call close() on normal exit."""
         store = LanceDBStore(tmp_path / "store.lance")
         store.recreate(dim=128)
+
+        calls = []
+        monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
         with store as s:
             assert s is store
             assert store.count() == 0
 
-    def test_lancedb_store_context_manager_exception_exit(self, tmp_path: Path) -> None:
-        """LanceDBStore must re-raise exception after running __exit__."""
+        assert calls == [1]
+
+    def test_lancedb_store_context_manager_exception_exit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LanceDBStore must call close() and re-raise exception on error."""
         store = LanceDBStore(tmp_path / "store.lance")
         store.recreate(dim=128)
+
+        calls = []
+        monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
         with pytest.raises(ValueError, match="Simulated hybrid_search error"):
             with store:
                 raise ValueError("Simulated hybrid_search error")
 
+        assert calls == [1]
+
 
 class TestQdrantStoreContextManager:
     """Verify QdrantStore stub context manager implementation."""
 
-    def test_qdrant_store_context_manager_normal_exit(self) -> None:
-        """QdrantStore stub must support `with` statement and close on exit."""
+    def test_qdrant_store_context_manager_normal_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """QdrantStore stub must call close() on normal exit."""
         store = QdrantStore("http://localhost:6333", "key", "collection", "tenant")
+
+        calls = []
+        monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
         with store as s:
             assert s is store
             assert store.collection == "collection"
 
-    def test_qdrant_store_context_manager_exception_exit(self) -> None:
-        """QdrantStore stub must re-raise exception after running __exit__."""
+        assert calls == [1]
+
+    def test_qdrant_store_context_manager_exception_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """QdrantStore stub must call close() and re-raise exception on error."""
         store = QdrantStore("http://localhost:6333", "key", "collection", "tenant")
+
+        calls = []
+        monkeypatch.setattr(store, "close", lambda: calls.append(1))
 
         with pytest.raises(RuntimeError, match="Qdrant error"):
             with store:
                 raise RuntimeError("Qdrant error")
+
+        assert calls == [1]

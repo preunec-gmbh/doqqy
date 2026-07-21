@@ -188,8 +188,8 @@ def _pass2(
     with make_store(ws, settings) as store:
         all_vecs, records = store.all_vectors(flt)
 
-
     if all_vecs.shape[0] == 0:
+
         _LOG.warning("No vectors found - Pass 2 skipped.")
         return {}
 
