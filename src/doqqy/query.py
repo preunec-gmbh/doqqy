@@ -79,9 +79,9 @@ def search(
     flt = TagFilter(tags=(tag,)) if tag else None
 
     dense_vec, sparse_vec = _embed_query(query)
-    store = make_store(ws, settings)
-    fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
-    store.close()
+    with make_store(ws, settings) as store:
+        fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
+
 
     if rerank and fused_chunks:
         from doqqy.rerank import rerank as do_rerank

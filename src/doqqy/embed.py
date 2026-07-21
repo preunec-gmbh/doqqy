@@ -151,9 +151,9 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
     # full_rebuild() uses create_table(mode="overwrite") — a single LanceDB operation
     # that keeps the old table readable until the new one is fully written (no crash window).
     # recreate()+upsert() is reserved for the incremental path (issue #16: doqqy sync).
-    store = make_store(ws, settings)
-    n = store.full_rebuild(records, dim=EMBEDDING_DIM)
-    store.close()
+    with make_store(ws, settings) as store:
+        n = store.full_rebuild(records, dim=EMBEDDING_DIM)
+
 
     _LOG.info("Vector store updated with %d records.", n)
     return n
