@@ -5,6 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:        # Windows dahil tam matrisi elle tetiklemek için
 
 permissions:
   contents: read
@@ -16,7 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # PR'larda sadece ubuntu; main'e push ve elle tetiklemede windows da koşar.
+        # Windows dakikaları 2x çarpanla faturalanıyor — Actions kotasının çoğunu o yiyordu.
+        # Windows'a özgü hatalar (path ayracı, cp1252 encoding, açık dosya silinemez) merge anında yakalanır.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest"]') }}
         python-version: ["3.10"]
 
     steps:
