@@ -6,6 +6,7 @@ Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 from typing import Optional
@@ -308,21 +309,19 @@ def tags(
         None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
     ),
 ) -> None:
-    """Sistemde kayıtlı olan tag/klasör/proje isimlerini listeler."""
+    """Sistemde kayıtlı olan tag'ler listeler."""
     from doqqy.infra.settings import Settings
     from doqqy.infra.vectorstore.factory import make_store
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    store = make_store(ws, settings)
 
     try:
-        all_tags = store.list_tags()
+        with contextlib.closing(make_store(ws, settings)) as store:
+            all_tags = store.list_tags()
     except Exception as e:      # noqa: BLE001
         err_console.print(f"[red]Gömülü tag'ler listelenemedi: {e}[/red]")
         raise typer.Exit(1) from e
-    finally:
-        store.close()
 
     if not all_tags:
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")

@@ -88,6 +88,7 @@ class VectorStore(Protocol):
 
 Design notes:
 
+- **Guaranteed cleanup contract via `contextlib.closing`.** Callers wrap store instantiation in `with contextlib.closing(make_store(ws, settings)) as store:`. This guarantees `close()` is invoked upon exiting the block, even if an exception occurs during `hybrid_search()` or `all_vectors()`, without requiring individual adapters to implement boilerplate context manager methods.
 - **Fusion lives behind the port.** `query.py` no longer implements `_rrf` — it calls `hybrid_search` and gets one fused list. The Qdrant adapter delegates fusion to the server; the LanceDB adapter keeps today's client-side RRF (moved into the adapter, byte-for-byte same algorithm so existing behavior is preserved). Reranking (bge-reranker-v2-m3) stays in `query.py` — it's model inference, not storage.
 - **`sparse` keys become `int`.** bge-m3's `lexical_weights` keys are token ids serialized as strings today; the port normalizes to `dict[int, float]`, which is exactly Qdrant's `SparseVector(indices, values)` shape. The LanceDB adapter keeps JSON-string serialization internally.
 - **`TagFilter` is a value object**, translated per backend: Qdrant → `FieldCondition(key="tags", match=...)`; LanceDB → the validated `tags_str LIKE` clause. The injection surface disappears from core code entirely.
