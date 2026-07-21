@@ -98,7 +98,6 @@ Design notes:
 `src/doqqy/infra/vectorstore/factory.py` — selected by settings, resolved per workspace:
 
 ```python
-
 def make_store(ws: Workspace, settings: Settings) -> VectorStore:
     match settings.vector_backend:
         case "lancedb":
