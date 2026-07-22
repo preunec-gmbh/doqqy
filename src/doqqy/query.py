@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -17,6 +18,9 @@ from doqqy.config import (
 )
 from doqqy.infra.settings import Settings
 from doqqy.workspace import Workspace
+
+if TYPE_CHECKING:
+    from doqqy.infra.vectorstore.base import VectorStore
 
 _LOG = get_logger("doqqy.query")
 
@@ -39,6 +43,19 @@ class SearchHit:
     section_path: list[str]
     content: str
     extra: dict = field(default_factory=dict)
+
+
+@dataclass
+class ExpandedContext:
+    """A hit's content plus its neighboring chunks, walked via prev_chunk/next_chunk."""
+
+    before: list[str]
+    after: list[str]
+    hit: str
+
+    def __str__(self) -> str:
+        SEP = "\n\n— · —\n\n"
+        return SEP.join([*self.before, self.hit, *self.after])
 
 
 # Model korpus-bağımsız → process-global singleton kalır.
@@ -119,6 +136,8 @@ def search(
                     "sparse_rank": r.get("sparse_rank"),
                     "rrf_score": r.get("rrf_score"),
                     "rerank_score": r.get("rerank_score"),
+                    "prev_chunk": r.get("prev_chunk"),
+                    "next_chunk": r.get("next_chunk"),
                 },
             ))
         return hits
@@ -139,6 +158,35 @@ def search(
                 "dense_rank": c.dense_rank,
                 "sparse_rank": c.sparse_rank,
                 "rrf_score": c.fused_score,
+                "prev_chunk": rec.prev_chunk,
+                "next_chunk": rec.next_chunk,
             },
         ))
     return hits
+
+
+def expand_context(store: VectorStore, hit: SearchHit, n: int) -> ExpandedContext:
+    """Walk *n* steps in each direction from *hit* via prev_chunk/next_chunk.
+
+    Reranking already happened by this point — expansion is purely additive,
+    display-only, and never affects which hits were selected or their order.
+    """
+    if n <= 0:
+        return ExpandedContext(before=[], after=[], hit=hit.content)
+
+    def _walk(chunk_id: str | None, attr: str) -> list[str]:
+        contents = []
+        current_id = chunk_id
+        for _ in range(n):
+            if not current_id:
+                break
+            records = store.get_by_ids([current_id])
+            if not records:
+                break
+            contents.append(records[0].content)
+            current_id = getattr(records[0], attr)
+        return contents
+
+    before = list(reversed(_walk(hit.extra.get("prev_chunk"), "prev_chunk")))
+    after = _walk(hit.extra.get("next_chunk"), "next_chunk")
+    return ExpandedContext(before=before, after=after, hit=hit.content)
