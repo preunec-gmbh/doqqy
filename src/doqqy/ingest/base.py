@@ -8,7 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from doqqy.config import get_logger, sanitize_tag
 from doqqy.workspace import Workspace
+
+_LOG = get_logger("doqqy.ingest.base")
 
 
 @dataclass
@@ -80,7 +83,17 @@ def base_metadata(source: Path, project_root: Path, kind: str) -> dict[str, Any]
         parts = parts[1:]
 
     # Son parça dosya adı, onu atıyoruz. Kalanlar klasör isimleri (tag'ler)
-    tags = parts[:-1] if len(parts) > 1 else []
+    raw_tags = parts[:-1] if len(parts) > 1 else []
+
+    tags: list[str] = []
+    for raw_tag in raw_tags:
+        sanitized = sanitize_tag(raw_tag)
+        if sanitized is None:
+            _LOG.warning("%s: klasör adı %r geçerli bir tag üretmedi, atlandı.", rel, raw_tag)
+            continue
+        if sanitized != raw_tag:
+            _LOG.info("%s: tag %r -> %r olarak temizlendi.", rel, raw_tag, sanitized)
+        tags.append(sanitized)
 
     return {
         "source": str(rel).replace("\\", "/"),
