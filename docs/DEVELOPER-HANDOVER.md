@@ -143,27 +143,16 @@ def stats() -> None:
     console.print(t)
 ```
 
-### 3.3 Context expansion (use the prev/next links that already exist)
+### 3.3 Context expansion (use the prev/next links that already exist) — implemented
 
-`prev_chunk` / `next_chunk` are stored but unused. To return neighboring chunks with each hit:
-
-```python
-# in query.py
-def expand_context(hit: SearchHit) -> str:
-    """Hit'in önceki/sonraki chunk'larını içeriğe ekle."""
-    table = _table()
-    parts = [hit.content]
-    for key, position in (("prev_chunk", 0), ("next_chunk", None)):
-        cid = hit.extra.get(key)
-        if not cid:
-            continue
-        rows = table.search().where(f"chunk_id = '{cid}'").limit(1).to_list()
-        if rows:
-            parts.insert(position, rows[0]["content"]) if position == 0 else parts.append(rows[0]["content"])
-    return "\n\n— · —\n\n".join(parts)
-```
-
-(You'll need to add `prev_chunk`/`next_chunk` into `SearchHit.extra` in `search()` — they're in the LanceDB row already.)
+`prev_chunk` / `next_chunk` are now surfaced in `SearchHit.extra` and consumed by
+`query.expand_context(store, hit, n)` (issue #22), which walks the chain via the
+`VectorStore.get_by_ids` port method (no raw SQL) — `n` steps in each direction, stopping
+at document edges. It returns an `ExpandedContext(before, hit, after)`; `str(...)` joins
+the pieces with a visible `— · —` separator. Expansion happens after reranking/scoring —
+it's purely additive and display-only, never affecting which chunks were retrieved or their
+order. Exposed on the CLI as `doqqy query "..." --context N` (`-c`), which also dims the
+neighboring chunks in the panel to visually distinguish them from the matched hit.
 
 ### 3.4 Swap the embedding model
 

@@ -96,9 +96,12 @@ doqqy query "invoice refund flow" --top-k 10       # more results (default 5)
 doqqy query "invoice states" --full              # full chunk text (default: 400-char preview)
 doqqy query "invoice states" --no-rerank         # skip reranker (faster, RRF order)
 doqqy query "refund process" --tag erp12         # restrict to one corpus/folder (must match ^[\w-]+\Z)
+doqqy query "invoice states" --context 1         # include 1 neighboring chunk on each side (prev/next chain)
 ```
 
 Each hit shows the source file, section path, and score breakdown (`dense=<rank> | sparse=<rank> | rrf=<score> | rerank=<score>`). Exit code 1 when nothing is found.
+
+`--context N` (`-c`) walks each hit's `prev_chunk`/`next_chunk` chain N steps in both directions and displays the neighboring chunks alongside the hit, dimmed to distinguish them from the matched chunk. Expansion happens after reranking — it's display-only and never affects which chunks were selected or their order. At a document's start/end, the missing side is simply omitted.
 
 ### `doqqy map`
 
@@ -196,7 +199,7 @@ from doqqy.workspace import Workspace
 from doqqy.ingest import ingest_directory
 from doqqy.chunk import chunk_directory
 from doqqy.embed import build_index
-from doqqy.query import search
+from doqqy.query import expand_context, search
 from doqqy.map_gen import generate_map
 from doqqy.index_gen import generate_index
 from doqqy.wikilink_inject import inject_links
@@ -212,6 +215,12 @@ hits = search(ws, "JWT refresh flow", k=5, rerank=True, tag="erp12")
 for h in hits:                              # list[SearchHit]
     print(f"{h.score:.3f}  {h.source}  {' > '.join(h.section_path)}")
     print(h.content[:200])
+
+import contextlib
+from doqqy.infra.vectorstore.factory import make_store
+with contextlib.closing(make_store(ws)) as store:
+    expanded = expand_context(store, hits[0], n=1)  # ExpandedContext(before, hit, after)
+    print(str(expanded))                            # joined with a visible separator
 
 generate_map(ws, cosine_threshold=0.8, top_n=3)  # → .doqqy/topics.yaml
 generate_index(ws)                          # → processed/INDEX.md
