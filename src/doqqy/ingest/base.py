@@ -13,6 +13,16 @@ from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.ingest.base")
 
+# Sanitize edilen/düşürülen klasör adları dosya başına değil, klasör başına
+# loglanır — aksi halde 500 dosyalık bir "smart farming" klasörü ingest
+# progress bar'ının ortasına 500 aynı satır basar.
+_LOGGED_TAG_SOURCES: set[str] = set()
+
+
+def reset_tag_log_state() -> None:
+    """Klasör başına tek log garantisini yeni bir ingest çalışması için sıfırla."""
+    _LOGGED_TAG_SOURCES.clear()
+
 
 @dataclass
 class Document:
@@ -88,11 +98,15 @@ def base_metadata(source: Path, project_root: Path, kind: str) -> dict[str, Any]
     tags: list[str] = []
     for raw_tag in raw_tags:
         sanitized = sanitize_tag(raw_tag)
+        first_time = raw_tag not in _LOGGED_TAG_SOURCES
         if sanitized is None:
-            _LOG.warning("%s: klasör adı %r geçerli bir tag üretmedi, atlandı.", rel, raw_tag)
+            if first_time:
+                _LOGGED_TAG_SOURCES.add(raw_tag)
+                _LOG.warning("klasör adı %r geçerli bir tag üretmedi, atlandı (ilk görülen: %s).", raw_tag, rel)
             continue
-        if sanitized != raw_tag:
-            _LOG.info("%s: tag %r -> %r olarak temizlendi.", rel, raw_tag, sanitized)
+        if sanitized != raw_tag and first_time:
+            _LOGGED_TAG_SOURCES.add(raw_tag)
+            _LOG.info("tag %r -> %r olarak temizlendi (ilk görülen: %s).", raw_tag, sanitized, rel)
         tags.append(sanitized)
 
     return {

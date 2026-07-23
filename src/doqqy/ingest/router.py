@@ -8,7 +8,7 @@ from typing import Any, Callable
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import SUPPORTED_EXTENSIONS, file_log, get_logger
-from doqqy.ingest.base import Document, IngestError, IngestResult
+from doqqy.ingest.base import Document, IngestError, IngestResult, reset_tag_log_state
 from doqqy.ingest.csv_ingest import ingest_csv
 from doqqy.ingest.docx_ingest import ingest_docx
 from doqqy.ingest.html_ingest import ingest_html
@@ -66,6 +66,8 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
         files = files[:limit]
 
     result = IngestResult()
+    # Tag temizleme logları klasör başına tek satır — her çalışma kendi state'iyle başlar.
+    reset_tag_log_state()
     with file_log("doqqy.ingest", ws.logs_dir / "ingest.log"), Progress(
         SpinnerColumn(),
         TextColumn("[bold cyan]ingest[/bold cyan]"),
