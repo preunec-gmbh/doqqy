@@ -147,6 +147,7 @@ def embed(
 def query(
     text: str = typer.Argument(..., help="Sorgu metni."),
     k: int = typer.Option(DEFAULT_TOP_K, "--top-k", "-k", help="Kaç sonuç döndürülecek."),
+    context: int = typer.Option(0, "--context", "-c", help="Kaç bağlam satırı gösterilecek."),
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
@@ -175,6 +176,12 @@ def query(
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
+
+    if context > 0:
+        from doqqy.infra.vectorstore.factory import make_store
+        from doqqy.query import expand_context
+        with contextlib.closing(make_store(ws, settings)) as store:
+            hits = [expand_context(store, hit, context) for hit in hits]
 
     console.print(Panel(f'[bold]"{text}"[/bold] için {len(hits)} sonuç', border_style="cyan"))
 
