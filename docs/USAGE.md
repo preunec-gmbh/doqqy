@@ -86,6 +86,32 @@ doqqy embed
 $env:DOQQY_DEVICE = "cpu"; doqqy embed    # force CPU
 ```
 
+### `doqqy sync`
+
+Incremental update pipeline: ingests, chunks, and embeds only added or modified raw files, and cleans up deleted documents.
+
+```powershell
+doqqy sync            # incremental update
+doqqy sync --dry-run  # preview changes without modifying vector store or manifest
+```
+
+### `doqqy status`
+
+Displays manifest status breakdown, total document/chunk counts, and pending disk changes.
+
+```powershell
+doqqy status
+```
+
+### `doqqy watch`
+
+Monitors `raw/` for changes and automatically runs `doqqy sync` when files are modified, added, or deleted.
+
+```powershell
+doqqy watch
+doqqy watch --debounce 3.0  # wait 3 seconds after last change before syncing
+```
+
 ### `doqqy query`
 
 Hybrid search: dense + sparse retrieval (50 candidates each) → RRF fusion → cross-encoder rerank → top-k.

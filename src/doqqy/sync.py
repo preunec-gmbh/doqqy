@@ -28,6 +28,7 @@ from doqqy.workspace import Workspace
 
 if TYPE_CHECKING:
     from doqqy.infra.settings import Settings
+    from doqqy.infra.vectorstore.base import ChunkRecord
 
 _LOG = get_logger("doqqy.sync")
 
@@ -157,7 +158,8 @@ def _process_changed(
 
                 doc_id = _doc_id(source_path, ws)
                 tags = doc.metadata.get("tags", [])
-                content_hash = doc.metadata.get("content_hash", "")
+                from doqqy.manifest import _read_content_hash
+                content_hash = _read_content_hash(source_path, ws) or ""
                 doc_chunks.append((doc_id, content_hash, tags, chunks))
 
                 is_new = str(source_path) in added_set
@@ -171,7 +173,7 @@ def _process_changed(
                 _LOG.exception("Failed to process %s: %s", source_path, exc)
                 report.failed.append((doc_id, f"{type(exc).__name__}: {exc}"))
                 manifest.update_entry(doc_id, ManifestEntry(
-                    source=str(source_path),
+                    source=doc_id,
                     content_hash="",
                     status="failed",
                 ))
@@ -193,6 +195,7 @@ def _process_changed(
 
     # Build ChunkRecords and group by doc.
     doc_records: dict[int, list[ChunkRecord]] = {}
+    all_new_records: list[ChunkRecord] = []
     for i, chunk in enumerate(all_chunks):
         sparse_vec = {int(k): float(v) for k, v in json.loads(sparse_jsons[i]).items()}
         rec = ChunkRecord(
@@ -211,15 +214,18 @@ def _process_changed(
         )
         doc_idx = chunk_doc_map[i]
         doc_records.setdefault(doc_idx, []).append(rec)
+        all_new_records.append(rec)
 
     # Upsert into the store: delete old chunks, insert new ones.
+    modified_or_added_doc_ids: set[str] = set()
     with contextlib.closing(make_store(ws, settings)) as store:
-        for idx, (doc_id, content_hash, tags, chunks) in enumerate(doc_chunks):
+        for idx, (doc_id, content_hash, tags, _chunks) in enumerate(doc_chunks):
             records = doc_records.get(idx, [])
             if not records:
                 continue
-            store.delete_by_doc(chunks[0].doc_id)
+            store.delete_by_doc(doc_id)
             store.upsert(records)
+            modified_or_added_doc_ids.add(doc_id)
 
             now = datetime.now(timezone.utc).isoformat(timespec="seconds")
             manifest.update_entry(doc_id, ManifestEntry(
@@ -231,6 +237,9 @@ def _process_changed(
                 indexed_at=now,
             ))
 
+    # Keep chunks.parquet synchronized if it exists.
+    _update_chunks_parquet(ws, all_new_records, modified_or_added_doc_ids)
+
 
 def _process_deletions(
     ws: Workspace,
@@ -239,24 +248,72 @@ def _process_deletions(
     report: SyncReport,
     settings: Settings | None,
 ) -> None:
-    """Remove deleted documents from the store and manifest."""
+    """Remove deleted documents from the store, processed files, and manifest."""
     from doqqy.infra.vectorstore.factory import make_store
+    from doqqy.ingest.base import processed_path_for
 
     with contextlib.closing(make_store(ws, settings)) as store:
         for doc_id in deleted_doc_ids:
             try:
                 store.delete_by_doc(doc_id)
 
-                # Remove corresponding processed file if it exists.
-                processed = ws.processed_dir / Path(doc_id).relative_to("raw") if doc_id.startswith("raw/") else None
-                if processed and processed.with_suffix(".md").exists():
-                    processed.with_suffix(".md").unlink()
+                source_path = ws.root / doc_id
+                processed = processed_path_for(source_path, ws)
+                if processed.exists():
+                    processed.unlink()
 
                 manifest.remove_entry(doc_id)
                 report.deleted += 1
             except Exception as exc:  # noqa: BLE001
                 _LOG.exception("Failed to delete %s: %s", doc_id, exc)
                 report.failed.append((doc_id, f"{type(exc).__name__}: {exc}"))
+
+    _update_chunks_parquet(ws, new_records=[], removed_doc_ids=set(deleted_doc_ids))
+
+
+def _update_chunks_parquet(
+    ws: Workspace,
+    new_records: list[ChunkRecord],
+    removed_doc_ids: set[str],
+) -> None:
+    """Keep ws.chunks_parquet synchronized with vector store changes."""
+    if not ws.chunks_parquet.exists():
+        return
+
+    try:
+        import pandas as pd
+
+        existing_df = pd.read_parquet(ws.chunks_parquet)
+        if "doc_id" in existing_df.columns and removed_doc_ids:
+            filtered_df = existing_df[~existing_df["doc_id"].isin(removed_doc_ids)].copy()
+        else:
+            filtered_df = existing_df
+
+        if new_records:
+            rows = [
+                {
+                    "chunk_id": r.chunk_id,
+                    "doc_id": r.doc_id,
+                    "source": r.source,
+                    "doc_type": r.doc_type,
+                    "tags": r.tags,
+                    "content": r.content,
+                    "section_path": r.section_path,
+                    "char_count": r.char_count,
+                    "prev_chunk": r.prev_chunk,
+                    "next_chunk": r.next_chunk,
+                }
+                for r in new_records
+            ]
+            new_df = pd.DataFrame(rows)
+            combined_df = pd.concat([filtered_df, new_df], ignore_index=True)
+        else:
+            combined_df = filtered_df
+
+        combined_df.to_parquet(ws.chunks_parquet, index=False)
+        _LOG.debug("Updated %s with %d rows.", ws.chunks_parquet, len(combined_df))
+    except Exception as exc:  # noqa: BLE001
+        _LOG.warning("Failed to update %s: %s", ws.chunks_parquet, exc)
 
 
 # ---------------------------------------------------------------------------

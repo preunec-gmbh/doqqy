@@ -521,10 +521,11 @@ def info() -> None:
     else:
         table.add_row("chunks/", "[yellow](boş — `doqqy chunk` çalıştır)[/yellow]")
 
-    if ws.store_dir.exists():
-        table.add_row("store.lance", f"[green]mevcut[/green] ({ws.store_dir})")
-    else:
-        table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
+    if ws.manifest_path.exists():
+        from doqqy.manifest import Manifest
+        m = Manifest.load(ws)
+        tot = m.totals()
+        table.add_row("manifest.json", f"[green]{tot['docs']} docs, {tot['chunks']} chunks[/green]")
 
     console.print(table)
 

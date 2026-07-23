@@ -30,10 +30,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
-import frontmatter
-
 from doqqy.config import SUPPORTED_EXTENSIONS, get_logger
-from doqqy.ingest.base import content_hash as compute_content_hash
 from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.manifest")
@@ -235,27 +232,12 @@ def _doc_id_from_source(source_path: Path, ws: Workspace) -> str:
         return source_path.name
 
 
-def _read_content_hash(source_path: Path, ws: Workspace) -> str | None:
-    """Read the content_hash from the corresponding processed file's frontmatter.
+def _read_content_hash(source_path: Path, ws: Workspace | None = None) -> str | None:
+    """Compute content_hash directly from raw source file bytes."""
+    import hashlib
 
-    Falls back to computing the hash from the raw file if the processed
-    file doesn't exist or lacks a content_hash field.
-    """
-    from doqqy.ingest.base import processed_path_for
-
-    processed = processed_path_for(source_path, ws)
-    if processed.exists():
-        try:
-            post = frontmatter.load(str(processed))
-            stored_hash = post.metadata.get("content_hash")
-            if stored_hash:
-                return str(stored_hash)
-        except Exception:  # noqa: BLE001
-            pass
-
-    # Fallback: compute hash directly from raw source content.
     try:
-        raw_content = source_path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
+        data = source_path.read_bytes()
+    except OSError:
         return None
-    return compute_content_hash(raw_content)
+    return hashlib.sha256(data).hexdigest()[:16]

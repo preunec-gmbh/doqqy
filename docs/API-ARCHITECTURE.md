@@ -337,21 +337,20 @@ Service-level exceptions (`WorkspaceNotFound`, `WorkspaceNotIndexed`, `QuotaExce
 {
   "version": 1,
   "docs": {
-    "processed/erp12/api.md": {
+    "raw/erp12/api.pdf": {
       "source": "raw/erp12/api.pdf",
       "content_hash": "a1b2c3d4e5f60718",
       "tags": ["erp12"],
-      "chunks": 34,
+      "chunk_count": 34,
       "status": "indexed",              // ingested | chunked | indexed | failed
       "indexed_at": "2026-07-03T10:00:00Z"
     }
   },
-  "tags": ["erp12", "billing"],
-  "totals": {"docs": 128, "chunks": 4102, "store_bytes": 91234567}
+  "totals": {"docs": 128, "chunks": 4102}
 }
 ```
 
-Written atomically (`tmp file + os.replace`). This is also the Phase-2 incremental-indexing substrate — the API work and the incremental work share it.
+Written atomically (`tmp file + os.replace`). This serves as the incremental-indexing substrate for `doqqy sync` and `doqqy watch`.
 
 ---
 
