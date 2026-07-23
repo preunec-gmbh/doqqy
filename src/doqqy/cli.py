@@ -177,12 +177,6 @@ def query(
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
 
-    if context > 0:
-        from doqqy.infra.vectorstore.factory import make_store
-        from doqqy.query import expand_context
-        with contextlib.closing(make_store(ws, settings)) as store:
-            hits = [expand_context(store, hit, context) for hit in hits]
-
     console.print(Panel(f'[bold]"{text}"[/bold] için {len(hits)} sonuç', border_style="cyan"))
 
     expanded = None
