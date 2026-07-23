@@ -33,6 +33,7 @@ doqqy query "invoice refund flow" --top-k 10
 doqqy query "refund process" --tag erp12     # search only the erp12 folder
 doqqy tags                                   # which tags exist?
 doqqy info                                   # pipeline state overview
+doqqy mcp                                    # start stdio MCP server for AI agents
 ```
 
 The first `doqqy embed` downloads ~2 GB of models from HuggingFace (one-time; cached afterwards). Everything after that runs fully offline.
@@ -107,13 +108,14 @@ Phases 1–5 complete. Shipped features:
 - ✅ Wikilink injection: `topics.yaml` → `[[links]]` in `processed/*.md` (idempotent, `doqqy inject`)
 - ✅ Multi-corpus / tag filtering: automatic tags from `raw/` folder structure; isolated search via `doqqy query --tag` and `doqqy map --tag`
 - ✅ Typer CLI with Rich UI: `ingest`, `chunk`, `embed`, `map`, `index`, `query`, `inject`, `tags`, `info`
+- ✅ MCP server (`doqqy mcp`): stdio integration for AI agents (Claude Code, Cursor, Windsurf, ...) exposing `doqqy_query`, `doqqy_tags`, and `doqqy_info` tools
 
 ## Roadmap (prioritized)
 
 1. 🎯 **Vector-store adapter port + Qdrant backend** — pluggable `VectorStore` interface; LanceDB stays the zero-daemon local default, Qdrant becomes the server/SaaS backend (native sparse vectors, server-side RRF fusion, payload multitenancy). Design: [docs/VECTOR-STORE-ADAPTERS.md](docs/VECTOR-STORE-ADAPTERS.md)
 2. `doqqy serve` — resident-model local API (queries go from ~30 s cold start to <1 s)
 3. Incremental indexing (`doqqy sync` / `doqqy watch`) — only reprocess changed files
-4. MCP server — expose search to AI agents (Claude Code, IDEs)
+4. ✅ **MCP server (`doqqy mcp`)** — expose search, tags, and info to AI agents (Claude Code, IDEs) over stdio
 5. Multi-tenant REST API — the SaaS-able cut. Blueprint: [docs/API-ARCHITECTURE.md](docs/API-ARCHITECTURE.md)
 
 Full analysis and sequencing: [docs/ROADMAP.md](docs/ROADMAP.md).

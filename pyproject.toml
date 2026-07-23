@@ -53,6 +53,10 @@ dev = [
 ocr = [
     "easyocr>=1.7.0",
 ]
+mcp = [
+    "mcp>=1.0.0",
+]
+
 # PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
 # pymupdf4llm yalnızca docling boş/hatalı döndüğünde devreye giriyor.
 # Opsiyonel tutuluyor çünkü PyMuPDF AGPL-3.0 / Artifex ticari ikili lisanslı —
@@ -66,11 +70,13 @@ doqqy = "doqqy.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["doqqy*"]
 
 [tool.setuptools.package-data]
 "doqqy" = ["py.typed"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 markers = [
     "slow: marks integration tests that are slower to run",
 ]

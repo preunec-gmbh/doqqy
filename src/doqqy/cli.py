@@ -150,6 +150,7 @@ def query(
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
+    min_score: float = typer.Option(0.0, "--min-score", "-m", help="Minimum rerank skoru eşiği (varsayılan: 0.0)."),
     backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
@@ -163,6 +164,13 @@ def query(
     except InvalidTagError as e:
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
         raise typer.Exit(code=1) from e
+
+    if min_score > 0.0:
+        hits = [
+            hit
+            for hit in hits
+            if (hit.extra.get("rerank_score") or 0.0) >= min_score
+        ]
 
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
@@ -372,6 +380,21 @@ def _count_files(root: Path, suffix: str | None = None) -> int:
         for p in root.rglob("*")
         if p.is_file() and (suffix is None or p.suffix.lower() == suffix)
     )
+
+
+@app.command()
+def mcp() -> None:
+    """Yapay zeka ajanı entegrasyonu için stdio MCP sunucusunu başlatır."""
+    try:
+        from doqqy.mcp_server import run_mcp_server
+    except ImportError as e:
+        err_console.print(
+            "[bold red]Hata:[/bold red] MCP paketi bulunamadı. "
+            "Lütfen 'pip install -e \".[mcp]\"' çalıştırın."
+        )
+        raise typer.Exit(code=1) from e
+
+    run_mcp_server()
 
 
 if __name__ == "__main__":
