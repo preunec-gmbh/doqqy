@@ -151,7 +151,7 @@ def query(
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
     min_score: float = typer.Option(0.0, "--min-score", "-m", help="Minimum rerank skoru eşiği (varsayılan: 0.0)."),
-    backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
+    backend: Optional[str] = typer.Option(None, "--backend", help="Kullanılacak vektör veritabanı backend'i (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.infra.settings import Settings
