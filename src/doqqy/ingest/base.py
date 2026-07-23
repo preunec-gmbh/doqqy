@@ -8,7 +8,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from doqqy.config import get_logger, sanitize_tag
 from doqqy.workspace import Workspace
+
+_LOG = get_logger("doqqy.ingest.base")
+
+# Sanitize edilen/düşürülen klasör adları dosya başına değil, klasör başına
+# loglanır — aksi halde 500 dosyalık bir "smart farming" klasörü ingest
+# progress bar'ının ortasına 500 aynı satır basar.
+_LOGGED_TAG_SOURCES: set[str] = set()
+
+
+def reset_tag_log_state() -> None:
+    """Klasör başına tek log garantisini yeni bir ingest çalışması için sıfırla."""
+    _LOGGED_TAG_SOURCES.clear()
 
 
 @dataclass
@@ -80,7 +93,21 @@ def base_metadata(source: Path, project_root: Path, kind: str) -> dict[str, Any]
         parts = parts[1:]
 
     # Son parça dosya adı, onu atıyoruz. Kalanlar klasör isimleri (tag'ler)
-    tags = parts[:-1] if len(parts) > 1 else []
+    raw_tags = parts[:-1] if len(parts) > 1 else []
+
+    tags: list[str] = []
+    for raw_tag in raw_tags:
+        sanitized = sanitize_tag(raw_tag)
+        first_time = raw_tag not in _LOGGED_TAG_SOURCES
+        if sanitized is None:
+            if first_time:
+                _LOGGED_TAG_SOURCES.add(raw_tag)
+                _LOG.warning("klasör adı %r geçerli bir tag üretmedi, atlandı (ilk görülen: %s).", raw_tag, rel)
+            continue
+        if sanitized != raw_tag and first_time:
+            _LOGGED_TAG_SOURCES.add(raw_tag)
+            _LOG.info("tag %r -> %r olarak temizlendi (ilk görülen: %s).", raw_tag, sanitized, rel)
+        tags.append(sanitized)
 
     return {
         "source": str(rel).replace("\\", "/"),

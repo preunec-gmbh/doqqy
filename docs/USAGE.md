@@ -256,6 +256,8 @@ df = tbl.search().where("tags_str LIKE '%,erp12,%'").limit(100).to_pandas()
 
 **`tags` shows nothing / tag filter returns nothing** — tags are captured at **ingest** time from the folder structure and stored at **embed** time. If you restructured `raw/`, re-run ingest → chunk → embed. Also note tags are exact folder names (case-sensitive) and must match the pattern `^[\w-]+\Z` (Unicode letters including Turkish, digits, underscores, or hyphens). Tag values not matching this pattern will be rejected with an `InvalidTagError` before any store query is issued.
 
+**Folder name with spaces/punctuation produces an unexpected tag** — `--tag` only accepts values matching `^[\w-]+\Z`, so at **ingest** time `base_metadata()` sanitizes each folder name into a conforming tag via `config.sanitize_tag()`: whitespace becomes `-`, and any other disallowed character (quotes, commas, etc.) is stripped. `raw/smart farming/x.md` → tag `smart-farming`; `raw/bulut'lar/x.md` → tag `bulutlar`. If a folder name has no conforming characters left after stripping (e.g. `raw/!!!/x.md`), the tag is dropped entirely and a warning is logged to `.doqqy/logs/ingest.log`. Sanitization is idempotent, so re-running ingest on an already-sanitized tree is stable. Run `doqqy tags` to see the tag a given folder actually produced. If you embedded a corpus **before** this sanitization was added, `doqqy tags` flags any stored tag that doesn't match `TAG_PATTERN` as unfilterable — re-run ingest → chunk → embed to fix it.
+
 **Out-of-memory during embed** — batch size is already small (4). Lower `EMBEDDING_BATCH_SIZE` in `config.py`, or set `DOQQY_DEVICE=cpu` (GPU VRAM is usually the constraint).
 
 **Where are the logs?** — `.doqqy/logs/` (`ingest.log` for ingest failures).

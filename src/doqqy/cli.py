@@ -7,6 +7,7 @@ Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
 from __future__ import annotations
 
 import contextlib
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,7 @@ from doqqy.config import (
     MAP_COSINE_THRESHOLD,
     MAP_TOP_N_NEIGHBORS,
     OCR_ENABLED,
+    TAG_PATTERN,
 )
 from doqqy.infra.vectorstore.base import InvalidTagError
 from doqqy.workspace import Workspace
@@ -342,12 +344,33 @@ def tags(
     if not all_tags:
         console.print("[yellow]Gösterilecek tag bulunamadı.[/yellow]")
     else:
+        invalid = [t for t in all_tags if not re.match(TAG_PATTERN, t)]
+
         table_view = Table(title=f"Bulunan Tag'ler ({len(all_tags)} adet)", box=box.ROUNDED)
         table_view.add_column("Tag", style="cyan")
+        table_view.add_column("Durum")
         for t in sorted(all_tags):
-            table_view.add_row(t)
+            if re.match(TAG_PATTERN, t):
+                table_view.add_row(t, "")
+            else:
+                table_view.add_row(t, "[red]⚠ --tag ile filtrelenemez[/red]")
         console.print(table_view)
-        console.print(f"\n[dim]Örnek: doqqy query \"sorgu\" --tag {sorted(all_tags)[0]}[/dim]")
+
+        valid_tags = [t for t in all_tags if t not in invalid]
+        if valid_tags:
+            console.print(f"\n[dim]Örnek: doqqy query \"sorgu\" --tag {sorted(valid_tags)[0]}[/dim]")
+
+        if invalid:
+            console.print(
+                Panel(
+                    f"[yellow]{len(invalid)} tag TAG_PATTERN ({TAG_PATTERN!r}) ile uyuşmuyor ve "
+                    "--tag ile filtrelenemez. Bunlar tag sanitizasyonundan önce ingest edilmiş "
+                    "eski (legacy) kayıtlardır — düzeltmek için ingest → chunk → embed "
+                    "adımlarını yeniden çalıştırın.[/yellow]",
+                    title="[bold yellow]Uyarı: geçersiz tag'ler bulundu[/bold yellow]",
+                    border_style="yellow",
+                )
+            )
 
 
 @app.command()
