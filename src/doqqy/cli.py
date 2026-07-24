@@ -147,16 +147,14 @@ def embed(
 def query(
     text: str = typer.Argument(..., help="Sorgu metni."),
     k: int = typer.Option(DEFAULT_TOP_K, "--top-k", "-k", help="Kaç sonuç döndürülecek."),
-    context: int = typer.Option(0, "--context", "-c", help="Kaç bağlam satırı gösterilecek."),
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
-    min_score: float = typer.Option(0.0, "--min-score", "-m", help="Minimum rerank skoru eşiği (varsayılan: 0.0)."),
     backend: Optional[str] = typer.Option(None, "--backend", help="Kullanılacak vektör veritabanı backend'i (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.infra.settings import Settings
-    from doqqy.query import expand_context, search
+    from doqqy.query import search
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
@@ -166,25 +164,11 @@ def query(
         err_console.print(f"[bold red]Hata: {e}[/bold red]")
         raise typer.Exit(code=1) from e
 
-    if min_score > 0.0:
-        hits = [
-            hit
-            for hit in hits
-            if (hit.extra.get("rerank_score") or 0.0) >= min_score
-        ]
-
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
         raise typer.Exit(code=1)
 
     console.print(Panel(f'[bold]"{text}"[/bold] için {len(hits)} sonuç', border_style="cyan"))
-
-    expanded = None
-    if context > 0:
-        from doqqy.infra.vectorstore.factory import make_store
-
-        with contextlib.closing(make_store(ws, settings)) as store:
-            expanded = [expand_context(store, hit, context) for hit in hits]
 
     for i, hit in enumerate(hits, 1):
         path = " > ".join(hit.section_path) if hit.section_path else "(başlıksız)"
@@ -203,13 +187,6 @@ def query(
         body = hit.content if full else hit.content[:400].rstrip()
         ellipsis = f"\n[dim]… ({len(hit.content) - 400} karakter daha)[/dim]" if not full and len(hit.content) > 400 else ""
         body = f"{body}{ellipsis}"
-
-        if expanded is not None:
-            exp = expanded[i - 1]
-            segments = [f"[dim italic]{c}[/dim italic]" for c in exp.before]
-            segments.append(body)
-            segments.extend(f"[dim italic]{c}[/dim italic]" for c in exp.after)
-            body = "\n\n[dim]— · —[/dim]\n\n".join(segments)
 
         console.print(
             Panel(

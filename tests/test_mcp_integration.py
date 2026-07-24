@@ -7,6 +7,10 @@ import sys
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("mcp")
+pytest.importorskip("pytest_asyncio")
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 

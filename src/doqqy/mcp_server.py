@@ -2,7 +2,7 @@
 Yapay zeka ajanları için stdio taşıyıcısı üzerinden sorgu, etiket ve bilgi araçlarını sunar.
 """
 
-import json
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +28,7 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
         NOTE FOR AGENTS:
         - Results returned are verbatim excerpts directly from local source files.
         - `tag` filters results by document tag. Use `doqqy_tags()` first to discover valid tags.
+        - Note: Backend selection uses the default vector store store (no --backend equivalent in MCP tools).
 
         Args:
             q: Semantic or lexical search query string.
@@ -42,7 +43,7 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
             from doqqy.query import search
 
             hits = search(ws, query=q, k=top_k, rerank=rerank, tag=tag)
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             return {"error": f"Arama yapılırken hata oluştu: {e}"}
 
         if not hits:
@@ -50,16 +51,13 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
 
         results = []
         for h in hits:
-            if isinstance(h, dict):
-                content = h.get("content", "")
-                source = h.get("source", "Bilinmiyor")
-                section = h.get("section_path", "Kök")
-                score = h.get("score", "N/A")
-            else:
-                content = getattr(h, "content", "")
-                source = getattr(h, "source", "Bilinmiyor")
-                section = getattr(h, "section_path", "Kök")
-                score = getattr(h, "score", "N/A")
+            content = getattr(h, "content", "")
+            source = getattr(h, "source", "Bilinmiyor")
+            sec_path = getattr(h, "section_path", [])
+            section = " > ".join(sec_path) if sec_path else "Kök"
+            score = getattr(h, "score", None)
+            if score is None and hasattr(h, "extra"):
+                score = h.extra.get("rerank_score") or h.extra.get("rrf_score", "N/A")
 
             results.append(
                 {
@@ -74,42 +72,52 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
 
     @mcp.tool()
     def doqqy_tags() -> dict[str, Any]:
-        """List all document tags and their usage counts in the workspace.
+        """List all document tags available in the vector store.
 
         Returns:
-            Dictionary containing tags and their counts, or an error message.
+            Dictionary containing tags list and count, or an error message.
         """
-        manifest_path = ws.manifest_path
-
-        if not manifest_path.exists():
-            return {"tags": {}, "count": 0}
-
         try:
-            with manifest_path.open(encoding="utf-8") as f:
-                data = json.load(f)
+            from doqqy.infra.vectorstore.factory import make_store
 
-            tag_counts: dict[str, int] = {}
-            docs = data.get("documents", {})
-            for doc_info in docs.values():
-                for t in doc_info.get("tags", []):
-                    tag_counts[t] = tag_counts.get(t, 0) + 1
+            with contextlib.closing(make_store(ws)) as store:
+                all_tags = store.list_tags()
 
-            return {"tags": tag_counts, "count": len(tag_counts)}
-        except Exception as e: # noqa: BLE001
-            return {"error": f"Etiket manifesti okunurken hata oluştu: {e}"}
+            return {"tags": sorted(list(all_tags)), "count": len(all_tags)}
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"Etiketler listelenirken hata oluştu: {e}"}
 
     @mcp.tool()
     def doqqy_info() -> dict[str, Any]:
-        """Get workspace directory structure and status information.
+        """Get workspace summary status including file counts and store state.
 
         Returns:
-            Dictionary containing workspace directory paths.
+            Dictionary containing workspace status metrics.
         """
+        raw_count = (
+            sum(1 for p in ws.raw_dir.rglob("*") if p.is_file())
+            if ws.raw_dir.exists()
+            else 0
+        )
+        proc_count = (
+            sum(
+                1
+                for p in ws.processed_dir.rglob("*.md")
+                if p.is_file()
+            )
+            if ws.processed_dir.exists()
+            else 0
+        )
+
+        chunks_exist = ws.chunks_parquet.exists()
+        store_exist = ws.store_dir.exists()
+
         return {
             "root": str(ws.root),
-            "processed_dir": str(ws.processed_dir),
-            "state_dir": str(ws.state_dir),
-            "manifest_path": str(ws.manifest_path),
+            "raw_files_count": raw_count,
+            "processed_files_count": proc_count,
+            "chunks_parquet_exists": chunks_exist,
+            "vector_store_exists": store_exist,
         }
 
     return mcp
@@ -126,6 +134,7 @@ def run_mcp_server(root_dir: Path | None = None) -> None:
 
         traceback.print_exc()
         raise
+
 
 if __name__ == "__main__":
     run_mcp_server()
