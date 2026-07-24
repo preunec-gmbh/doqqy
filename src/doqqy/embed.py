@@ -7,7 +7,8 @@ import json
 from typing import TYPE_CHECKING, Iterator
 
 if TYPE_CHECKING:
-    from doqqy.infra.settings import Settings  # Settings sadece tip kontrolü için import ediliyor
+    from doqqy.infra.settings import Settings
+    from doqqy.infra.vectorstore.base import ChunkRecord
 
 import numpy as np
 import pandas as pd
@@ -155,5 +156,37 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
     with contextlib.closing(make_store(ws, settings)) as store:
         n = store.full_rebuild(records, dim=EMBEDDING_DIM)
 
+    # Save baseline manifest so subsequent `doqqy sync` calls have state to diff against.
+    _save_manifest_from_records(ws, records)
+
     _LOG.info("Vector store updated with %d records.", n)
     return n
+
+
+def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> None:
+    from datetime import datetime, timezone
+
+    from doqqy.manifest import Manifest, ManifestEntry, read_content_hash
+
+    manifest = Manifest()
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    doc_groups: dict[str, list[ChunkRecord]] = {}
+    for r in records:
+        doc_groups.setdefault(r.doc_id, []).append(r)
+
+    for doc_id, recs in doc_groups.items():
+        source_path = ws.root / doc_id if (ws.root / doc_id).exists() else ws.raw_dir / doc_id
+        chash = read_content_hash(source_path) or ""
+        manifest.update_entry(
+            doc_id,
+            ManifestEntry(
+                source=doc_id,
+                content_hash=chash,
+                tags=recs[0].tags,
+                chunk_count=len(recs),
+                status="indexed",
+                indexed_at=now,
+            ),
+        )
+    manifest.save(ws)

@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterator
 
 # Ingest scope — MVP: sadece dokümantasyon dosyaları, kod örnekleri hariç.
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".docx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"})
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
+    {".md", ".markdown", ".pdf", ".docx", ".pptx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"}
+)
 OCR_ENABLED: bool = False       # OCR varsayılan olarak kapalıdır (yavaş çalışır)
 
 # Chunking
@@ -35,6 +38,22 @@ RRF_K: int = 60            # Reciprocal Rank Fusion k parametresi
 
 # Tag validation — Unicode \w covers ASCII, Turkish letters, digits, and underscore
 TAG_PATTERN: str = r"^[\w-]+\Z"
+
+
+def sanitize_tag(raw: str) -> str | None:
+    """Bir klasör adını TAG_PATTERN'e uyan bir tag'e dönüştürür (ingest-side slugify).
+
+    Boşluklar '-' ile değiştirilir; TAG_PATTERN dışındaki karakterler (tırnak,
+    virgül, vb.) tamamen atılır. Sonuç boşsa (örn. klasör adı yalnızca
+    sembollerden oluşuyorsa) tag tamamen düşürülür ve None döner.
+
+    Zaten TAG_PATTERN'e uyan bir girdi değişmeden döner — sanitize_tag idempotent'tir,
+    yani zaten temizlenmiş bir çıktı üzerinde tekrar çalıştırmak sonucu değiştirmez.
+    """
+    slug = re.sub(r"\s+", "-", raw.strip())
+    slug = re.sub(r"[^\w-]", "", slug)
+    slug = slug.strip("-")
+    return slug or None
 
 # Reranker
 RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
