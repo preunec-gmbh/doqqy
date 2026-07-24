@@ -166,7 +166,7 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> None:
     from datetime import datetime, timezone
 
-    from doqqy.manifest import Manifest, ManifestEntry, _read_content_hash
+    from doqqy.manifest import Manifest, ManifestEntry, read_content_hash
 
     manifest = Manifest()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -177,7 +177,7 @@ def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> No
 
     for doc_id, recs in doc_groups.items():
         source_path = ws.root / doc_id if (ws.root / doc_id).exists() else ws.raw_dir / doc_id
-        chash = _read_content_hash(source_path, ws) or ""
+        chash = read_content_hash(source_path) or ""
         manifest.update_entry(
             doc_id,
             ManifestEntry(

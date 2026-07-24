@@ -53,6 +53,11 @@ dev = [
 ocr = [
     "easyocr>=1.7.0",
 ]
+# `doqqy watch` dosya sistemi izleyicisi. Opsiyonel tutuluyor çünkü pipeline'ın
+# geri kalanı buna ihtiyaç duymuyor; komut eksikse anlamlı bir hata veriyor.
+watch = [
+    "watchfiles>=0.21",
+]
 # PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
 # pymupdf4llm yalnızca docling boş/hatalı döndüğünde devreye giriyor.
 # Opsiyonel tutuluyor çünkü PyMuPDF AGPL-3.0 / Artifex ticari ikili lisanslı —

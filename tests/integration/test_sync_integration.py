@@ -1,10 +1,19 @@
-"""Integration test for doqqy sync (end-to-end embed -> sync handoff)."""
+"""Integration test for doqqy sync (end-to-end embed -> sync handoff).
+
+Deliberately **not** marked `slow`: this is the regression guard for the
+doc_id / content_hash handoff between embed and sync, so it has to run in the
+fast CI lane.  To stay there it stubs out the two embedding helpers — the
+vectors themselves are irrelevant here, while the real ingest, real chunking,
+and real vector store are exactly what the test exists to exercise.
+"""
 
 from __future__ import annotations
 
 import contextlib
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from doqqy.chunk import chunk_file
@@ -24,7 +33,20 @@ def temp_ws(tmp_path: Path) -> Workspace:
     return ws
 
 
-def test_embed_sync_roundtrip(temp_ws: Workspace) -> None:
+@pytest.fixture
+def stub_embeddings():
+    """Replace bge-m3 with zero vectors so the fast lane never downloads ~2 GB."""
+
+    def fake_embed(_model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
+        dense = np.zeros((len(texts), EMBEDDING_DIM), dtype=np.float32)
+        return dense, ['{"1": 0.5}'] * len(texts)
+
+    with patch("doqqy.sync._load_embed_model", return_value=MagicMock()), \
+         patch("doqqy.sync._embed_texts", side_effect=fake_embed):
+        yield
+
+
+def test_embed_sync_roundtrip(temp_ws: Workspace, stub_embeddings: None) -> None:
     # 1. Create initial raw files
     raw1 = temp_ws.raw_dir / "doc1.md"
     raw1.write_text("# Document One\n\nInitial content for document one.", encoding="utf-8")
@@ -45,7 +67,6 @@ def test_embed_sync_roundtrip(temp_ws: Workspace) -> None:
     assert len(chunks2) > 0
 
     # Build initial ChunkRecords (dummy vectors for test speed)
-    import numpy as np
     records: list[ChunkRecord] = []
     for c in chunks1 + chunks2:
         records.append(
@@ -112,3 +133,64 @@ def test_embed_sync_roundtrip(temp_ws: Workspace) -> None:
     manifest4 = Manifest.load(temp_ws)
     assert "raw/doc2.md" not in manifest4.docs
     assert len(manifest4.docs) == 2  # doc1.md and doc3.md remain
+
+    # The store must agree with the manifest: doc2's chunks are really gone.
+    with contextlib.closing(make_store(temp_ws)) as store:
+        assert store.count() == sum(e.chunk_count for e in manifest4.docs.values())
+
+
+def test_sync_bootstraps_store_without_prior_embed(temp_ws: Workspace, stub_embeddings: None) -> None:
+    """`doqqy sync` on a corpus that never ran `doqqy embed` must build a usable table.
+
+    The first batch is deliberately degenerate — a doc directly in raw/ (no tags)
+    whose single chunk has no prev_chunk. Inferring the schema from it would type
+    those columns list<null>/null and break every later upsert.
+    """
+    (temp_ws.raw_dir / "solo.md").write_text("# Solo\n\nOnly document.", encoding="utf-8")
+
+    report = sync(temp_ws)
+    assert report.added == 1
+    assert not report.has_failures
+
+    # A tagged document arriving later must merge into that table, not blow up.
+    tagged = temp_ws.raw_dir / "erp12" / "api.md"
+    tagged.parent.mkdir(parents=True, exist_ok=True)
+    tagged.write_text("# API\n\nTagged document body.", encoding="utf-8")
+
+    report2 = sync(temp_ws)
+    assert report2.added == 1
+    assert not report2.has_failures
+
+    with contextlib.closing(make_store(temp_ws)) as store:
+        assert store.count() == 2
+        assert store.list_tags() == ["erp12"]
+
+
+def test_sync_records_documents_that_produce_no_chunks(temp_ws: Workspace, stub_embeddings: None) -> None:
+    """An empty document still gets a manifest entry, or it re-syncs forever."""
+    empty = temp_ws.raw_dir / "empty.md"
+    empty.write_text("", encoding="utf-8")
+
+    report = sync(temp_ws)
+    assert report.added == 1
+
+    entry = Manifest.load(temp_ws).get("raw/empty.md")
+    assert entry is not None
+    assert entry.chunk_count == 0
+
+    # Second run sees nothing to do — this is the regression being guarded.
+    report2 = sync(temp_ws)
+    assert report2.total_processed == 0
+    assert report2.unchanged == 1
+
+
+def test_sync_dry_run_creates_no_directories(tmp_path: Path) -> None:
+    """--dry-run must not touch the filesystem."""
+    ws = Workspace(tmp_path)
+    (tmp_path / "raw").mkdir()
+    (tmp_path / "raw" / "doc.md").write_text("# Doc\n\nBody.", encoding="utf-8")
+
+    report = sync(ws, dry_run=True)
+    assert report.added == 1
+    assert not ws.state_dir.exists()
+    assert not ws.processed_dir.exists()

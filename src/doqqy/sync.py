@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,7 +75,10 @@ def sync(
     -------
     SyncReport with counts of added/modified/deleted/unchanged documents.
     """
-    ws.ensure_dirs()
+    # A dry run must not touch the filesystem — only create directories when
+    # we are actually going to write into them.
+    if not dry_run:
+        ws.ensure_dirs()
 
     manifest = Manifest.load(ws)
     diff = manifest.diff(ws)
@@ -131,11 +136,16 @@ def _process_changed(
     from doqqy.infra.vectorstore.base import ChunkRecord
     from doqqy.infra.vectorstore.factory import make_store
     from doqqy.ingest import ingest_file
+    from doqqy.manifest import read_content_hash
 
     added_set = set(str(p) for p in diff.added)
 
     # Collect all chunks that need embedding.
-    doc_chunks: list[tuple[str, str, list[str], list[Chunk]]] = []  # (doc_id, source_str, tags, chunks)
+    doc_chunks: list[tuple[str, str, list[str], list[Chunk]]] = []  # (doc_id, content_hash, tags, chunks)
+    # Documents that ingested cleanly but produced zero chunks (empty file, blank
+    # spreadsheet, …).  They still get a manifest entry with chunk_count=0 —
+    # otherwise the diff would classify them as changed on every single run.
+    empty_docs: list[tuple[str, str, list[str]]] = []  # (doc_id, content_hash, tags)
 
     with Progress(
         SpinnerColumn(),
@@ -151,16 +161,16 @@ def _process_changed(
                 doc = ingest_file(source_path, ws)
                 doc.write()
 
-                chunks = chunk_file(doc.processed_path, ws)
-                if not chunks:
-                    _LOG.warning("No chunks produced for %s — skipping.", source_path)
-                    continue
-
                 doc_id = _doc_id(source_path, ws)
                 tags = doc.metadata.get("tags", [])
-                from doqqy.manifest import _read_content_hash
-                content_hash = _read_content_hash(source_path, ws) or ""
-                doc_chunks.append((doc_id, content_hash, tags, chunks))
+                content_hash = read_content_hash(source_path) or ""
+
+                chunks = chunk_file(doc.processed_path, ws)
+                if chunks:
+                    doc_chunks.append((doc_id, content_hash, tags, chunks))
+                else:
+                    _LOG.warning("No chunks produced for %s — recording an empty entry.", source_path)
+                    empty_docs.append((doc_id, content_hash, tags))
 
                 is_new = str(source_path) in added_set
                 if is_new:
@@ -177,6 +187,23 @@ def _process_changed(
                     content_hash="",
                     status="failed",
                 ))
+
+    # A document that used to have chunks and no longer does must lose its old
+    # chunks from the store, or they would linger as orphans.
+    if empty_docs:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with contextlib.closing(make_store(ws, settings)) as store:
+            for doc_id, content_hash, tags in empty_docs:
+                store.delete_by_doc(doc_id)
+                manifest.update_entry(doc_id, ManifestEntry(
+                    source=doc_id,
+                    content_hash=content_hash,
+                    tags=tags,
+                    chunk_count=0,
+                    status="indexed",
+                    indexed_at=now,
+                ))
+        _update_chunks_parquet(ws, new_records=[], removed_doc_ids={d[0] for d in empty_docs})
 
     if not doc_chunks:
         return
@@ -310,7 +337,22 @@ def _update_chunks_parquet(
         else:
             combined_df = filtered_df
 
-        combined_df.to_parquet(ws.chunks_parquet, index=False)
+        # Atomic, same as the manifest: a crash mid-write must not be able to
+        # leave a truncated parquet behind, because the previous file is the
+        # only copy of the chunk table.
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(ws.chunks_parquet.parent), prefix=".chunks_", suffix=".tmp"
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            combined_df.to_parquet(tmp_path, index=False)
+            os.replace(tmp_path, ws.chunks_parquet)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                tmp_path.unlink()
+            raise
+
         _LOG.debug("Updated %s with %d rows.", ws.chunks_parquet, len(combined_df))
     except Exception as exc:  # noqa: BLE001
         _LOG.warning("Failed to update %s: %s", ws.chunks_parquet, exc)

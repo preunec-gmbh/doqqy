@@ -95,6 +95,10 @@ doqqy sync            # incremental update
 doqqy sync --dry-run  # preview changes without modifying vector store or manifest
 ```
 
+Change detection hashes the **raw** file's bytes. Editing a file under `raw/` is picked up; re-running `sync` after only upgrading an ingester is not, because the raw bytes are unchanged — use `doqqy embed` for a full rebuild in that case.
+
+Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
+
 ### `doqqy status`
 
 Displays manifest status breakdown, total document/chunk counts, and pending disk changes.
@@ -105,11 +109,13 @@ doqqy status
 
 ### `doqqy watch`
 
-Monitors `raw/` for changes and automatically runs `doqqy sync` when files are modified, added, or deleted.
+Monitors `raw/` for changes and automatically runs `doqqy sync` when files are modified, added, or deleted. Requires the optional `watch` extra:
 
 ```powershell
+pip install -e ".[watch]"
+
 doqqy watch
-doqqy watch --debounce 3.0  # wait 3 seconds after last change before syncing
+doqqy watch --debounce 3.0  # wait 3 seconds after the last change before syncing
 ```
 
 ### `doqqy query`

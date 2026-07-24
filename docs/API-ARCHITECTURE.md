@@ -342,15 +342,21 @@ Service-level exceptions (`WorkspaceNotFound`, `WorkspaceNotIndexed`, `QuotaExce
       "content_hash": "a1b2c3d4e5f60718",
       "tags": ["erp12"],
       "chunk_count": 34,
-      "status": "indexed",              // ingested | chunked | indexed | failed
+      "status": "indexed",              // indexed | failed today;
+                                        // ingested | chunked reserved for staged commands
       "indexed_at": "2026-07-03T10:00:00Z"
     }
   },
+  "tags": ["erp12", "billing"],         // PLANNED — not yet written (see #16)
   "totals": {"docs": 128, "chunks": 4102}
 }
 ```
 
 Written atomically (`tmp file + os.replace`). This serves as the incremental-indexing substrate for `doqqy sync` and `doqqy watch`.
+
+`content_hash` here is the **raw source bytes** hash — deliberately not the frontmatter `content_hash`, which covers the transformed markdown body. See `Manifest.diff`.
+
+Two pieces of §4 are still open on #16: the top-level `tags` aggregate, and the `doqqy tags` fast path that would consume it. Until both land, `doqqy tags` keeps scanning the store. When they do, the fast path must live **above** the `VectorStore` port (backend-agnostic, so Qdrant benefits equally) and must fall back to a store scan whenever the manifest is missing *or* lacks the `tags` aggregate — never silently return `[]`.
 
 ---
 

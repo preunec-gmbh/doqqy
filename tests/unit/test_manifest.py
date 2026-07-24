@@ -123,9 +123,9 @@ def test_diff_unchanged_files(temp_ws: Workspace) -> None:
     raw_file = temp_ws.raw_dir / "doc.md"
     raw_file.write_text("# Document\n\nContent.", encoding="utf-8")
 
-    from doqqy.manifest import _read_content_hash
+    from doqqy.manifest import read_content_hash
     doc_id = str(raw_file.relative_to(temp_ws.root)).replace("\\", "/")
-    current_hash = _read_content_hash(raw_file) or ""
+    current_hash = read_content_hash(raw_file) or ""
 
     manifest = Manifest()
     manifest.update_entry(doc_id, ManifestEntry(source=doc_id, content_hash=current_hash))

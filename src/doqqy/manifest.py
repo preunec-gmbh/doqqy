@@ -23,6 +23,8 @@ Schema (.doqqy/manifest.json):
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import os
 import tempfile
@@ -37,6 +39,11 @@ _LOG = get_logger("doqqy.manifest")
 
 _MANIFEST_VERSION = 1
 
+# `doqqy sync` only ever persists "indexed" or "failed": the manifest is saved
+# once, after the store writes have landed, which is what makes an interrupted
+# run self-healing. "ingested" and "chunked" are reserved for the staged
+# `ingest --changed` / `chunk --changed` commands still open on #16 — until
+# those exist nothing emits them, and `doqqy status` simply won't show them.
 Status = Literal["ingested", "chunked", "indexed", "failed"]
 
 
@@ -160,7 +167,7 @@ class Manifest:
             os.replace(tmp_path, str(path))
         except BaseException:
             # Clean up the temp file on any error (including KeyboardInterrupt).
-            with _suppress_os_error():
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
             raise
 
@@ -174,9 +181,13 @@ class Manifest:
     def diff(self, ws: Workspace) -> DiffResult:
         """Compare on-disk state against this manifest to find what changed.
 
-        The diff uses the *processed/* directory to read content_hash from
-        frontmatter.  If a processed file is missing for a raw source, the
-        source is treated as **added** (needs full ingest→chunk→embed).
+        Change detection hashes the **raw source bytes** (see read_content_hash)
+        and compares against the hash the manifest recorded on the last run.
+        Deliberately not the frontmatter ``content_hash``: that one covers the
+        *transformed* markdown, which sync only rewrites after it has already
+        decided a document changed — so reading it here could never detect an
+        edit.  The trade-off is that an ingester upgrade which changes the
+        processed output for identical raw bytes is invisible to the diff.
         """
         result = DiffResult()
 
@@ -195,7 +206,7 @@ class Manifest:
                 result.added.append(source_path)
                 continue
 
-            current_hash = _read_content_hash(source_path, ws)
+            current_hash = read_content_hash(source_path)
             if current_hash is None or current_hash != existing.content_hash:
                 result.modified.append(source_path)
             else:
@@ -210,18 +221,8 @@ class Manifest:
 
 
 # ------------------------------------------------------------------
-# Module-private helpers
+# Helpers
 # ------------------------------------------------------------------
-
-
-class _suppress_os_error:
-    """Tiny context manager that swallows OSError (e.g. file-already-deleted)."""
-
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:  # noqa: ANN001
-        return exc_type is not None and issubclass(exc_type, OSError)
 
 
 def _doc_id_from_source(source_path: Path, ws: Workspace) -> str:
@@ -232,10 +233,12 @@ def _doc_id_from_source(source_path: Path, ws: Workspace) -> str:
         return source_path.name
 
 
-def _read_content_hash(source_path: Path, ws: Workspace | None = None) -> str | None:
-    """Compute content_hash directly from raw source file bytes."""
-    import hashlib
+def read_content_hash(source_path: Path) -> str | None:
+    """Hash the raw source file's bytes. None if it cannot be read.
 
+    Note this is a *different* value from the ``content_hash`` in processed
+    frontmatter, which hashes the transformed markdown body — see Manifest.diff.
+    """
     try:
         data = source_path.read_bytes()
     except OSError:

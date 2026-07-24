@@ -351,7 +351,8 @@ def sync(
     settings = Settings(vector_backend=backend) if backend else None
     report = run_sync(ws, settings=settings, dry_run=dry_run)
 
-    prefix = "[dry-run] " if dry_run else ""
+    # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
+    prefix = r"\[dry-run] " if dry_run else ""
     if report.has_failures:
         console.print(
             Panel(
@@ -454,15 +455,13 @@ def watch(
         2.0, "--debounce", help="Seconds to wait after last change before syncing."
     ),
 ) -> None:
-    """Watch raw/ for changes and auto-sync (requires watchfiles)."""
-    import time
-
+    """Watch raw/ for changes and auto-sync (requires the `watch` extra)."""
     try:
         from watchfiles import watch as watchfiles_watch  # type: ignore
     except ImportError as e:
         err_console.print(
             "[red]watchfiles is required for doqqy watch. "
-            "Install it: pip install watchfiles[/red]"
+            "Install it: pip install 'doqqy[watch]'[/red]"
         )
         raise typer.Exit(code=1) from e
 
@@ -482,9 +481,10 @@ def watch(
     )
 
     try:
-        for _changes in watchfiles_watch(ws.raw_dir):
-            # Debounce: wait for writes to finish (e.g. bulk file copy).
-            time.sleep(debounce)
+        # watchfiles debounces internally (milliseconds) and only yields once the
+        # burst has settled — sleeping after the yield would just let edits made
+        # during the sleep queue up and trigger a second, redundant sync.
+        for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
             console.print("[dim]Change detected — syncing…[/dim]")
             report = run_sync(ws, settings=settings)
             if report.total_processed > 0:
@@ -521,11 +521,18 @@ def info() -> None:
     else:
         table.add_row("chunks/", "[yellow](boş — `doqqy chunk` çalıştır)[/yellow]")
 
+    if ws.store_dir.exists():
+        table.add_row("store.lance", f"[green]mevcut[/green] ({ws.store_dir})")
+    else:
+        table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
+
     if ws.manifest_path.exists():
         from doqqy.manifest import Manifest
         m = Manifest.load(ws)
         tot = m.totals()
-        table.add_row("manifest.json", f"[green]{tot['docs']} docs, {tot['chunks']} chunks[/green]")
+        table.add_row("manifest.json", f"[green]{tot['docs']} doküman, {tot['chunks']} chunk[/green]")
+    else:
+        table.add_row("manifest.json", "[yellow](boş — `doqqy embed` ya da `doqqy sync` çalıştır)[/yellow]")
 
     console.print(table)
 
