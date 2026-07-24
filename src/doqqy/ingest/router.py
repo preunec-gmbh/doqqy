@@ -14,6 +14,7 @@ from doqqy.ingest.docx_ingest import ingest_docx
 from doqqy.ingest.html_ingest import ingest_html
 from doqqy.ingest.md_ingest import ingest_md, ingest_txt
 from doqqy.ingest.pdf_ingest import ingest_pdf
+from doqqy.ingest.pptx_ingest import ingest_pptx
 from doqqy.ingest.xlsx_ingest import ingest_xlsx
 from doqqy.ingest.xml_ingest import ingest_xml
 from doqqy.workspace import Workspace
@@ -27,6 +28,7 @@ _DISPATCH: dict[str, Callable[..., Document]] = {
     ".txt": ingest_txt,
     ".pdf": ingest_pdf,
     ".docx": ingest_docx,
+    ".pptx": ingest_pptx,
     ".xml": ingest_xml,
     ".xlsx": ingest_xlsx,
     ".csv": ingest_csv,
