@@ -152,12 +152,11 @@ def query(
     full: bool = typer.Option(False, "--full", help="Chunk içeriğini tamamen göster."),
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
-    context: int = typer.Option(0, "--context", "-c", help="Her sonuca komşu chunk'ları N adım ekle (prev/next zinciri)."),
-    backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
+    backend: Optional[str] = typer.Option(None, "--backend", help="Kullanılacak vektör veritabanı backend'i (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.infra.settings import Settings
-    from doqqy.query import expand_context, search
+    from doqqy.query import search
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
@@ -172,13 +171,6 @@ def query(
         raise typer.Exit(code=1)
 
     console.print(Panel(f'[bold]"{text}"[/bold] için {len(hits)} sonuç', border_style="cyan"))
-
-    expanded = None
-    if context > 0:
-        from doqqy.infra.vectorstore.factory import make_store
-
-        with contextlib.closing(make_store(ws, settings)) as store:
-            expanded = [expand_context(store, hit, context) for hit in hits]
 
     for i, hit in enumerate(hits, 1):
         path = " > ".join(hit.section_path) if hit.section_path else "(başlıksız)"
@@ -197,13 +189,6 @@ def query(
         body = hit.content if full else hit.content[:400].rstrip()
         ellipsis = f"\n[dim]… ({len(hit.content) - 400} karakter daha)[/dim]" if not full and len(hit.content) > 400 else ""
         body = f"{body}{ellipsis}"
-
-        if expanded is not None:
-            exp = expanded[i - 1]
-            segments = [f"[dim italic]{c}[/dim italic]" for c in exp.before]
-            segments.append(body)
-            segments.extend(f"[dim italic]{c}[/dim italic]" for c in exp.after)
-            body = "\n\n[dim]— · —[/dim]\n\n".join(segments)
 
         console.print(
             Panel(
@@ -584,6 +569,21 @@ def _count_files(root: Path, suffix: str | None = None) -> int:
         for p in root.rglob("*")
         if p.is_file() and (suffix is None or p.suffix.lower() == suffix)
     )
+
+
+@app.command()
+def mcp() -> None:
+    """Yapay zeka ajanı entegrasyonu için stdio MCP sunucusunu başlatır."""
+    try:
+        from doqqy.mcp_server import run_mcp_server
+    except ImportError as e:
+        err_console.print(
+            "[bold red]Hata:[/bold red] MCP paketi bulunamadı. "
+            "Lütfen 'pip install -e \".[mcp]\"' çalıştırın."
+        )
+        raise typer.Exit(code=1) from e
+
+    run_mcp_server()
 
 
 if __name__ == "__main__":

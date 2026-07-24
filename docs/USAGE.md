@@ -20,6 +20,9 @@ pip install -e ".[ocr]"
 # stays permissive without it.
 pip install -e ".[pdf-fallback]"
 
+# Optional: MCP server dependencies for AI agent integration
+pip install -e ".[mcp]"
+
 doqqy --help
 ```
 
@@ -182,6 +185,14 @@ Pipeline state overview: file counts in `raw/` and `processed/`, chunk count, st
 doqqy info
 ```
 
+### `doqqy mcp`
+
+Start the stdio Model Context Protocol (MCP) server to expose search and corpus inspection tools directly to AI agents (Claude Code, Cursor, Windsurf, Claude Desktop).
+
+```powershell
+doqqy mcp
+```
+
 ## 4. Typical workflows
 
 ### Fresh corpus, end to end
@@ -293,3 +304,37 @@ df = tbl.search().where("tags_str LIKE '%,erp12,%'").limit(100).to_pandas()
 **Out-of-memory during embed** — batch size is already small (4). Lower `EMBEDDING_BATCH_SIZE` in `config.py`, or set `DOQQY_DEVICE=cpu` (GPU VRAM is usually the constraint).
 
 **Where are the logs?** — `.doqqy/logs/` (`ingest.log` for ingest failures).
+
+
+## 7. MCP Server (AI Agent Integration)
+
+`doqqy` includes a built-in Model Context Protocol (MCP) server over `stdio`, enabling AI agents to search your local document store directly.
+
+### Tools Exposed to Agents
+* **`doqqy_query(q, top_k=5, tag=None, rerank=True)`**: Searches local indexed documents using hybrid retrieval and cross-encoder reranking.
+* **`doqqy_tags()`**: Lists all available document tags/folders in the store.
+* **`doqqy_info()`**: Summarizes current workspace state and indexed file counts.
+
+### Connecting to Claude Code CLI
+Run this command **from your corpus directory**:
+
+```bash
+claude mcp add doqqy -- doqqy mcp
+```
+
+### Manual Configuration (e.g., `claude_desktop_config.json` / Cursor / Windsurf)
+
+Add the following to your MCP client configuration file:
+
+```json
+{
+  "mcpServers": {
+    "doqqy": {
+      "command": "doqqy",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+> **Important:** Ensure the agent process or working directory is set to your corpus folder so `doqqy mcp` can locate `.doqqy/` and `processed/`.
