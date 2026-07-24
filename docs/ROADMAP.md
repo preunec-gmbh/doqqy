@@ -201,7 +201,7 @@ The no-LLM query path stays. That's the differentiator: *"your documents never l
 | 7 | **Retrieval eval harness** | M | A `tests/eval/` set of (query, expected-doc) pairs + recall@k / MRR script — otherwise threshold/model changes (0.75 cosine, RRF k=60) are vibes-based. Also the backend-parity gate for LanceDB vs Qdrant |
 | 8 | **Web UI** | M | Local FastAPI + single-page search UI over the API from Phase 3; also the SaaS front-end seed |
 | 9 | **Dedup by `content_hash`** | S | Same doc in two folders currently embeds twice; hash is already computed |
-| 10 | **PPTX ingester** | S | Recipe documented in the handover; docling natively handles PPTX; (HTML, XLSX, CSV, and XML ingesters are completed) |
+| 10 | ~~**PPTX ingester**~~ | S | **Done.** `pptx_ingest.py` — docling primary, python-pptx fallback; (HTML, XLSX, CSV, XML, and PPTX ingesters are completed) |
 | 11 | **ColBERT reranking leg** | L | bge-m3 can emit ColBERT vectors (`return_colbert_vecs`) — a third retrieval signal; only worth it after the eval harness exists to prove it |
 
 (The former "sparse-search scalability via custom inverted index" item is dropped — the Qdrant adapter solves it properly; the LanceDB backend keeps the current scan, acceptable for local corpus sizes.)
