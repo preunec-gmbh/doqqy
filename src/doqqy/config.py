@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 # Ingest scope — MVP: sadece dokümantasyon dosyaları, kod örnekleri hariç.
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".pdf", ".docx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"})
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
+    {".md", ".markdown", ".pdf", ".docx", ".pptx", ".txt", ".xml", ".xlsx", ".csv", ".html", ".htm"}
+)
 OCR_ENABLED: bool = False       # OCR varsayılan olarak kapalıdır (yavaş çalışır)
 
 # Chunking
