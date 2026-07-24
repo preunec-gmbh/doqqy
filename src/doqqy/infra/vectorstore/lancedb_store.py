@@ -159,15 +159,30 @@ class LanceDBStore(VectorStore):
             })
 
         df = pd.DataFrame(data)
+        self._store_dir.mkdir(parents=True, exist_ok=True)
         db = lancedb.connect(self._store_dir)
 
         if LANCE_TABLE not in db.list_tables().tables:
-            db.create_table(LANCE_TABLE, data=df, mode="overwrite")
+            # Bootstrap path: `doqqy sync` on a corpus that never ran `doqqy embed`.
+            # The schema has to be explicit. Inferring it from this first batch
+            # bakes in whatever that batch happens to look like: a doc sitting
+            # directly in raw/ has no tags and a single chunk has no prev_chunk,
+            # so pyarrow types those columns list<null> and null — and every
+            # later upsert carrying real values dies inside LanceDB's merge_insert.
+            db.create_table(LANCE_TABLE, data=df, schema=_build_schema(self._infer_dim(records)), mode="overwrite")
         else:
             table = db.open_table(LANCE_TABLE)
             table.merge_insert(on="chunk_id").when_matched_update_all().when_not_matched_insert_all().execute(df)
 
         return len(records)
+
+    @staticmethod
+    def _infer_dim(records: Sequence[ChunkRecord]) -> int:
+        """Dense vector dimension of *records*, for bootstrapping an empty table."""
+        for rec in records:
+            if rec.dense is not None:
+                return int(np.asarray(rec.dense).shape[-1])
+        raise ValueError("Cannot create the table: no record carries a dense vector.")
 
     def full_rebuild(self, records: Sequence[ChunkRecord], dim: int) -> int:
         """Atomically replace the entire store contents with *records* in a single operation.

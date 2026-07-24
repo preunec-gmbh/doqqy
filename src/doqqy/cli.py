@@ -374,6 +374,171 @@ def tags(
 
 
 @app.command()
+def sync(
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would change without modifying anything."
+    ),
+) -> None:
+    """Incremental pipeline: only re-process changed/new/deleted documents."""
+    from doqqy.infra.settings import Settings
+    from doqqy.sync import sync as run_sync
+
+    ws = _workspace()
+    settings = Settings(vector_backend=backend) if backend else None
+    report = run_sync(ws, settings=settings, dry_run=dry_run)
+
+    # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
+    prefix = r"\[dry-run] " if dry_run else ""
+    if report.has_failures:
+        console.print(
+            Panel(
+                f"{prefix}[green]+{report.added}[/green] added  "
+                f"[yellow]~{report.modified}[/yellow] modified  "
+                f"[red]-{report.deleted}[/red] deleted  "
+                f"[dim]={report.unchanged}[/dim] unchanged  "
+                f"[red]✗{len(report.failed)}[/red] failed",
+                title="[bold yellow]sync completed with errors[/bold yellow]",
+                border_style="yellow",
+            )
+        )
+        for doc_id, err in report.failed[:20]:
+            console.print(f"  [red]✗[/red] {doc_id}: [dim]{err}[/dim]")
+    elif report.total_processed == 0:
+        console.print(
+            Panel(
+                f"{prefix}[dim]Everything up to date ({report.unchanged} documents).[/dim]",
+                title="[bold green]sync[/bold green]",
+                border_style="green",
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"{prefix}[green]+{report.added}[/green] added  "
+                f"[yellow]~{report.modified}[/yellow] modified  "
+                f"[red]-{report.deleted}[/red] deleted  "
+                f"[dim]={report.unchanged}[/dim] unchanged",
+                title="[bold green]sync completed[/bold green]",
+                border_style="green",
+            )
+        )
+
+
+@app.command()
+def status() -> None:
+    """Show document sync status from manifest."""
+    from doqqy.manifest import Manifest
+
+    ws = _workspace()
+    manifest = Manifest.load(ws)
+    docs = manifest.docs
+    totals = manifest.totals()
+
+    if not docs:
+        console.print(
+            Panel(
+                "[yellow]No manifest found. Run [bold]doqqy sync[/bold] or "
+                "[bold]doqqy embed[/bold] first.[/yellow]",
+                title="[bold]status[/bold]",
+                border_style="yellow",
+            )
+        )
+        return
+
+    # Summary table.
+    summary = Table(title="Manifest Summary", box=box.ROUNDED)
+    summary.add_column("Metric", style="bold")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Documents", str(totals["docs"]))
+    summary.add_row("Chunks", str(totals["chunks"]))
+    console.print(summary)
+
+    # Status breakdown.
+    status_counts: dict[str, int] = {}
+    for entry in docs.values():
+        status_counts[entry.status] = status_counts.get(entry.status, 0) + 1
+
+    status_table = Table(title="Status Breakdown", box=box.ROUNDED)
+    status_table.add_column("Status", style="bold")
+    status_table.add_column("Count", justify="right")
+    for s, count in sorted(status_counts.items()):
+        style = {"indexed": "green", "failed": "red", "ingested": "yellow", "chunked": "cyan"}.get(s, "dim")
+        status_table.add_row(f"[{style}]{s}[/{style}]", str(count))
+    console.print(status_table)
+
+    # Pending changes (diff against current disk).
+    diff = manifest.diff(ws)
+    if diff.has_changes:
+        console.print(
+            Panel(
+                f"[green]+{len(diff.added)}[/green] new  "
+                f"[yellow]~{len(diff.modified)}[/yellow] modified  "
+                f"[red]-{len(diff.deleted)}[/red] deleted",
+                title="[bold]Pending changes[/bold] (run [bold cyan]doqqy sync[/bold cyan])",
+                border_style="cyan",
+            )
+        )
+    else:
+        console.print("[dim]Everything up to date.[/dim]")
+
+
+@app.command()
+def watch(
+    backend: Optional[str] = typer.Option(
+        None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
+    ),
+    debounce: float = typer.Option(
+        2.0, "--debounce", help="Seconds to wait after last change before syncing."
+    ),
+) -> None:
+    """Watch raw/ for changes and auto-sync (requires the `watch` extra)."""
+    try:
+        from watchfiles import watch as watchfiles_watch  # type: ignore
+    except ImportError as e:
+        err_console.print(
+            "[red]watchfiles is required for doqqy watch. "
+            "Install it: pip install 'doqqy[watch]'[/red]"
+        )
+        raise typer.Exit(code=1) from e
+
+    from doqqy.infra.settings import Settings
+    from doqqy.sync import sync as run_sync
+
+    ws = _workspace()
+    ws.ensure_dirs()
+    settings = Settings(vector_backend=backend) if backend else None
+
+    console.print(
+        Panel(
+            f"Watching [bold]{ws.raw_dir}[/bold] for changes… (Ctrl+C to stop)",
+            title="[bold cyan]watch[/bold cyan]",
+            border_style="cyan",
+        )
+    )
+
+    try:
+        # watchfiles debounces internally (milliseconds) and only yields once the
+        # burst has settled — sleeping after the yield would just let edits made
+        # during the sleep queue up and trigger a second, redundant sync.
+        for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
+            console.print("[dim]Change detected — syncing…[/dim]")
+            report = run_sync(ws, settings=settings)
+            if report.total_processed > 0:
+                console.print(
+                    f"  [green]+{report.added}[/green] added  "
+                    f"[yellow]~{report.modified}[/yellow] modified  "
+                    f"[red]-{report.deleted}[/red] deleted"
+                )
+            else:
+                console.print("  [dim]No actionable changes.[/dim]")
+    except KeyboardInterrupt:
+        console.print("\n[dim]Watch stopped.[/dim]")
+
+
+@app.command()
 def info() -> None:
     """Mevcut pipeline durumunu özetle."""
     ws = _workspace()
@@ -399,6 +564,14 @@ def info() -> None:
         table.add_row("store.lance", f"[green]mevcut[/green] ({ws.store_dir})")
     else:
         table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
+
+    if ws.manifest_path.exists():
+        from doqqy.manifest import Manifest
+        m = Manifest.load(ws)
+        tot = m.totals()
+        table.add_row("manifest.json", f"[green]{tot['docs']} doküman, {tot['chunks']} chunk[/green]")
+    else:
+        table.add_row("manifest.json", "[yellow](boş — `doqqy embed` ya da `doqqy sync` çalıştır)[/yellow]")
 
     console.print(table)
 

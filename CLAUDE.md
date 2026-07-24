@@ -22,6 +22,9 @@ Pipeline (each stage is an independent, idempotent command — rerun any stage a
 doqqy ingest        # raw/ → processed/ (canonical markdown + YAML frontmatter)
 doqqy chunk         # processed/ → .doqqy/chunks/chunks.parquet
 doqqy embed         # → .doqqy/store.lance/ (LanceDB/Qdrant, dense + sparse vectors) --backend
+doqqy sync          # incremental ingest->chunk->embed for changed/new/deleted raw files (--backend, --dry-run)
+doqqy status        # manifest summary, document/chunk breakdown, and pending disk changes
+doqqy watch         # monitor raw/ for changes and auto-sync in background (--debounce)
 doqqy map           # → .doqqy/topics.yaml (Pass 1 regex + Pass 2 cosine; --backend)
 doqqy index         # .doqqy/topics.yaml → processed/INDEX.md (Obsidian entry point)
 doqqy inject        # inject [[wikilinks]] into processed/*.md (idempotent marker blocks; --dry-run)

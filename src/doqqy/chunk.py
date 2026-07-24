@@ -138,12 +138,20 @@ def chunk_file(md_path: Path, ws: Workspace) -> list[Chunk]:
     fm = post.metadata or {}
     body = post.content
 
-    try:
-        doc_id = str(md_path.relative_to(ws.root)).replace("\\", "/")
-    except ValueError:
-        doc_id = md_path.name
+    source_raw = fm.get("source")
+    if source_raw:
+        doc_id = str(source_raw).replace("\\", "/")
+    else:
+        try:
+            rel = md_path.relative_to(ws.processed_dir)
+            doc_id = str(Path("raw") / rel).replace("\\", "/")
+        except ValueError:
+            try:
+                doc_id = str(md_path.relative_to(ws.root)).replace("\\", "/")
+            except ValueError:
+                doc_id = md_path.name
 
-    source = fm.get("source", doc_id)
+    source = source_raw or doc_id
     doc_type = fm.get("type", "md")
 
     tags_raw = fm.get("tags")
