@@ -49,7 +49,7 @@ llm = [
 ]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.15,<0.16",     # CI ile aynı linter sürümü; minor'a pinli ki yeni kurallar CI'ı kırmasın
+    "ruff>=0.15,<0.17",     # CI ile aynı linter sürümü; minor'a pinli ki yeni kurallar CI'ı kırmasın
 ]
 ocr = [
     "easyocr>=1.7.0",
