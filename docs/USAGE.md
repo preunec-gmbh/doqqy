@@ -323,7 +323,6 @@ claude mcp add doqqy -- doqqy mcp
 ```
 
 ### Manual Configuration (e.g., `claude_desktop_config.json` / Cursor / Windsurf)
-
 Add the following to your MCP client configuration file:
 
 ```json
@@ -335,6 +334,13 @@ Add the following to your MCP client configuration file:
     }
   }
 }
+```
+
+### Running MCP Integration Tests
+Since MCP integration tests require approximately 2 GB of model size and run slowly, they are not executed automatically in standard test suites (pytest) due to the @pytest.mark.slow decorator. You can run these tests manually using the following commands:
+```bash
+pip install -e ".[dev,mcp]"
+pytest -m slow tests/test_mcp_integration.py
 ```
 
 > **Important:** Ensure the agent process or working directory is set to your corpus folder so `doqqy mcp` can locate `.doqqy/` and `processed/`.

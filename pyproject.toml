@@ -54,6 +54,11 @@ dev = [
 ocr = [
     "easyocr>=1.7.0",
 ]
+# `doqqy watch` dosya sistemi izleyicisi. Opsiyonel tutuluyor çünkü pipeline'ın
+# geri kalanı buna ihtiyaç duymuyor; komut eksikse anlamlı bir hata veriyor.
+watch = [
+    "watchfiles>=0.21",
+]
 mcp = [
     "mcp>=1.0.0",
 ]
@@ -69,10 +74,6 @@ pdf-fallback = [
 [project.scripts]
 doqqy = "doqqy.cli:app"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["doqqy*"]
-
 [tool.setuptools.package-data]
 "doqqy" = ["py.typed"]
 
@@ -81,7 +82,7 @@ pythonpath = ["src"]
 markers = [
     "slow: marks integration tests that are slower to run",
 ]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
 
 [tool.ruff]
 target-version = "py310"
