@@ -66,6 +66,9 @@ watch = [
 pdf-fallback = [
     "pymupdf4llm>=0.0.17",
 ]
+qdrant = [
+    "qdrant-client>=1.10",
+]
 
 [project.scripts]
 doqqy = "doqqy.cli:app"
