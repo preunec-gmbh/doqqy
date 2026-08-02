@@ -169,20 +169,169 @@ class QdrantStore(VectorStore):
         _LOG.debug("Deleted %d points for doc_id=%s in collection %s", count_before, doc_id, self.collection)
         return count_before
 
+    def _build_filter(self, flt: TagFilter | None = None):
+        """Construct structured Qdrant filter for tenant and optional tags."""
+        from qdrant_client import models  # type: ignore
+
+        conditions = [
+            models.FieldCondition(key="tenant", match=models.MatchValue(value=self.tenant_key)),
+        ]
+        if flt and flt.tags:
+            for tag in flt.tags:
+                conditions.append(models.FieldCondition(key="tags", match=models.MatchValue(value=tag)))
+        return models.Filter(must=conditions)
+
+    def _to_record(self, point) -> ChunkRecord:
+        """Convert a Qdrant PointStruct/ScoredPoint to ChunkRecord."""
+        payload = point.payload or {}
+        dense_vec = None
+        if hasattr(point, "vector") and point.vector:
+            if isinstance(point.vector, dict) and "dense" in point.vector:
+                dense_vec = np.asarray(point.vector["dense"], dtype=np.float32)
+            elif isinstance(point.vector, list):
+                dense_vec = np.asarray(point.vector, dtype=np.float32)
+
+        return ChunkRecord(
+            chunk_id=str(point.id),
+            doc_id=str(payload.get("doc_id", "")),
+            source=str(payload.get("source", "")),
+            doc_type=str(payload.get("doc_type", "")),
+            tags=list(payload.get("tags", [])),
+            content=str(payload.get("content", "")),
+            section_path=list(payload.get("section_path", [])),
+            char_count=int(payload.get("char_count", 0)),
+            prev_chunk=payload.get("prev_chunk"),
+            next_chunk=payload.get("next_chunk"),
+            dense=dense_vec,
+            sparse=None,
+        )
+
     def hybrid_search(
         self, dense: np.ndarray, sparse: dict[int, float],
         *, limit: int, flt: TagFilter | None = None,
     ) -> list[ScoredChunk]:
-        raise NotImplementedError("QdrantStore phase 3 implementation pending.")
+        """Perform dense + sparse hybrid search with server-side RRF fusion."""
+        from qdrant_client import models  # type: ignore
+
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return []
+
+        qfilter = self._build_filter(flt)
+
+        sparse_indices = list(sparse.keys())
+        sparse_values = [float(v) for v in sparse.values()]
+        sparse_vec = models.SparseVector(indices=sparse_indices, values=sparse_values)
+
+        res = client.query_points(
+            collection_name=self.collection,
+            prefetch=[
+                models.Prefetch(
+                    query=dense.tolist(),
+                    using="dense",
+                    filter=qfilter,
+                    limit=limit,
+                ),
+                models.Prefetch(
+                    query=sparse_vec,
+                    using="sparse",
+                    filter=qfilter,
+                    limit=limit,
+                ),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=limit,
+            with_payload=True,
+        )
+
+        scored_chunks = []
+        for p in res.points:
+            scored_chunks.append(
+                ScoredChunk(
+                    record=self._to_record(p),
+                    fused_score=float(p.score),
+                )
+            )
+        return scored_chunks
 
     def get_by_ids(self, chunk_ids: Sequence[str]) -> list[ChunkRecord]:
-        raise NotImplementedError("QdrantStore phase 3 implementation pending.")
+        """Retrieve chunks by their unique IDs."""
+        if not chunk_ids:
+            return []
+
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return []
+
+        points = client.retrieve(
+            collection_name=self.collection,
+            ids=list(chunk_ids),
+            with_payload=True,
+        )
+
+        records = []
+        for p in points:
+            payload = p.payload or {}
+            if payload.get("tenant") == self.tenant_key:
+                records.append(self._to_record(p))
+        return records
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
-        raise NotImplementedError("QdrantStore phase 3 implementation pending.")
+        """Retrieve all dense vectors as a (N, 1024) matrix along with their records."""
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return np.zeros((0, 1024), dtype=np.float32), []
+
+        qfilter = self._build_filter(flt)
+        all_points = []
+        offset = None
+
+        while True:
+            scroll_res, offset = client.scroll(
+                collection_name=self.collection,
+                scroll_filter=qfilter,
+                with_payload=True,
+                with_vectors=["dense"],
+                limit=256,
+                offset=offset,
+            )
+            all_points.extend(scroll_res)
+            if offset is None:
+                break
+
+        if not all_points:
+            return np.zeros((0, 1024), dtype=np.float32), []
+
+        records = [self._to_record(p) for p in all_points]
+        vecs = np.vstack([r.dense for r in records]).astype(np.float32)
+        return vecs, records
 
     def list_tags(self) -> list[str]:
-        raise NotImplementedError("QdrantStore phase 3 implementation pending.")
+        """List all unique tags present for the current tenant."""
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return []
+
+        qfilter = self._build_filter()
+        all_tags: set[str] = set()
+        offset = None
+
+        while True:
+            scroll_res, offset = client.scroll(
+                collection_name=self.collection,
+                scroll_filter=qfilter,
+                with_payload=["tags"],
+                limit=256,
+                offset=offset,
+            )
+            for p in scroll_res:
+                payload = p.payload or {}
+                for tag in payload.get("tags", []):
+                    all_tags.add(str(tag))
+            if offset is None:
+                break
+
+        return sorted(list(all_tags))
 
     def count(self) -> int:
         """Return the count of points for the current tenant in the collection."""
