@@ -7,7 +7,15 @@
 #
 # doc_id is the file path relative to tests/eval/corpus/raw/.
 # expected_section, where present, is the literal Markdown heading text of
-# the section that contains the answer.
+# the section that contains the answer. Matching contract: a chunk passes
+# if expected_section appears ANYWHERE in that chunk's section_path (i.e.
+# an ancestor-heading match counts), not only as the chunk's own leaf
+# heading. chunk.py splits on H1-H4, so a chunk's leaf heading can be one
+# level deeper than the expected_section value given here (e.g. an H3
+# "Bağlantı Hataları" expected_section matching a chunk whose own leaf
+# heading is the H4 "E-2002: Sertifika Süresi Dolmuş" beneath it) — that is
+# intentional, not a bug, and #15's harness must implement the check this
+# way rather than as literal leaf-string equality.
 # category is one of: exact_term, paraphrase, hard_rerank, tag_filtered,
 # cross_lingual_tr_to_en, cross_lingual_en_to_tr.
 
@@ -195,18 +203,26 @@ queries:
     expected_doc_id: hr/izin/izin-sureci-tr.md
     category: tag_filtered
     reason: >
-      "onay süresi" (approval turnaround) appears in both the invoice
-      cancellation doc and the leave process doc. The hr/izin tag filter
-      must exclude the erp/faturalama match, which otherwise scores well.
+      Both hr/izin/izin-sureci-tr.md ("Yönetici 2 iş günü içinde yanıt
+      vermezse... eskale edilir") and erp/faturalama/fatura-iptal-sureci-tr.md
+      ("Onay bekleyen talepler 48 saat içinde sonuçlandırılmazsa...
+      eskale edilir") describe an approval-turnaround escalation window,
+      even though neither uses the literal phrase "onay süresi". The
+      hr/izin tag filter must exclude the erp/faturalama match, which
+      otherwise scores well on this topical/semantic overlap.
 
-  - query: "en az kaç gün önceden bildirmem gerekiyor"
+  - query: "Mevsimsel ürünler için başlangıç siparişi sezon başlamadan kaç gün önce oluşturuluyor?"
     tag_filter: ["erp"]
-    expected_doc_id: erp/faturalama/fatura-iptal-sureci-tr.md
+    expected_doc_id: erp/stok/minimum-stok-seviyesi-tr.md
+    expected_section: "Mevsimsel Ürünler İstisnası"
     category: tag_filtered
     reason: >
       Tests the parent tag "erp" matching across both its child folders
-      (faturalama and stok) rather than requiring an exact leaf-tag match,
-      while still excluding the lexically-similar hr/izin notice-period doc.
+      (faturalama and stok) rather than requiring an exact leaf-tag match.
+      "mevsimsel ürünler" / "sezon başlangıcından 45 gün önce" is a phrase
+      found only in this document, so the answer is unambiguous within the
+      erp scope even though erp/stok/stok-sayim-tr.md also contains an
+      unrelated "N gün önce" sentence about closing orders before a count.
 
   # ---------------------------------------------------------------------
   # Cross-lingual queries — Turkish query against an English-only document
