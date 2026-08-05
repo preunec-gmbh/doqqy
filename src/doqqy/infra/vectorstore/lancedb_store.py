@@ -247,6 +247,19 @@ class LanceDBStore(VectorStore):
         table.delete(f"doc_id = '{doc_id_escaped}'")
         return count_before - len(table)
 
+    def get_by_doc(self, doc_id: str) -> list[ChunkRecord]:
+        """Retrieve all chunk records belonging to a single document ID."""
+        import lancedb  # type: ignore
+
+        db = lancedb.connect(self._store_dir)
+        if LANCE_TABLE not in db.list_tables().tables:
+            return []
+
+        table = db.open_table(LANCE_TABLE)
+        doc_id_escaped = doc_id.replace("'", "''")
+        rows = table.search().where(f"doc_id = '{doc_id_escaped}'").to_list()
+        return [self._to_record(r) for r in rows]
+
     def _dense_search(self, qvec: np.ndarray, k: int, flt: TagFilter | None = None) -> list[dict]:
         query_builder = self._table().search(qvec).metric("cosine")
 

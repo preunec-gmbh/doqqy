@@ -44,7 +44,9 @@ _MANIFEST_VERSION = 1
 # run self-healing. "ingested" and "chunked" are reserved for the staged
 # `ingest --changed` / `chunk --changed` commands still open on #16 — until
 # those exist nothing emits them, and `doqqy status` simply won't show them.
-Status = Literal["ingested", "chunked", "indexed", "failed"]
+# "aliased" (issue #18) marks a document whose body is a byte-for-byte duplicate
+# of another doc's — its chunks live under the canonical doc_id instead of its own.
+Status = Literal["ingested", "chunked", "indexed", "aliased", "failed"]
 
 
 @dataclass
@@ -57,6 +59,15 @@ class ManifestEntry:
     chunk_count: int = 0
     status: Status = "ingested"
     indexed_at: str | None = None
+    # Hash of the *transformed markdown body* (frontmatter `content_hash`, see
+    # ingest/base.py:content_hash) — distinct from the raw-byte `content_hash`
+    # above. Used only for cross-doc duplicate detection (doqqy.dedup), never
+    # for change detection: unlike the raw hash it is written by the ingester
+    # itself, so it can't tell an edited file from an unedited one.
+    body_hash: str = ""
+    # doc_id of the canonical document this one is a content-identical alias
+    # of (issue #18). None for canonical/non-duplicate documents.
+    alias_of: str | None = None
 
 
 @dataclass
@@ -140,6 +151,8 @@ class Manifest:
                 chunk_count=entry_dict.get("chunk_count", 0),
                 status=entry_dict.get("status", "ingested"),
                 indexed_at=entry_dict.get("indexed_at"),
+                body_hash=entry_dict.get("body_hash", ""),
+                alias_of=entry_dict.get("alias_of"),
             )
 
         _LOG.debug("Manifest loaded: %d docs from %s", len(manifest._docs), path)
@@ -244,3 +257,22 @@ def read_content_hash(source_path: Path) -> str | None:
     except OSError:
         return None
     return hashlib.sha256(data).hexdigest()[:16]
+
+
+def read_body_hash(processed_path: Path) -> str | None:
+    """Read the transformed-markdown ``content_hash`` from a processed file's frontmatter.
+
+    This is the value ingesters write via ``ingest.base.content_hash()`` — the hash of the
+    *canonical markdown body*, not the raw source bytes (see read_content_hash). It is the
+    join key for cross-doc duplicate detection (doqqy.dedup): two docs with the same body
+    hash have byte-identical processed output, regardless of which raw folder they live in.
+    """
+    import frontmatter  # type: ignore
+
+    try:
+        with processed_path.open("r", encoding="utf-8") as fh:
+            post = frontmatter.load(fh)
+    except OSError:
+        return None
+    value = post.metadata.get("content_hash")
+    return str(value) if value else None
