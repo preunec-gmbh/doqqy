@@ -15,15 +15,15 @@ Nova Trading UK Ltd operates two distribution centres: Manchester (primary) and 
 
 ## Transfer Steps
 
-### 1. Transfer Request
+### Transfer Request
 
 A warehouse supervisor raises a transfer request in the ERP system, specifying source, destination, SKU, and quantity. The request is validated against the source warehouse's available (non-reserved) stock.
 
-### 2. Dispatch Confirmation
+### Dispatch Confirmation
 
 Once picked and loaded, the dispatching warehouse confirms the transfer in the system, which immediately deducts the quantity from the source location's available stock, even though it has not yet arrived at the destination.
 
-### 3. Receipt Confirmation
+### Receipt Confirmation
 
 The receiving warehouse scans the incoming pallets and confirms receipt. Only at this point does the stock become available for sale from the destination location. Goods in transit are visible in the system under a distinct "In Transit" status and cannot be sold from either location during that window.
 

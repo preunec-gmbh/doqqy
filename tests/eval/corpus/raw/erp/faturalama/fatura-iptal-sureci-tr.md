@@ -19,11 +19,11 @@ Faturanın iptal edilebilmesi için ilgili faturanın **e-Fatura GİB portalına
 
 ## İptal Adımları
 
-### 1. Talep Oluşturma
+### Talep Oluşturma
 
 Muhasebe personeli, ERP sisteminde ilgili fatura kaydını açar ve "İptal Talebi Oluştur" butonuna basar. Talep formunda iptal gerekçesi zorunlu alan olarak doldurulmalıdır.
 
-### 2. Yetkilendirme
+### Yetkilendirme
 
 İptal talebi, fatura tutarına göre farklı onay mercilerine yönlendirilir:
 
@@ -32,7 +32,7 @@ Muhasebe personeli, ERP sisteminde ilgili fatura kaydını açar ve "İptal Tale
 
 Onay bekleyen talepler 48 saat içinde sonuçlandırılmazsa otomatik olarak muhasebe müdürüne eskale edilir.
 
-### 3. Sistem Kaydının Kapatılması
+### Sistem Kaydının Kapatılması
 
 Onay verildikten sonra ERP sistemi faturayı "İptal Edildi" statüsüne çeker ve ilgili stok hareketlerini geri alır. Bu adım geri alınamaz.
 

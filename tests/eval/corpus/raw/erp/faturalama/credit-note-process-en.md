@@ -15,15 +15,15 @@ Once an invoice has been submitted to HMRC's Making Tax Digital gateway, it can 
 
 ## Issuing Steps
 
-### 1. Link to Original Invoice
+### Link to Original Invoice
 
 The accounts clerk opens the credit note form and selects the original invoice by its reference number. The system pre-fills the line items, which can then be adjusted to reflect the returned quantity.
 
-### 2. Reason Code
+### Reason Code
 
 A reason code is mandatory: `RETURN`, `PRICING_ERROR`, or `GOODWILL`. This code is later used in the monthly returns report reviewed by the Finance Director.
 
-### 3. Submission
+### Submission
 
 The credit note is transmitted to HMRC in the same way as a regular invoice, but with a negative net amount. No further approval is required beyond the reason code selection, since the original invoice was already approved.
 

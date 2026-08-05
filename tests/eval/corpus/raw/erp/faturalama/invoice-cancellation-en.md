@@ -19,11 +19,11 @@ An invoice can only be cancelled while it is still in **draft submission state**
 
 ## Cancellation Steps
 
-### 1. Raising the Request
+### Raising the Request
 
 The accounts clerk opens the invoice record in the ERP system and selects "Request Cancellation". A cancellation reason is a mandatory field on the form.
 
-### 2. Approval Routing
+### Approval Routing
 
 Cancellation requests are routed to different approvers depending on invoice value:
 
@@ -32,7 +32,7 @@ Cancellation requests are routed to different approvers depending on invoice val
 
 Requests left unapproved for more than 48 hours are automatically escalated to the Head of Finance.
 
-### 3. Closing the Record
+### Closing the Record
 
 Once approved, the ERP system marks the invoice as "Cancelled" and reverses the associated stock movements. This step cannot be undone.
 
