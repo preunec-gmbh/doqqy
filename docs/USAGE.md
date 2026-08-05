@@ -53,6 +53,8 @@ my-corpus/
 
 You can maintain any number of separate corpora — each is just a directory. Deleting `.doqqy/` + `processed/` fully resets a corpus; `raw/` is never touched.
 
+**Duplicate documents across folders** — if the exact same file is placed under two different `raw/` subfolders (e.g. `raw/erp12/policy.md` and `raw/legal/policy.md`), doqqy detects it by comparing each doc's processed-markdown `content_hash` (byte-identical bodies only — never fuzzy matching) and embeds it **once**. The alphabetically-first path becomes the canonical document; the other is recorded in the manifest as an alias with no chunks of its own. The canonical document's tags become the **union** of both folders' tags, so `--tag erp12` and `--tag legal` both find it. Run `doqqy info` to see duplicate groups.
+
 ## 3. CLI reference
 
 ### `doqqy ingest`
@@ -176,7 +178,7 @@ doqqy tags
 
 ### `doqqy info`
 
-Pipeline state overview: file counts in `raw/` and `processed/`, chunk count, store presence.
+Pipeline state overview: file counts in `raw/` and `processed/`, chunk count, store presence, and duplicate groups detected by `content_hash` (see [Directory model](#2-directory-model--important)).
 
 ```powershell
 doqqy info
