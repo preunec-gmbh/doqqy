@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Iterator
 if TYPE_CHECKING:
     from doqqy.infra.settings import Settings
     from doqqy.infra.vectorstore.base import ChunkRecord
+    from doqqy.manifest import Manifest
 
 import numpy as np
 import pandas as pd
