@@ -6,17 +6,27 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 from doqqy.workspace import Workspace
+
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError as e:
+    from rich.console import Console
+    err_console = Console(stderr=True)
+    err_console.print(
+        f"[red]Hata: MCP paketi bulunamadı veya yüklenemedi ({e}).[/red]\n"
+        f"Lütfen pip install -e \".\\[mcp]\" komutunu çalıştırın."
+    )
+    raise SystemExit(1) from e
 
 
 def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
     """Belirtilen çalışma alanı için FastMCP sunucu örneğini oluşturur ve yapılandırır."""
     ws = Workspace(root_dir or Path.cwd())
-    mcp = FastMCP("doqqy")
 
-    @mcp.tool()
+    mcp_instance = FastMCP("doqqy")
+
+    @mcp_instance.tool()
     def doqqy_query(
         q: str,
         top_k: int = 5,
@@ -28,7 +38,7 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
         NOTE FOR AGENTS:
         - Results returned are verbatim excerpts directly from local source files.
         - `tag` filters results by document tag. Use `doqqy_tags()` first to discover valid tags.
-        - Note: Backend selection uses the default vector store store (no --backend equivalent in MCP tools).
+        # Backend selection uses the default vector store (no --backend equivalent in MCP tools).
 
         Args:
             q: Semantic or lexical search query string.
@@ -51,26 +61,19 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
 
         results = []
         for h in hits:
-            content = getattr(h, "content", "")
-            source = getattr(h, "source", "Bilinmiyor")
-            sec_path = getattr(h, "section_path", [])
-            section = " > ".join(sec_path) if sec_path else "Kök"
-            score = getattr(h, "score", None)
-            if score is None and hasattr(h, "extra"):
-                score = h.extra.get("rerank_score") or h.extra.get("rrf_score", "N/A")
-
             results.append(
                 {
-                    "content": content,
-                    "source": str(source),
-                    "section_path": section,
-                    "score": score,
+                    "content": h.content,
+                    "source": str(h.source),
+                    "section_path": " > ".join(h.section_path) if h.section_path else "Kök",
+                    "score": h.score,
                 }
             )
 
         return results
 
-    @mcp.tool()
+
+    @mcp_instance.tool()
     def doqqy_tags() -> dict[str, Any]:
         """List all document tags available in the vector store.
 
@@ -83,11 +86,12 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
             with contextlib.closing(make_store(ws)) as store:
                 all_tags = store.list_tags()
 
-            return {"tags": sorted(list(all_tags)), "count": len(all_tags)}
+            return {"tags": sorted(all_tags), "count": len(all_tags)}
         except Exception as e:  # noqa: BLE001
             return {"error": f"Etiketler listelenirken hata oluştu: {e}"}
 
-    @mcp.tool()
+
+    @mcp_instance.tool()
     def doqqy_info() -> dict[str, Any]:
         """Get workspace summary status including file counts and store state.
 
@@ -100,11 +104,7 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
             else 0
         )
         proc_count = (
-            sum(
-                1
-                for p in ws.processed_dir.rglob("*.md")
-                if p.is_file()
-            )
+            sum(1 for p in ws.processed_dir.rglob("*.md") if p.is_file())
             if ws.processed_dir.exists()
             else 0
         )
@@ -112,19 +112,36 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
         chunks_exist = ws.chunks_parquet.exists()
         store_exist = ws.store_dir.exists()
 
+        total_docs = 0
+        total_chunks = 0
+        try:
+            from doqqy.manifest import Manifest
+            manifest = Manifest.load(ws)
+            totals = manifest.totals()
+            total_docs = totals.get("documents", 0)
+            total_chunks = totals.get("chunks", 0)
+        except Exception:  # noqa: BLE001
+            pass
+
         return {
             "root": str(ws.root),
             "raw_files_count": raw_count,
             "processed_files_count": proc_count,
+            "indexed_documents_count": total_docs,
+            "indexed_chunks_count": total_chunks,
             "chunks_parquet_exists": chunks_exist,
             "vector_store_exists": store_exist,
         }
 
-    return mcp
+    return mcp_instance
 
 
 def run_mcp_server(root_dir: Path | None = None) -> None:
     """MCP sunucusunu standart G/Ç (stdio) taşıyıcısı üzerinden çalıştırır."""
+    import doqqy.query  # noqa: F401
+    import doqqy.rerank  # noqa: F401
+    from doqqy.infra.vectorstore import factory  # noqa: F401
+
     server = create_mcp_server(root_dir)
 
     try:

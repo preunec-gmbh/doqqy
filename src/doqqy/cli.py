@@ -587,7 +587,11 @@ def _count_files(root: Path, suffix: str | None = None) -> int:
 
 
 @app.command()
-def mcp() -> None:
+def mcp(
+    root: Optional[Path] = typer.Option(
+        None, "--root", help="Korpus kök dizini (varsayılan: cwd)."
+    ),
+) -> None:
     """Yapay zeka ajanı entegrasyonu için stdio MCP sunucusunu başlatır."""
     try:
         from doqqy.mcp_server import run_mcp_server
@@ -598,7 +602,7 @@ def mcp() -> None:
         )
         raise typer.Exit(code=1) from e
 
-    run_mcp_server()
+    run_mcp_server(root)
 
 
 if __name__ == "__main__":

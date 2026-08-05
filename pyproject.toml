@@ -61,7 +61,8 @@ watch = [
     "watchfiles>=0.21",
 ]
 mcp = [
-    "mcp>=1.0.0",
+    # FastMCP API'si 2.0 sürümünde değiştiği/taşındığı için şimdilik 2.x sürümlerini sınırlandırıyoruz.
+    "mcp>=1.29.0,<2",    
 ]
 
 # PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
@@ -75,11 +76,13 @@ pdf-fallback = [
 [project.scripts]
 doqqy = "doqqy.cli:app"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools.package-data]
 "doqqy" = ["py.typed"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 markers = [
     "slow: marks integration tests that are slower to run",
 ]

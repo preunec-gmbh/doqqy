@@ -99,3 +99,13 @@ async def test_mcp_stdio_handshake_and_query_roundtrip(fixture_workspace: Path):
             assert "source" in hits[0]
             assert "score" in hits[0]
             assert "JWT refresh" in hits[0]["content"]
+
+            # 4. Info Tool Call Roundtrip
+            info_result = await session.call_tool("doqqy_info", arguments={})
+            assert info_result is not None
+            assert info_result.structuredContent is not None
+
+            # doqqy_info'nun döndürdüğü sözlük içindeki anahtarları kontrol et
+            info_data = info_result.structuredContent.get("result", info_result.structuredContent)
+            assert "chunks_parquet_exists" in info_data
+            assert "vector_store_exists" in info_data
