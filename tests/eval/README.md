@@ -32,9 +32,13 @@ The corpus deliberately exercises specific chunker/embedder behavior, not just "
   - invoice cancellation: `erp/faturalama/fatura-iptal-sureci-tr.md` (TRY, Bölge Müdürü/Genel Müdür) vs. `erp/faturalama/invoice-cancellation-en.md` (GBP, Regional Manager/Finance Director)
   - annual leave request: `hr/izin/izin-sureci-tr.md` (3 business days, manager-only approval) vs. `hr/izin/leave-process-en.md` (5 business days, manager + HR approval)
 
+`hr/izin/mesai-politikasi-en.md` (overtime policy, English content despite the Turkish filename) is deliberately filed under `izin` rather than a separate `mesai`/overtime tag folder: it exists specifically as the near-topic distractor for the TOIL-vs-annual-leave-forfeiture `hard_rerank` query in `queries.yaml`, which depends on both documents sharing the `hr`/`izin` tags. Don't take it as the pattern for "which folder does a new HR document go in" — a genuinely new HR topic should get its own tag folder.
+
 ## queries.yaml
 
 Each entry is a `(query, expected_doc_id[, expected_section])` pair plus a `category` and a `reason` explaining what retrieval behavior it targets: exact-term (sparse should win), paraphrase (dense should win), hard/rerank-dependent (a near-duplicate-topic doc competes for top-1), tag-filtered, and cross-lingual (TR query → EN doc or vice versa).
+
+**Section-matching contract**: `expected_section`, where present, must be the literal text of a Markdown heading in the target document — but the harness should treat a chunk as matching if `expected_section` appears *anywhere in that chunk's `section_path`* (an ancestor heading counts), not only as the chunk's own leaf heading. Since `chunk.py` splits on H1–H4, a chunk's own leaf heading can sit one level below the `expected_section` given here (e.g. an H3 `expected_section` matching a chunk whose leaf heading is an H4 beneath it). This is intentional and is spelled out in `queries.yaml`'s header comment — don't "fix" it by making `expected_section` always the leaf.
 
 **The ground truth in this file was written by reading the corpus, never by running `doqqy query` and recording its output.** If you ever regenerate or "fix" an entry by looking at what doqqy currently returns, you've destroyed the point of the harness — a regression that exists today would get baked in as the expected answer and the harness would never be able to catch it again.
 
