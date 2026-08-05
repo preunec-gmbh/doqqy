@@ -157,16 +157,24 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
         n = store.full_rebuild(records, dim=EMBEDDING_DIM)
 
     # Save baseline manifest so subsequent `doqqy sync` calls have state to diff against.
-    _save_manifest_from_records(ws, records)
+    manifest = _build_manifest_from_records(ws, records)
+
+    # Detect content_hash duplicates across doc_ids (issue #18) and alias them
+    # before persisting — a full rebuild embeds every doc fresh, so any pair of
+    # identical files anywhere in raw/ shows up here on the very first pass.
+    from doqqy.dedup import resolve_duplicates
+    resolve_duplicates(ws, manifest, settings)
+
+    manifest.save(ws)
 
     _LOG.info("Vector store updated with %d records.", n)
     return n
 
 
-def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> None:
+def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "Manifest":
     from datetime import datetime, timezone
 
-    from doqqy.manifest import Manifest, ManifestEntry, read_content_hash
+    from doqqy.manifest import Manifest, ManifestEntry, read_body_hash, read_content_hash
 
     manifest = Manifest()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -178,6 +186,8 @@ def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> No
     for doc_id, recs in doc_groups.items():
         source_path = ws.root / doc_id if (ws.root / doc_id).exists() else ws.raw_dir / doc_id
         chash = read_content_hash(source_path) or ""
+        from doqqy.ingest.base import processed_path_for
+        body_hash = read_body_hash(processed_path_for(source_path, ws)) or ""
         manifest.update_entry(
             doc_id,
             ManifestEntry(
@@ -187,6 +197,7 @@ def _save_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> No
                 chunk_count=len(recs),
                 status="indexed",
                 indexed_at=now,
+                body_hash=body_hash,
             ),
         )
-    manifest.save(ws)
+    return manifest

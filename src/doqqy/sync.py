@@ -108,6 +108,15 @@ def sync(
     if diff.deleted:
         _process_deletions(ws, manifest, diff.deleted, report, settings)
 
+    # Detect content_hash duplicates across doc_ids (issue #18): a doc synced just
+    # now may duplicate one embedded in an earlier run, or two changed docs in this
+    # same batch may duplicate each other. Runs over the whole manifest, not just
+    # this batch's docs, so a late-arriving alias still finds its canonical.
+    # A single bad group is isolated inside resolve_duplicates() and surfaces
+    # here instead of aborting the run (§1.4 failure isolation).
+    from doqqy.dedup import resolve_duplicates
+    resolve_duplicates(ws, manifest, settings, failures=report.failed)
+
     # Persist the updated manifest atomically.
     manifest.save(ws)
     _LOG.info(
@@ -141,11 +150,14 @@ def _process_changed(
     added_set = set(str(p) for p in diff.added)
 
     # Collect all chunks that need embedding.
-    doc_chunks: list[tuple[str, str, list[str], list[Chunk]]] = []  # (doc_id, content_hash, tags, chunks)
+    # (doc_id, content_hash, body_hash, tags, chunks) — body_hash is the
+    # frontmatter content_hash (transformed markdown), the join key issue #18
+    # dedup groups on; content_hash stays the raw-byte hash used for diffing.
+    doc_chunks: list[tuple[str, str, str, list[str], list[Chunk]]] = []
     # Documents that ingested cleanly but produced zero chunks (empty file, blank
     # spreadsheet, …).  They still get a manifest entry with chunk_count=0 —
     # otherwise the diff would classify them as changed on every single run.
-    empty_docs: list[tuple[str, str, list[str]]] = []  # (doc_id, content_hash, tags)
+    empty_docs: list[tuple[str, str, str, list[str]]] = []  # (doc_id, content_hash, body_hash, tags)
 
     with Progress(
         SpinnerColumn(),
@@ -164,13 +176,14 @@ def _process_changed(
                 doc_id = _doc_id(source_path, ws)
                 tags = doc.metadata.get("tags", [])
                 content_hash = read_content_hash(source_path) or ""
+                body_hash = doc.metadata.get("content_hash", "") or ""
 
                 chunks = chunk_file(doc.processed_path, ws)
                 if chunks:
-                    doc_chunks.append((doc_id, content_hash, tags, chunks))
+                    doc_chunks.append((doc_id, content_hash, body_hash, tags, chunks))
                 else:
                     _LOG.warning("No chunks produced for %s — recording an empty entry.", source_path)
-                    empty_docs.append((doc_id, content_hash, tags))
+                    empty_docs.append((doc_id, content_hash, body_hash, tags))
 
                 is_new = str(source_path) in added_set
                 if is_new:
@@ -193,7 +206,7 @@ def _process_changed(
     if empty_docs:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         with contextlib.closing(make_store(ws, settings)) as store:
-            for doc_id, content_hash, tags in empty_docs:
+            for doc_id, content_hash, body_hash, tags in empty_docs:
                 store.delete_by_doc(doc_id)
                 manifest.update_entry(doc_id, ManifestEntry(
                     source=doc_id,
@@ -202,6 +215,7 @@ def _process_changed(
                     chunk_count=0,
                     status="indexed",
                     indexed_at=now,
+                    body_hash=body_hash,
                 ))
         _update_chunks_parquet(ws, new_records=[], removed_doc_ids={d[0] for d in empty_docs})
 
@@ -211,7 +225,7 @@ def _process_changed(
     # Embed all chunks in batches.
     all_chunks: list[Chunk] = []
     chunk_doc_map: list[int] = []  # chunk index → doc_chunks index
-    for idx, (_, _, _, chunks) in enumerate(doc_chunks):
+    for idx, (_, _, _, _, chunks) in enumerate(doc_chunks):
         for c in chunks:
             all_chunks.append(c)
             chunk_doc_map.append(idx)
@@ -246,7 +260,7 @@ def _process_changed(
     # Upsert into the store: delete old chunks, insert new ones.
     modified_or_added_doc_ids: set[str] = set()
     with contextlib.closing(make_store(ws, settings)) as store:
-        for idx, (doc_id, content_hash, tags, _chunks) in enumerate(doc_chunks):
+        for idx, (doc_id, content_hash, body_hash, tags, _chunks) in enumerate(doc_chunks):
             records = doc_records.get(idx, [])
             if not records:
                 continue
@@ -262,6 +276,7 @@ def _process_changed(
                 chunk_count=len(records),
                 status="indexed",
                 indexed_at=now,
+                body_hash=body_hash,
             ))
 
     # Keep chunks.parquet synchronized if it exists.
