@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.10.0
+    container_name: doqqy-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC API
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__API_KEY: ${DOQQY_QDRANT_API_KEY:-}
+
+volumes:
+  qdrant_storage:
+    driver: local

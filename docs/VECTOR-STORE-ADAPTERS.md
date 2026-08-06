@@ -234,9 +234,7 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 | `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
 | `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-**Phase 1 Status:** Completed. Decoupling port and LanceDB adapter logic relocation is fully implemented, verified via unit and parity testing.
-
-Estimated remaining effort (Phase 1.5): Qdrant adapter + parity tests ~3–4 days; migration tool ~1 day.
+**Phase 1 & 1.5 Status:** Completed. Qdrant adapter (`QdrantStore`), payload multitenancy (`is_tenant=True`), server-side RRF hybrid search, CLI `--backend` wiring, and integration test suite are fully implemented.
 
 ## 6. Migration: LanceDB → Qdrant without re-embedding
 

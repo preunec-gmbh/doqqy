@@ -20,6 +20,9 @@ pip install -e ".[ocr]"
 # stays permissive without it.
 pip install -e ".[pdf-fallback]"
 
+# Optional: Qdrant server vector store backend
+pip install -e ".[qdrant]"
+
 doqqy --help
 ```
 
@@ -31,6 +34,10 @@ The first `doqqy embed` downloads ~2 GB of models (bge-m3 + reranker) from Huggi
 |---|---|
 | `DOQQY_DEVICE` | Force `cuda` or `cpu` (default: auto-detect); applies to both embedder and reranker |
 | `DOQQY_RERANKER_FP16` | Set to `1` to run the reranker in fp16 on CUDA (default: `0` — fp32 safe mode) |
+| `DOQQY_VECTOR_BACKEND` | Vector store backend selection: `lancedb` (default) or `qdrant` |
+| `DOQQY_QDRANT_URL` | Qdrant server URL (default: `http://localhost:6333`) |
+| `DOQQY_QDRANT_API_KEY` | Optional Qdrant API key |
+| `DOQQY_QDRANT_COLLECTION` | Target Qdrant collection name (default: `doqqy_chunks`) |
 | `HF_HOME` | HuggingFace model cache directory |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | **Unused by the pipeline.** Reserved in `.env.example` for optional future LLM extras (`pip install -e .[llm]`); no current code path calls them |
 
