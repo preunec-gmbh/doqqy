@@ -105,7 +105,9 @@ async def test_mcp_stdio_handshake_and_query_roundtrip(fixture_workspace: Path):
             assert info_result is not None
             assert info_result.structuredContent is not None
 
-            # doqqy_info'nun döndürdüğü sözlük içindeki anahtarları kontrol et
+            # doqqy_info'nun döndürdüğü sözlük içindeki anahtarları ve sayaçları kontrol et
             info_data = info_result.structuredContent.get("result", info_result.structuredContent)
-            assert "chunks_parquet_exists" in info_data
-            assert "vector_store_exists" in info_data
+            assert info_data.get("chunks_parquet_exists") is True
+            assert info_data.get("vector_store_exists") is True
+            assert info_data.get("indexed_documents_count") == 1
+            assert info_data.get("indexed_chunks_count") == 1

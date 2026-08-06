@@ -6,18 +6,9 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
-from doqqy.workspace import Workspace
+from mcp.server.fastmcp import FastMCP
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError as e:
-    from rich.console import Console
-    err_console = Console(stderr=True)
-    err_console.print(
-        f"[red]Hata: MCP paketi bulunamadı veya yüklenemedi ({e}).[/red]\n"
-        f"Lütfen pip install -e \".\\[mcp]\" komutunu çalıştırın."
-    )
-    raise SystemExit(1) from e
+from doqqy.workspace import Workspace
 
 
 def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
@@ -38,7 +29,6 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
         NOTE FOR AGENTS:
         - Results returned are verbatim excerpts directly from local source files.
         - `tag` filters results by document tag. Use `doqqy_tags()` first to discover valid tags.
-        # Backend selection uses the default vector store (no --backend equivalent in MCP tools).
 
         Args:
             q: Semantic or lexical search query string.
@@ -49,6 +39,8 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
         Returns:
             List of search result dictionaries or error message dictionary.
         """
+        # Backend selection uses the default vector store (no --backend equivalent in MCP tools).
+
         try:
             from doqqy.query import search
 
@@ -118,7 +110,7 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
             from doqqy.manifest import Manifest
             manifest = Manifest.load(ws)
             totals = manifest.totals()
-            total_docs = totals.get("documents", 0)
+            total_docs = totals.get("docs", 0)
             total_chunks = totals.get("chunks", 0)
         except Exception:  # noqa: BLE001
             pass

@@ -597,8 +597,8 @@ def mcp(
         from doqqy.mcp_server import run_mcp_server
     except ImportError as e:
         err_console.print(
-            "[bold red]Hata:[/bold red] MCP paketi bulunamadı. "
-            "Lütfen 'pip install -e \".[mcp]\"' çalıştırın."
+            f"[bold red]Hata:[/bold red] MCP paketi bulunamadı ({e}). "
+            f"Lütfen 'pip install -e \".\\[mcp]\"' komutunu çalıştırın."
         )
         raise typer.Exit(code=1) from e
 
