@@ -213,7 +213,15 @@ def test_resolve_duplicates_isolates_a_failing_group(temp_ws: Workspace) -> None
     manifest.update_entry("raw/d/y.md", _entry(tags=["d"], body_hash="H2", chunk_count=1))
 
     mock_store = MagicMock()
-    mock_store.get_by_doc.return_value = []
+
+    def get_by_doc(doc_id: str) -> list[ChunkRecord]:
+        # Real record for the group that must succeed (H2's canonical); empty
+        # elsewhere so a get_by_doc call never crashes on the failing group.
+        if doc_id == "raw/c/y.md":
+            return [_record("c1", "raw/c/y.md", ["c"])]
+        return []
+
+    mock_store.get_by_doc.side_effect = get_by_doc
 
     def flaky_delete_by_doc(doc_id: str) -> int:
         if doc_id == "raw/b/x.md":
@@ -240,6 +248,39 @@ def test_resolve_duplicates_isolates_a_failing_group(temp_ws: Workspace) -> None
     assert manifest.get("raw/c/y.md").tags == ["c", "d"]
     assert manifest.get("raw/d/y.md").alias_of == "raw/c/y.md"
     assert manifest.get("raw/d/y.md").status == "aliased"
+
+
+def test_resolve_duplicates_does_not_claim_tag_union_when_store_write_fails(temp_ws: Workspace) -> None:
+    """Review fix: if get_by_doc comes back empty despite chunk_count > 0 (store
+    drift), the manifest must not claim the tag union reached the store — otherwise
+    tags_changed goes False and the discrepancy is never retried."""
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", _entry(tags=["a"], body_hash="H1", chunk_count=1))
+    manifest.update_entry("raw/b/x.md", _entry(tags=["b"], body_hash="H1", chunk_count=0, status="ingested"))
+
+    mock_store = MagicMock()
+    mock_store.get_by_doc.return_value = []  # drift: nothing found despite chunk_count=1
+
+    with patch("doqqy.infra.vectorstore.factory.make_store", return_value=mock_store):
+        resolve_duplicates(temp_ws, manifest, settings=None)
+
+        # Tags were NOT updated in the manifest — the store never actually got them.
+        assert manifest.get("raw/a/x.md").tags == ["a"]
+        mock_store.upsert.assert_not_called()
+
+        # A second run must retry (tags_changed is still True), not silently give up.
+        mock_store.get_by_doc.return_value = [
+            ChunkRecord(
+                chunk_id="c1", doc_id="raw/a/x.md", source="raw/a/x.md", doc_type="md",
+                tags=["a"], content="x", section_path=[], char_count=1,
+                prev_chunk=None, next_chunk=None,
+                dense=np.zeros(8, dtype=np.float32), sparse={},
+            )
+        ]
+        resolve_duplicates(temp_ws, manifest, settings=None)
+
+    assert manifest.get("raw/a/x.md").tags == ["a", "b"]
+    mock_store.upsert.assert_called_once()
 
 
 def test_resolve_duplicates_no_groups_leaves_manifest_untouched(temp_ws: Workspace) -> None:

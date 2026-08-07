@@ -136,6 +136,79 @@ def test_diff_unchanged_files(temp_ws: Workspace) -> None:
     assert diff.has_changes is False
 
 
+def test_diff_flags_stale_alias_when_canonical_deleted(temp_ws: Workspace) -> None:
+    """Issue #18 review: an alias whose canonical was removed must self-heal, not
+    sit forever with content_hash unchanged (the alias's own bytes never moved)."""
+    raw_file = temp_ws.raw_dir / "b" / "x.md"
+    raw_file.parent.mkdir(parents=True, exist_ok=True)
+    raw_file.write_text("# Shared\n\nSame content.", encoding="utf-8")
+
+    from doqqy.manifest import read_content_hash
+    doc_id = str(raw_file.relative_to(temp_ws.root)).replace("\\", "/")
+    current_hash = read_content_hash(raw_file) or ""
+
+    manifest = Manifest()
+    # No "raw/a/x.md" entry at all — the canonical was already deleted.
+    manifest.update_entry(doc_id, ManifestEntry(
+        source=doc_id, content_hash=current_hash, body_hash="H1",
+        alias_of="raw/a/x.md", status="aliased", chunk_count=0,
+    ))
+
+    diff = manifest.diff(temp_ws)
+    assert diff.modified == [raw_file]
+    assert diff.unchanged == []
+
+
+def test_diff_flags_stale_alias_when_canonical_edited(temp_ws: Workspace) -> None:
+    """Canonical body changed (new body_hash) without the alias's own file moving."""
+    raw_file = temp_ws.raw_dir / "b" / "x.md"
+    raw_file.parent.mkdir(parents=True, exist_ok=True)
+    raw_file.write_text("# Shared\n\nSame content.", encoding="utf-8")
+
+    from doqqy.manifest import read_content_hash
+    doc_id = str(raw_file.relative_to(temp_ws.root)).replace("\\", "/")
+    current_hash = read_content_hash(raw_file) or ""
+
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", ManifestEntry(
+        source="raw/a/x.md", content_hash="whatever", body_hash="H2-NEW",  # already re-embedded
+        tags=["a"], status="indexed", chunk_count=1,
+    ))
+    manifest.update_entry(doc_id, ManifestEntry(
+        source=doc_id, content_hash=current_hash, body_hash="H1-OLD",  # stale, no longer matches
+        alias_of="raw/a/x.md", status="aliased", chunk_count=0,
+    ))
+
+    diff = manifest.diff(temp_ws)
+    assert diff.modified == [raw_file]
+    assert diff.unchanged == []
+
+
+def test_diff_alias_with_valid_canonical_stays_unchanged(temp_ws: Workspace) -> None:
+    """Sanity check: a consistent alias (target present, hashes match) is not disturbed."""
+    raw_file = temp_ws.raw_dir / "b" / "x.md"
+    raw_file.parent.mkdir(parents=True, exist_ok=True)
+    raw_file.write_text("# Shared\n\nSame content.", encoding="utf-8")
+
+    from doqqy.manifest import read_content_hash
+    doc_id = str(raw_file.relative_to(temp_ws.root)).replace("\\", "/")
+    current_hash = read_content_hash(raw_file) or ""
+
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", ManifestEntry(
+        source="raw/a/x.md", content_hash="whatever", body_hash="H1",
+        tags=["a", "b"], status="indexed", chunk_count=1,
+    ))
+    manifest.update_entry(doc_id, ManifestEntry(
+        source=doc_id, content_hash=current_hash, body_hash="H1",
+        alias_of="raw/a/x.md", status="aliased", chunk_count=0,
+    ))
+
+    diff = manifest.diff(temp_ws)
+    assert diff.unchanged == [doc_id]
+    assert diff.modified == []
+
+
 def test_corrupt_manifest_load(temp_ws: Workspace) -> None:
     temp_ws.manifest_path.write_text("invalid json {{{", encoding="utf-8")
     manifest = Manifest.load(temp_ws)
