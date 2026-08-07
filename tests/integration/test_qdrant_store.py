@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import urllib.request
 import uuid
 from typing import Generator
 from unittest.mock import MagicMock

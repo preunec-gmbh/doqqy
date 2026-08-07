@@ -23,6 +23,9 @@ pip install -e ".[pdf-fallback]"
 # Optional: Qdrant server vector store backend
 pip install -e ".[qdrant]"
 
+# Optional: MCP server dependencies for AI agent integration
+pip install -e ".[mcp]"
+
 doqqy --help
 ```
 
