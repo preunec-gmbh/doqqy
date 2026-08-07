@@ -283,6 +283,64 @@ def test_resolve_duplicates_does_not_claim_tag_union_when_store_write_fails(temp
     mock_store.upsert.assert_called_once()
 
 
+def test_resolve_duplicates_sheds_stale_union_when_group_dissolves(temp_ws: Workspace) -> None:
+    """Review fix: deleting an alias directly (not the canonical) must not leave
+    the canonical carrying tags from a folder that no longer exists.
+
+    raw/a/x.md (canonical, tags=[a,b]) + raw/b/x.md (alias) — raw/b/x.md gets
+    deleted, so its manifest entry is gone entirely (simulating _process_deletions
+    having already run). find_duplicate_groups now sees only one doc with this
+    body_hash, so no group forms — but raw/a/x.md is still tagged ['a', 'b'].
+    It must shed back to its own folder tag, ['a'].
+    """
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", _entry(tags=["a", "b"], body_hash="H1", chunk_count=1))
+    # raw/b/x.md is *absent* — already removed by a prior deletion run.
+
+    mock_store = MagicMock()
+    mock_store.get_by_doc.return_value = [_record("c1", "raw/a/x.md", ["a", "b"])]
+
+    with patch("doqqy.infra.vectorstore.factory.make_store", return_value=mock_store):
+        groups = resolve_duplicates(temp_ws, manifest, settings=None)
+
+    assert groups == []  # no active duplicate group — this is the point being tested
+    assert manifest.get("raw/a/x.md").tags == ["a"]
+    updated_tags = [sorted(r.tags) for r in mock_store.upsert.call_args[0][0]]
+    assert updated_tags == [["a"]]
+
+
+def test_resolve_duplicates_orphan_shedding_does_not_touch_grouped_docs(temp_ws: Workspace) -> None:
+    """Sanity check: a doc that's still genuinely part of an active group is
+    untouched by the orphan-shedding pass (it's handled by the main loop)."""
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", _entry(tags=["a"], body_hash="H1", chunk_count=1))
+    manifest.update_entry("raw/b/x.md", _entry(tags=["b"], body_hash="H1", chunk_count=1))
+
+    mock_store = MagicMock()
+    mock_store.get_by_doc.return_value = [_record("c1", "raw/a/x.md", ["a"])]
+
+    with patch("doqqy.infra.vectorstore.factory.make_store", return_value=mock_store):
+        groups = resolve_duplicates(temp_ws, manifest, settings=None)
+
+    assert len(groups) == 1
+    assert manifest.get("raw/a/x.md").tags == ["a", "b"]  # normal union path, not orphan-shed
+
+
+def test_resolve_duplicates_orphan_shedding_retries_on_store_drift(temp_ws: Workspace) -> None:
+    """Same store-write-gating discipline applies to the orphan-shedding pass."""
+    manifest = Manifest()
+    manifest.update_entry("raw/a/x.md", _entry(tags=["a", "b"], body_hash="H1", chunk_count=1))
+
+    mock_store = MagicMock()
+    mock_store.get_by_doc.return_value = []  # drift
+
+    with patch("doqqy.infra.vectorstore.factory.make_store", return_value=mock_store):
+        resolve_duplicates(temp_ws, manifest, settings=None)
+
+    assert manifest.get("raw/a/x.md").tags == ["a", "b"]  # left stale, not silently claimed
+    mock_store.upsert.assert_not_called()
+
+
 def test_resolve_duplicates_no_groups_leaves_manifest_untouched(temp_ws: Workspace) -> None:
     manifest = Manifest()
     manifest.update_entry("raw/a/x.md", _entry(tags=["a"], body_hash="H1"))

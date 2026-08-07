@@ -296,6 +296,63 @@ def test_sync_self_heals_alias_after_canonical_deleted(
 
 @patch("doqqy.sync._load_embed_model")
 @patch("doqqy.sync._embed_texts")
+def test_sync_sheds_stale_tag_union_when_alias_deleted(
+    mock_embed_texts: MagicMock,
+    mock_load_model: MagicMock,
+    temp_ws: Workspace,
+) -> None:
+    """Review fix, other direction: delete the *alias* (raw/b), not the canonical.
+
+    raw/a/x.md keeps tags=[a, b] otherwise, even though raw/b/ no longer exists
+    — so `--tag b` would still (wrongly) return it. Unlike the stranded-alias
+    case, this self-heals in the *same* sync run as the deletion, since
+    resolve_duplicates recomputes it directly rather than waiting on diff().
+    """
+    mock_load_model.return_value = MagicMock()
+    mock_embed_texts.side_effect = lambda _model, texts: (
+        np.zeros((len(texts), 1024), dtype=np.float32),
+        ['{"1": 0.5}'] * len(texts),
+    )
+
+    content = "# Shared Policy\n\nIdentical content placed in two folders."
+    (temp_ws.raw_dir / "a").mkdir(parents=True, exist_ok=True)
+    (temp_ws.raw_dir / "b").mkdir(parents=True, exist_ok=True)
+    (temp_ws.raw_dir / "a" / "x.md").write_text(content, encoding="utf-8")
+    (temp_ws.raw_dir / "b" / "x.md").write_text(content, encoding="utf-8")
+
+    from doqqy.infra.vectorstore.base import ChunkRecord
+
+    with patch("doqqy.infra.vectorstore.factory.make_store") as mock_make_store:
+        mock_store = MagicMock()
+        mock_store.get_by_doc.return_value = [
+            ChunkRecord(
+                chunk_id="c1", doc_id="raw/a/x.md", source="raw/a/x.md", doc_type="md",
+                tags=["a"], content=content, section_path=[], char_count=len(content),
+                prev_chunk=None, next_chunk=None,
+                dense=np.zeros(1024, dtype=np.float32), sparse={1: 0.5},
+            )
+        ]
+        mock_make_store.return_value = mock_store
+
+        sync(temp_ws)
+        assert Manifest.load(temp_ws).get("raw/a/x.md").tags == ["a", "b"]
+
+        # Delete the alias this time.
+        (temp_ws.raw_dir / "b" / "x.md").unlink()
+        report2 = sync(temp_ws)
+        assert report2.deleted == 1
+
+    manifest2 = Manifest.load(temp_ws)
+    assert manifest2.get("raw/b/x.md") is None
+    survivor = manifest2.get("raw/a/x.md")
+    assert survivor is not None
+    assert survivor.alias_of is None
+    assert survivor.chunk_count == 1
+    assert survivor.tags == ["a"]  # shed back — "b" is gone with the folder
+
+
+@patch("doqqy.sync._load_embed_model")
+@patch("doqqy.sync._embed_texts")
 def test_sync_failure_isolation(
     mock_embed_texts: MagicMock,
     mock_load_model: MagicMock,
