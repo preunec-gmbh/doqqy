@@ -130,6 +130,9 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
 
 def run_mcp_server(root_dir: Path | None = None) -> None:
     """MCP sunucusunu standart G/Ç (stdio) taşıyıcısı üzerinden çalıştırır."""
+    import FlagEmbedding  # noqa: F401
+    import transformers  # noqa: F401
+
     import doqqy.query  # noqa: F401
     import doqqy.rerank  # noqa: F401
     from doqqy.infra.vectorstore import factory  # noqa: F401
