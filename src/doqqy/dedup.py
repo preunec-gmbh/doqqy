@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from dataclasses import field as dc_field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from doqqy.config import get_logger
@@ -90,9 +91,10 @@ def resolve_duplicates(
     into a SyncReport.
     """
     groups = find_duplicate_groups(manifest)
-    if not groups:
-        return groups
-
+    # No early return on an empty groups list: a doc can still be carrying a
+    # stale tag union from a group that has since fully dissolved (its other
+    # member(s) deleted) — the orphaned-carrier pass below needs to run even
+    # when there are zero *active* groups left anywhere in the manifest.
     store = None
     parquet_removed: set[str] = set()
     parquet_new_records = []
@@ -191,6 +193,63 @@ def resolve_duplicates(
                 if failures is not None:
                     failures.append((group.canonical, f"{type(exc).__name__}: {exc}"))
                 continue
+
+        # A group that shrinks to a single survivor (its other member(s) deleted)
+        # never gets re-grouped by find_duplicate_groups — but the survivor can
+        # still be carrying a tag union from members that are now gone. Shed it
+        # back to the doc's own folder-derived tags. Aliases are excluded: a
+        # stranded alias is Manifest.diff()'s job (it gets fully reprocessed).
+        grouped_doc_ids: set[str] = set()
+        for g in groups:
+            grouped_doc_ids.add(g.canonical)
+            grouped_doc_ids.update(g.aliases)
+
+        for doc_id in list(manifest.docs.keys()):
+            entry = manifest.get(doc_id)
+            if entry is None or entry.alias_of is not None or doc_id in grouped_doc_ids:
+                continue
+            if not entry.tags:
+                continue
+
+            try:
+                own_tags = _own_tags(doc_id, ws)
+                if sorted(entry.tags) == sorted(own_tags):
+                    continue
+
+                needs_store_write = entry.chunk_count > 0
+                store_write_ok = not needs_store_write
+                if needs_store_write:
+                    if store is None:
+                        from doqqy.infra.vectorstore.factory import make_store
+                        store = make_store(ws, settings)
+                    records = store.get_by_doc(doc_id)
+                    if records:
+                        updated = [replace(r, tags=own_tags) for r in records]
+                        store.delete_by_doc(doc_id)
+                        store.upsert(updated)
+                        parquet_removed.add(doc_id)
+                        parquet_new_records.extend(updated)
+                        store_write_ok = True
+                        _LOG.info(
+                            "Orphaned duplicate carrier %s: tags %s -> %s (other group member(s) gone).",
+                            doc_id, entry.tags, own_tags,
+                        )
+                    else:
+                        _LOG.warning(
+                            "Orphaned duplicate carrier %s: expected %d stored chunk(s) but "
+                            "found none — leaving manifest tags unchanged, will retry.",
+                            doc_id, entry.chunk_count,
+                        )
+
+                if store_write_ok:
+                    entry.tags = own_tags
+                    manifest.update_entry(doc_id, entry)
+
+            except Exception as exc:  # noqa: BLE001 — one bad doc must not abort the run
+                _LOG.exception("Failed to shed stale tag union for %s: %s", doc_id, exc)
+                if failures is not None:
+                    failures.append((doc_id, f"{type(exc).__name__}: {exc}"))
+                continue
     finally:
         if store is not None:
             store.close()
@@ -206,3 +265,14 @@ def resolve_duplicates(
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _own_tags(doc_id: str, ws: "Workspace") -> list[str]:
+    """A document's own folder-derived tags, independent of any union pollution.
+
+    Pure path parsing — base_metadata() derives tags from doc_id's folder
+    structure alone, no file I/O — so this is safe to call even for a doc_id
+    whose canonical/co-aliases have since been deleted.
+    """
+    from doqqy.ingest.base import base_metadata
+    return base_metadata(Path(doc_id), ws.root, kind="md")["tags"]
