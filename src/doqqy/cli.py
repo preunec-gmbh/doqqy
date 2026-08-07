@@ -153,7 +153,7 @@ def query(
     no_rerank: bool = typer.Option(False, "--no-rerank", help="Reranker'ı atla, RRF sonrası döndür."),
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
     context: int = typer.Option(0, "--context", "-c", help="Her sonuca komşu chunk'ları N adım ekle (prev/next zinciri)."),
-    backend: Optional[str] = typer.Option(None, "--backend", help="Vector store backend to use (lancedb | qdrant)."),
+    backend: Optional[str] = typer.Option(None, "--backend", help="Kullanılacak vektör veritabanı backend'i (lancedb | qdrant)."),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.infra.settings import Settings
@@ -584,6 +584,25 @@ def _count_files(root: Path, suffix: str | None = None) -> int:
         for p in root.rglob("*")
         if p.is_file() and (suffix is None or p.suffix.lower() == suffix)
     )
+
+
+@app.command()
+def mcp(
+    root: Optional[Path] = typer.Option(
+        None, "--root", help="Korpus kök dizini (varsayılan: cwd)."
+    ),
+) -> None:
+    """Yapay zeka ajanı entegrasyonu için stdio MCP sunucusunu başlatır."""
+    try:
+        from doqqy.mcp_server import run_mcp_server
+    except ImportError as e:
+        err_console.print(
+            f"[bold red]Hata:[/bold red] MCP paketi bulunamadı ({e}). "
+            f"Lütfen 'pip install -e \".\\[mcp]\"' komutunu çalıştırın."
+        )
+        raise typer.Exit(code=1) from e
+
+    run_mcp_server(root)
 
 
 if __name__ == "__main__":
