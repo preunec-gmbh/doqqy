@@ -201,6 +201,14 @@ class Manifest:
         decided a document changed — so reading it here could never detect an
         edit.  The trade-off is that an ingester upgrade which changes the
         processed output for identical raw bytes is invisible to the diff.
+
+        A doc whose raw bytes are untouched can still need reprocessing: an
+        ``alias_of`` entry (issue #18) whose canonical was deleted or edited
+        out from under it is stale — its content silently drops out of the
+        index otherwise, since nothing about the alias's own file changed.
+        Such entries are reported as modified so sync re-embeds them (as a
+        standalone doc, or re-aliased if still a duplicate — resolve_duplicates
+        is idempotent either way).
         """
         result = DiffResult()
 
@@ -222,6 +230,8 @@ class Manifest:
             current_hash = read_content_hash(source_path)
             if current_hash is None or current_hash != existing.content_hash:
                 result.modified.append(source_path)
+            elif self._is_stale_alias(existing):
+                result.modified.append(source_path)
             else:
                 result.unchanged.append(doc_id)
 
@@ -231,6 +241,19 @@ class Manifest:
                 result.deleted.append(doc_id)
 
         return result
+
+    def _is_stale_alias(self, entry: ManifestEntry) -> bool:
+        """True if *entry* claims to be a duplicate alias whose canonical no longer backs it up.
+
+        Covers both lifecycle breaks: the canonical doc was deleted (its manifest
+        entry is gone) or edited (its body_hash moved on, so the two are no longer
+        byte-identical). Either way the alias itself never changed on disk, so
+        content_hash comparison alone would never catch this — see diff().
+        """
+        if entry.alias_of is None:
+            return False
+        target = self._docs.get(entry.alias_of)
+        return target is None or target.body_hash != entry.body_hash
 
 
 # ------------------------------------------------------------------

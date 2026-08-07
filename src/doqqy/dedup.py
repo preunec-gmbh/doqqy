@@ -116,6 +116,12 @@ def resolve_duplicates(
                     if had_own_chunks:
                         newly_aliased.append(alias_id)
 
+                # A tag union only needs a store write when the canonical actually
+                # has chunks sitting there to re-tag; otherwise there's nothing to
+                # drift out of sync with, so it's trivially "written".
+                canonical_needs_store_write = tags_changed and canonical_entry.chunk_count > 0
+                canonical_store_write_ok = not canonical_needs_store_write
+
                 # Store operations first: if any of these raise, the manifest
                 # below is never touched, so this group is retried cleanly
                 # next run instead of drifting out of sync with the store.
@@ -128,7 +134,7 @@ def resolve_duplicates(
                         store.delete_by_doc(alias_id)
                         parquet_removed.add(alias_id)
 
-                    if tags_changed and canonical_entry.chunk_count > 0:
+                    if canonical_needs_store_write:
                         records = store.get_by_doc(group.canonical)
                         if records:
                             updated = [replace(r, tags=group.tags) for r in records]
@@ -136,12 +142,29 @@ def resolve_duplicates(
                             store.upsert(updated)
                             parquet_removed.add(group.canonical)
                             parquet_new_records.extend(updated)
+                            canonical_store_write_ok = True
                             _LOG.info(
                                 "Duplicate group canonical=%s: tags -> %s (%d alias(es)).",
                                 group.canonical, group.tags, len(group.aliases),
                             )
+                        else:
+                            # get_by_doc came back empty despite chunk_count > 0 —
+                            # store drift. Don't claim the tag union in the
+                            # manifest; leave it stale so tags_changed stays True
+                            # and this group is retried next run instead of the
+                            # discrepancy going undetected forever.
+                            _LOG.warning(
+                                "Duplicate group canonical=%s: expected %d stored chunk(s) "
+                                "but found none — leaving manifest tags unchanged, will retry.",
+                                group.canonical, canonical_entry.chunk_count,
+                            )
 
-                if tags_changed or was_marked_alias:
+                # Only record what the store actually reflects: if the tag union
+                # needed a store write and it didn't happen, skip the manifest
+                # write entirely (including clearing alias_of) so the whole
+                # canonical entry is retried cleanly next run rather than
+                # partially applied.
+                if canonical_store_write_ok and (tags_changed or was_marked_alias):
                     canonical_entry.tags = group.tags
                     canonical_entry.alias_of = None
                     manifest.update_entry(group.canonical, canonical_entry)
