@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 
-from doqqy.config import get_logger
+from doqqy.config import EMBEDDING_DIM, QDRANT_SPARSE_ON_DISK, QDRANT_UPSERT_BATCH_SIZE, get_logger
 from doqqy.infra.vectorstore.base import ChunkRecord, ScoredChunk, TagFilter, VectorStore
+
+if TYPE_CHECKING:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models
 
 _LOG = get_logger("doqqy.infra.vectorstore.qdrant")
 
@@ -20,10 +24,11 @@ class QdrantStore(VectorStore):
         self.api_key = api_key
         self.collection = collection
         self.tenant_key = tenant_key
-        self._client_instance = None
+        self._client_instance: QdrantClient | None = None
+        self._collection_verified: bool = False
 
     @property
-    def _client(self):
+    def _client(self) -> QdrantClient:
         if self._client_instance is None:
             try:
                 from qdrant_client import QdrantClient  # type: ignore
@@ -32,15 +37,37 @@ class QdrantStore(VectorStore):
                     "qdrant-client is required for the Qdrant backend. "
                     "Install it via `pip install doqqy[qdrant]`."
                 ) from exc
-            self._client_instance = QdrantClient(url=self.url, api_key=self.api_key or None)
+            self._client_instance = QdrantClient(
+                url=self.url,
+                api_key=self.api_key or None,
+                check_compatibility=False,
+            )
         return self._client_instance
 
     def ensure_collection(self, dim: int) -> None:
         """Ensure the target collection and payload indices exist in Qdrant."""
+        if self._collection_verified:
+            return
+
         from qdrant_client import models  # type: ignore
 
         client = self._client
         if client.collection_exists(self.collection):
+            info = client.get_collection(self.collection)
+            existing_vectors = info.config.params.vectors
+            if isinstance(existing_vectors, dict) and "dense" in existing_vectors:
+                existing_dim = existing_vectors["dense"].size
+            elif hasattr(existing_vectors, "size"):
+                existing_dim = existing_vectors.size
+            else:
+                existing_dim = None
+
+            if isinstance(existing_dim, int) and existing_dim != dim:
+                raise ValueError(
+                    f"Collection '{self.collection}' exists with dense dimension {existing_dim}, "
+                    f"but requested dimension is {dim}."
+                )
+            self._collection_verified = True
             return
 
         _LOG.info("Creating Qdrant collection: %s (dim=%d)", self.collection, dim)
@@ -51,7 +78,7 @@ class QdrantStore(VectorStore):
             },
             sparse_vectors_config={
                 "sparse": models.SparseVectorParams(
-                    index=models.SparseIndexParams(on_disk=False),
+                    index=models.SparseIndexParams(on_disk=QDRANT_SPARSE_ON_DISK),
                     modifier=models.Modifier.IDF,
                 ),
             },
@@ -75,6 +102,7 @@ class QdrantStore(VectorStore):
             "doc_id",
             models.PayloadSchemaType.KEYWORD,
         )
+        self._collection_verified = True
         _LOG.info("Qdrant collection %s created with payload indexes.", self.collection)
 
     def recreate(self, dim: int) -> None:
@@ -83,6 +111,7 @@ class QdrantStore(VectorStore):
         if client.collection_exists(self.collection):
             _LOG.info("Dropping Qdrant collection %s for recreate.", self.collection)
             client.delete_collection(self.collection)
+        self._collection_verified = False
         self.ensure_collection(dim)
 
     @staticmethod
@@ -94,7 +123,7 @@ class QdrantStore(VectorStore):
         raise ValueError("Cannot infer dimension: no record contains a dense vector.")
 
     def upsert(self, records: Sequence[ChunkRecord]) -> int:
-        """Upsert a sequence of ChunkRecords as Qdrant Points."""
+        """Upsert a sequence of ChunkRecords as Qdrant Points in batches."""
         if not records:
             return 0
 
@@ -105,7 +134,10 @@ class QdrantStore(VectorStore):
 
         points = []
         for rec in records:
-            dense_vec = rec.dense.tolist() if rec.dense is not None else []
+            if rec.dense is None:
+                _LOG.warning("Skipping record %s: dense vector is None", rec.chunk_id)
+                continue
+            dense_vec = rec.dense.tolist()
             if rec.sparse:
                 indices = list(rec.sparse.keys())
                 values = [float(v) for v in rec.sparse.values()]
@@ -134,13 +166,42 @@ class QdrantStore(VectorStore):
             )
             points.append(point)
 
-        self._client.upsert(collection_name=self.collection, points=points)
+        if not points:
+            return 0
+
+        batch_size = QDRANT_UPSERT_BATCH_SIZE
+        for i in range(0, len(points), batch_size):
+            batch = points[i : i + batch_size]
+            self._client.upsert(collection_name=self.collection, points=batch)
+
         _LOG.debug("Upserted %d points to Qdrant collection %s", len(points), self.collection)
         return len(points)
 
     def full_rebuild(self, records: Sequence[ChunkRecord], dim: int) -> int:
-        """Atomically recreate collection and upsert all records."""
-        self.recreate(dim)
+        """Delete all points for the current tenant and re-insert records.
+
+        Note: This is NOT fully atomic across tenants — if interrupted mid-upsert,
+        the current tenant's data will be partially empty. True atomicity (new
+        collection + alias swap) is incompatible with the shared-collection model.
+        """
+        from qdrant_client import models  # type: ignore
+
+        self.ensure_collection(dim)
+        client = self._client
+        if client.collection_exists(self.collection):
+            tenant_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="tenant",
+                        match=models.MatchValue(value=self.tenant_key),
+                    )
+                ]
+            )
+            client.delete(
+                collection_name=self.collection,
+                points_selector=models.FilterSelector(filter=tenant_filter),
+            )
+
         return self.upsert(records)
 
     def delete_by_doc(self, doc_id: str) -> int:
@@ -169,11 +230,11 @@ class QdrantStore(VectorStore):
         _LOG.debug("Deleted %d points for doc_id=%s in collection %s", count_before, doc_id, self.collection)
         return count_before
 
-    def _build_filter(self, flt: TagFilter | None = None):
+    def _build_filter(self, flt: TagFilter | None = None) -> models.Filter:
         """Construct structured Qdrant filter for tenant and optional tags."""
         from qdrant_client import models  # type: ignore
 
-        conditions = [
+        conditions: list[Any] = [
             models.FieldCondition(key="tenant", match=models.MatchValue(value=self.tenant_key)),
         ]
         if flt and flt.tags:
@@ -181,7 +242,7 @@ class QdrantStore(VectorStore):
                 conditions.append(models.FieldCondition(key="tags", match=models.MatchValue(value=tag)))
         return models.Filter(must=conditions)
 
-    def _to_record(self, point) -> ChunkRecord:
+    def _to_record(self, point: Any) -> ChunkRecord:
         """Convert a Qdrant PointStruct/ScoredPoint to ChunkRecord."""
         payload = point.payload or {}
         dense_vec = None
@@ -277,10 +338,10 @@ class QdrantStore(VectorStore):
         return records
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
-        """Retrieve all dense vectors as a (N, 1024) matrix along with their records."""
+        """Retrieve all dense vectors as a (N, EMBEDDING_DIM) matrix along with their records."""
         client = self._client
         if not client.collection_exists(self.collection):
-            return np.zeros((0, 1024), dtype=np.float32), []
+            return np.zeros((0, EMBEDDING_DIM), dtype=np.float32), []
 
         qfilter = self._build_filter(flt)
         all_points = []
@@ -300,7 +361,7 @@ class QdrantStore(VectorStore):
                 break
 
         if not all_points:
-            return np.zeros((0, 1024), dtype=np.float32), []
+            return np.zeros((0, EMBEDDING_DIM), dtype=np.float32), []
 
         records = [self._to_record(p) for p in all_points]
         vecs = np.vstack([r.dense for r in records]).astype(np.float32)

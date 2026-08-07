@@ -43,6 +43,11 @@ The first `doqqy embed` downloads ~2 GB of models (bge-m3 + reranker) from Huggi
 
 A `.env` file at the working-directory root is loaded automatically (`python-dotenv`, no override of existing env).
 
+### Backend parity notes
+
+- **Rank breakdown:** On the Qdrant backend, `dense_rank` and `sparse_rank` individual leg ranks are not displayed because fusion is calculated server-side in Qdrant. CLI search output displays `rrf=<score>`. LanceDB displays `dense=<rank> | sparse=<rank> | rrf=<score>`.
+- **Score comparability:** Qdrant's internal RRF constant is fixed in its engine (different from doqqy's default `k=60`). Therefore, `rrf` scores on Qdrant and LanceDB are not directly comparable numbers, though rankings between backends correlate closely.
+
 ## 2. Directory model — important
 
 doqqy treats **the current working directory as the corpus root** (like git treats it as the repo). Run all commands from the folder that contains your documents:

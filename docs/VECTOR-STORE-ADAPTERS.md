@@ -234,7 +234,9 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 | `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
 | `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-**Phase 1 & 1.5 Status:** Completed. Qdrant adapter (`QdrantStore`), payload multitenancy (`is_tenant=True`), server-side RRF hybrid search, CLI `--backend` wiring, and integration test suite are fully implemented.
+**Phase 1 & 1.5 Status:** Adapter + multitenancy + server-side RRF are done. The LanceDB→Qdrant migration tool (§6) and the eval-harness parity check (ROADMAP #7) are still open.
+
+> **Atomicity note:** Qdrant `full_rebuild` deletes only the current tenant's points before upserting. This is NOT atomic across tenants — a crash between delete and upsert leaves the tenant empty. True atomicity (new collection + alias swap) is incompatible with the shared-collection model. LanceDB's drop-and-recreate is atomic because it operates on a single-tenant file.
 
 ## 6. Migration: LanceDB → Qdrant without re-embedding
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from doqqy.cli import app
@@ -42,8 +43,9 @@ def test_factory_resolves_qdrant(tmp_path: Path):
     assert store.tenant_key == str(ws.root)
 
 
-def test_cli_tags_command_accepts_backend_flag(tmp_path: Path):
+def test_cli_tags_command_accepts_backend_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Verify CLI `tags --backend` passes settings with vector_backend to make_store."""
+    monkeypatch.chdir(tmp_path)
     with patch("doqqy.infra.vectorstore.factory.make_store") as mock_make_store:
         mock_store = mock_make_store.return_value
         mock_store.list_tags.return_value = ["test-tag"]
@@ -57,8 +59,9 @@ def test_cli_tags_command_accepts_backend_flag(tmp_path: Path):
         assert passed_settings.vector_backend == "lancedb"
 
 
-def test_cli_embed_command_accepts_backend_flag(tmp_path: Path):
+def test_cli_embed_command_accepts_backend_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Verify CLI `embed --backend` passes settings with vector_backend to build_index."""
+    monkeypatch.chdir(tmp_path)
     with patch("doqqy.embed.build_index") as mock_build_index:
         mock_build_index.return_value = 5
 
