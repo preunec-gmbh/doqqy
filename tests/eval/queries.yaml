@@ -5,7 +5,21 @@
 # current retrieval behavior as "correct" would make this harness blind to
 # regressions that already exist at the time the file was written.
 #
-# doc_id is the file path relative to tests/eval/corpus/raw/.
+# expected_doc_id must equal the real Chunk.doc_id produced by the pipeline,
+# not a path relative to tests/eval/corpus/raw/. chunk.py:143 sets doc_id from
+# the ingested frontmatter `source` field, which ingest/base.py writes as a
+# path relative to the workspace root — i.e. it keeps the "raw/" prefix. So
+# for a file at tests/eval/corpus/raw/erp/faturalama/x.md, the value here is
+# "raw/erp/faturalama/x.md", matching Chunk.doc_id exactly. #15 should do a
+# literal equality check against Chunk.doc_id with no path rewriting.
+#
+# tag_filter, where present, is an optional list of tags applied as an AND
+# constraint (see TagFilter in infra/vectorstore/base.py) — a chunk must
+# carry every listed tag, not just one. A single-element list like ["erp"]
+# is deliberate in some entries: it tests that the parent tag "erp" matches
+# chunks tagged with either child ("erp","faturalama") or ("erp","stok"),
+# not a typo for a two-element list.
+#
 # expected_section, where present, is the literal Markdown heading text of
 # the section that contains the answer. Matching contract: a chunk passes
 # if expected_section appears ANYWHERE in that chunk's section_path (i.e.
@@ -27,7 +41,7 @@ queries:
   # ---------------------------------------------------------------------
 
   - query: "E-2002 hata kodu ne anlama gelir"
-    expected_doc_id: erp/faturalama/e-fatura-entegrasyon-tr.md
+    expected_doc_id: raw/erp/faturalama/e-fatura-entegrasyon-tr.md
     expected_section: "Bağlantı Hataları"
     category: exact_term
     reason: >
@@ -36,7 +50,7 @@ queries:
       this is a sanity floor, not a hard case.
 
   - query: "offline_queue_limit parametresi ne işe yarar"
-    expected_doc_id: erp/stok/barkod-entegrasyonu-tr.md
+    expected_doc_id: raw/erp/stok/barkod-entegrasyonu-tr.md
     expected_section: "Çevrimdışı Kuyruk"
     category: exact_term
     reason: >
@@ -45,7 +59,7 @@ queries:
       when they sit inside a code block rather than prose.
 
   - query: "RETURN reason code credit note"
-    expected_doc_id: erp/faturalama/credit-note-process-en.md
+    expected_doc_id: raw/erp/faturalama/credit-note-process-en.md
     expected_section: "Reason Code"
     category: exact_term
     reason: >
@@ -54,7 +68,7 @@ queries:
       might instead drift toward the topically-similar cancellation doc.
 
   - query: "UBL-TR 1.2 format nedir"
-    expected_doc_id: erp/faturalama/e-fatura-entegrasyon-tr.md
+    expected_doc_id: raw/erp/faturalama/e-fatura-entegrasyon-tr.md
     expected_section: "Giriş"
     category: exact_term
     reason: >
@@ -63,7 +77,7 @@ queries:
       multi-section document.
 
   - query: "NOVA2026000123 numaralı örnek fatura hangi dökümanda geçiyor"
-    expected_doc_id: erp/faturalama/e-fatura-entegrasyon-tr.md
+    expected_doc_id: raw/erp/faturalama/e-fatura-entegrasyon-tr.md
     expected_section: "XML Şema Örneği"
     category: exact_term
     reason: >
@@ -77,7 +91,7 @@ queries:
   # ---------------------------------------------------------------------
 
   - query: "Ne kadar süre kala izin isteğimi bildirmem lazım?"
-    expected_doc_id: hr/izin/izin-sureci-tr.md
+    expected_doc_id: raw/hr/izin/izin-sureci-tr.md
     expected_section: "Talep Oluşturma"
     category: paraphrase
     reason: >
@@ -85,7 +99,7 @@ queries:
       önce" verbatim. Tests dense retrieval on meaning rather than tokens.
 
   - query: "How much notice do UK staff need to give before taking time off?"
-    expected_doc_id: hr/izin/leave-process-en.md
+    expected_doc_id: raw/hr/izin/leave-process-en.md
     expected_section: "Submitting a Request"
     category: paraphrase
     reason: >
@@ -94,7 +108,7 @@ queries:
       Turkish paraphrase case above.
 
   - query: "If a customer sends products back once they've already received them, what document gets created?"
-    expected_doc_id: erp/faturalama/credit-note-process-en.md
+    expected_doc_id: raw/erp/faturalama/credit-note-process-en.md
     expected_section: "When to Use a Credit Note"
     category: paraphrase
     reason: >
@@ -103,7 +117,7 @@ queries:
       rather than lexical matching.
 
   - query: "Depoda fiziksel ürün adedini saymak için ekipler nasıl görevlendiriliyor?"
-    expected_doc_id: erp/stok/stok-sayim-tr.md
+    expected_doc_id: raw/erp/stok/stok-sayim-tr.md
     expected_section: "Uygulama"
     category: paraphrase
     reason: >
@@ -111,7 +125,7 @@ queries:
       barkod okutarak" without reusing those exact phrases.
 
   - query: "Bir ürünün deposu azaldığında tedarikçiye otomatik olarak ne oluyor?"
-    expected_doc_id: erp/stok/minimum-stok-seviyesi-tr.md
+    expected_doc_id: raw/erp/stok/minimum-stok-seviyesi-tr.md
     expected_section: "Otomatik Sipariş Tetikleme"
     category: paraphrase
     reason: >
@@ -126,7 +140,7 @@ queries:
   # ---------------------------------------------------------------------
 
   - query: "fatura iptal etme yetkisi kimde, tutar sınırı ne kadar"
-    expected_doc_id: erp/faturalama/fatura-iptal-sureci-tr.md
+    expected_doc_id: raw/erp/faturalama/fatura-iptal-sureci-tr.md
     expected_section: "Yetkilendirme Matrisi"
     category: hard_rerank
     reason: >
@@ -137,7 +151,7 @@ queries:
       resolve it correctly.
 
   - query: "Depoda ürün stoğu azaldığında sistem ne yapar?"
-    expected_doc_id: erp/stok/minimum-stok-seviyesi-tr.md
+    expected_doc_id: raw/erp/stok/minimum-stok-seviyesi-tr.md
     expected_section: "Otomatik Sipariş Tetikleme"
     category: hard_rerank
     reason: >
@@ -146,7 +160,7 @@ queries:
       the count-discrepancy document may outrank the reorder-point document.
 
   - query: "İzin günü sayısı nasıl belirlenir?"
-    expected_doc_id: hr/izin/yillik-izin-hesaplama-tr.md
+    expected_doc_id: raw/hr/izin/yillik-izin-hesaplama-tr.md
     expected_section: "Kıdem Bazlı Hakediş Tablosu"
     category: hard_rerank
     reason: >
@@ -155,7 +169,7 @@ queries:
       and lexical overlap ("izin", "yıllık izin").
 
   - query: "If I don't use my time off in lieu within the deadline, do I lose it or get paid instead?"
-    expected_doc_id: hr/izin/mesai-politikasi-en.md
+    expected_doc_id: raw/hr/izin/mesai-politikasi-en.md
     expected_section: "Time Off in Lieu"
     category: hard_rerank
     reason: >
@@ -166,7 +180,7 @@ queries:
       identical forfeiture language belonging to two different policies.
 
   - query: "What's the difference between voiding an invoice early versus reversing it after it's already gone to the tax authority?"
-    expected_doc_id: erp/faturalama/credit-note-process-en.md
+    expected_doc_id: raw/erp/faturalama/credit-note-process-en.md
     expected_section: "Difference from Cancellation"
     category: hard_rerank
     reason: >
@@ -182,7 +196,7 @@ queries:
 
   - query: "iptal süreci nasıl işler"
     tag_filter: ["erp", "faturalama"]
-    expected_doc_id: erp/faturalama/fatura-iptal-sureci-tr.md
+    expected_doc_id: raw/erp/faturalama/fatura-iptal-sureci-tr.md
     category: tag_filtered
     reason: >
       "iptal" (cancellation) alone is ambiguous across tag folders (an HR
@@ -191,7 +205,7 @@ queries:
 
   - query: "asgari seviye ne zaman tetiklenir"
     tag_filter: ["erp", "stok"]
-    expected_doc_id: erp/stok/minimum-stok-seviyesi-tr.md
+    expected_doc_id: raw/erp/stok/minimum-stok-seviyesi-tr.md
     category: tag_filtered
     reason: >
       Confirms the tag filter is applied as an AND constraint alongside
@@ -200,7 +214,7 @@ queries:
 
   - query: "onay süresi kaç gün"
     tag_filter: ["hr", "izin"]
-    expected_doc_id: hr/izin/izin-sureci-tr.md
+    expected_doc_id: raw/hr/izin/izin-sureci-tr.md
     category: tag_filtered
     reason: >
       Both hr/izin/izin-sureci-tr.md ("Yönetici 2 iş günü içinde yanıt
@@ -213,7 +227,7 @@ queries:
 
   - query: "Mevsimsel ürünler için başlangıç siparişi sezon başlamadan kaç gün önce oluşturuluyor?"
     tag_filter: ["erp"]
-    expected_doc_id: erp/stok/minimum-stok-seviyesi-tr.md
+    expected_doc_id: raw/erp/stok/minimum-stok-seviyesi-tr.md
     expected_section: "Mevsimsel Ürünler İstisnası"
     category: tag_filtered
     reason: >
@@ -231,7 +245,7 @@ queries:
   # ---------------------------------------------------------------------
 
   - query: "İngiltere şubesinde fatura iptali için onay limiti kaç sterlin?"
-    expected_doc_id: erp/faturalama/invoice-cancellation-en.md
+    expected_doc_id: raw/erp/faturalama/invoice-cancellation-en.md
     expected_section: "Approval Matrix"
     category: cross_lingual_tr_to_en
     reason: >
@@ -241,7 +255,7 @@ queries:
       Turkish invoice-cancellation doc.
 
   - query: "UK deposundaki mallar, hedef depoya varmadan satılabilir mi?"
-    expected_doc_id: erp/stok/warehouse-transfer-en.md
+    expected_doc_id: raw/erp/stok/warehouse-transfer-en.md
     expected_section: "Receipt Confirmation"
     category: cross_lingual_tr_to_en
     reason: >
@@ -250,7 +264,7 @@ queries:
       without a distracting near-duplicate sibling.
 
   - query: "İngiltere ofisinde izin talebi kaç iş günü önceden yapılmalı?"
-    expected_doc_id: hr/izin/leave-process-en.md
+    expected_doc_id: raw/hr/izin/leave-process-en.md
     expected_section: "Submitting a Request"
     category: cross_lingual_tr_to_en
     reason: >
@@ -261,7 +275,7 @@ queries:
       the model to key off "İngiltere ofisinde" rather than topic alone.
 
   - query: "What is the approval limit in Turkish lira for cancelling an invoice at the Turkey headquarters?"
-    expected_doc_id: erp/faturalama/fatura-iptal-sureci-tr.md
+    expected_doc_id: raw/erp/faturalama/fatura-iptal-sureci-tr.md
     expected_section: "Yetkilendirme Matrisi"
     category: cross_lingual_en_to_tr
     reason: >
@@ -269,7 +283,7 @@ queries:
       (5.000 TL) exist only in the Turkish document.
 
   - query: "How many days in advance must a request be filed at the Turkey office before taking leave?"
-    expected_doc_id: hr/izin/izin-sureci-tr.md
+    expected_doc_id: raw/hr/izin/izin-sureci-tr.md
     expected_section: "Talep Oluşturma"
     category: cross_lingual_en_to_tr
     reason: >
@@ -278,7 +292,7 @@ queries:
       (5 business days) for the UK office instead.
 
   - query: "What is the VAT rate applied to basic food items in the Turkish ERP system?"
-    expected_doc_id: erp/faturalama/kdv-hesaplama-tr.md
+    expected_doc_id: raw/erp/faturalama/kdv-hesaplama-tr.md
     expected_section: "Kategori Bazlı Oranlar"
     category: cross_lingual_en_to_tr
     reason: >
