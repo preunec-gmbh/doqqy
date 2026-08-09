@@ -118,6 +118,8 @@ doqqy watch
 doqqy watch --debounce 3.0  # wait 3 seconds after the last change before syncing
 ```
 
+Each debounced batch of changes triggers one `sync` run and prints a single summary line (`+added ~modified -deleted`). A bad file in a batch does not stop the loop — it's counted as `✗failed`, logged to `.doqqy/logs/sync.log`, and watching continues; the same isolation applies to batch-level failures (e.g. a transient store/model error), logged to `.doqqy/logs/watch.log`. Stop with Ctrl+C.
+
 ### `doqqy query`
 
 Hybrid search: dense + sparse retrieval (50 candidates each) → RRF fusion → cross-encoder rerank → top-k.
