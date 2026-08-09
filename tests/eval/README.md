@@ -36,7 +36,11 @@ The corpus deliberately exercises specific chunker/embedder behavior, not just "
 
 ## queries.yaml
 
-Each entry is a `(query, expected_doc_id[, expected_section])` pair plus a `category` and a `reason` explaining what retrieval behavior it targets: exact-term (sparse should win), paraphrase (dense should win), hard/rerank-dependent (a near-duplicate-topic doc competes for top-1), tag-filtered, and cross-lingual (TR query → EN doc or vice versa).
+Each entry is a `(query, expected_doc_id[, expected_section])` pair plus an optional `tag_filter`, a `category`, and a `reason` explaining what retrieval behavior it targets: exact-term (sparse should win), paraphrase (dense should win), hard/rerank-dependent (a near-duplicate-topic doc competes for top-1), tag-filtered, and cross-lingual (TR query → EN doc or vice versa).
+
+**`expected_doc_id` is not a path relative to `raw/`, it's the literal `Chunk.doc_id`.** `chunk.py` sets `doc_id` from the ingested frontmatter `source` field, which keeps the `raw/` prefix (workspace-root-relative), so `tests/eval/corpus/raw/erp/faturalama/x.md` produces `Chunk.doc_id == "raw/erp/faturalama/x.md"` — and that `raw/`-prefixed form is exactly what every `expected_doc_id` in `queries.yaml` uses. #15 should compare against `Chunk.doc_id` with plain string equality; no path rewriting.
+
+**`tag_filter`** is optional and, where present, is an AND constraint over every listed tag (see `TagFilter` in `infra/vectorstore/base.py`) — not an OR. A single-element filter like `["erp"]` is intentional in some entries, testing that the parent tag matches chunks under either child tag folder; it is not a typo for the two-element form.
 
 **Section-matching contract**: `expected_section`, where present, must be the literal text of a Markdown heading in the target document — but the harness should treat a chunk as matching if `expected_section` appears *anywhere in that chunk's `section_path`* (an ancestor heading counts), not only as the chunk's own leaf heading. Since `chunk.py` splits on H1–H4, a chunk's own leaf heading can sit one level below the `expected_section` given here (e.g. an H3 `expected_section` matching a chunk whose leaf heading is an H4 beneath it). This is intentional and is spelled out in `queries.yaml`'s header comment — don't "fix" it by making `expected_section` always the leaf.
 
