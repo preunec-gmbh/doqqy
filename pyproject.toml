@@ -53,6 +53,7 @@ dev = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "pydantic-settings>=2.2.0",
+    "pytest-asyncio>=0.23.0",
 ]
 ocr = [
     "easyocr>=1.7.0",
@@ -62,6 +63,11 @@ ocr = [
 watch = [
     "watchfiles>=0.21",
 ]
+mcp = [
+    # FastMCP API'si 2.0 sürümünde değiştiği/taşındığı için şimdilik 2.x sürümlerini sınırlandırıyoruz.
+    "mcp>=1.29.0,<2",
+]
+
 # PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
 # pymupdf4llm yalnızca docling boş/hatalı döndüğünde devreye giriyor.
 # Opsiyonel tutuluyor çünkü PyMuPDF AGPL-3.0 / Artifex ticari ikili lisanslı —
@@ -88,6 +94,7 @@ where = ["src"]
 markers = [
     "slow: marks integration tests that are slower to run",
 ]
+asyncio_mode = "strict"
 
 [tool.ruff]
 target-version = "py310"
