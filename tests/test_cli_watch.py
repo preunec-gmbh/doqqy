@@ -8,6 +8,8 @@ already isolated. Ctrl-C must still exit the loop cleanly.
 
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 from unittest.mock import patch
 
@@ -25,7 +27,9 @@ def temp_ws(tmp_path: Path) -> Workspace:
     return ws
 
 
-def test_watch_survives_batch_failure_and_exits_on_ctrl_c(temp_ws: Workspace, capsys) -> None:
+def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
+    temp_ws: Workspace, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
     calls = {"n": 0}
 
     def fake_sync(ws, *, settings=None, dry_run=False):
@@ -42,9 +46,19 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(temp_ws: Workspace, ca
         for _ in range(3):
             yield {("added", str(path / "x.md"))}
 
+    # `watchfiles` is an optional extra (the `watch` install group) and isn't
+    # guaranteed to be present in the environment running this test, so a
+    # real `watchfiles.watch` module attribute can't be patched with
+    # unittest.mock.patch("watchfiles.watch", ...) -- that requires importing
+    # the real module first. Inject a fake module into sys.modules instead;
+    # cli.watch()'s `from watchfiles import watch as watchfiles_watch` then
+    # resolves against the fake regardless of whether the real package exists.
+    fake_watchfiles = types.ModuleType("watchfiles")
+    fake_watchfiles.watch = fake_watchfiles_watch  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "watchfiles", fake_watchfiles)
+
     with (
         patch.object(cli, "_workspace", return_value=temp_ws),
-        patch("watchfiles.watch", side_effect=fake_watchfiles_watch),
         patch("doqqy.sync.sync", side_effect=fake_sync),
     ):
         # Must not raise -- KeyboardInterrupt on the third batch is caught
