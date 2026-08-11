@@ -97,6 +97,8 @@ doqqy sync --dry-run  # preview changes without modifying vector store or manife
 
 Change detection hashes the **raw** file's bytes. Editing a file under `raw/` is picked up; re-running `sync` after only upgrading an ingester is not, because the raw bytes are unchanged — use `doqqy embed` for a full rebuild in that case.
 
+Failures don't stop the run — a summary panel lists failed files; details in `.doqqy/logs/sync.log`.
+
 Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
 
 ### `doqqy status`

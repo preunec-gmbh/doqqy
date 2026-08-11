@@ -383,12 +383,19 @@ def sync(
     ),
 ) -> None:
     """Incremental pipeline: only re-process changed/new/deleted documents."""
+    from doqqy.config import file_log
     from doqqy.infra.settings import Settings
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    report = run_sync(ws, settings=settings, dry_run=dry_run)
+    if dry_run:
+        # A dry run must not touch the filesystem, and file_log() creates the
+        # log file/directory as a side effect of attaching the handler.
+        report = run_sync(ws, settings=settings, dry_run=dry_run)
+    else:
+        with file_log("doqqy.sync", ws.logs_dir / "sync.log"):
+            report = run_sync(ws, settings=settings, dry_run=dry_run)
 
     # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
     prefix = r"\[dry-run] " if dry_run else ""
@@ -512,6 +519,10 @@ def watch(
     ws.ensure_dirs()
     settings = Settings(vector_backend=backend) if backend else None
     log = get_logger("doqqy.watch")
+    # Child loggers propagate to the "doqqy" root's console StreamHandler by
+    # default; the rich line below is already the console-facing summary, so
+    # don't also dump the raw traceback there — only into watch.log.
+    log.propagate = False
 
     console.print(
         Panel(
