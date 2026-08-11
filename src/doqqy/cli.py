@@ -465,7 +465,10 @@ def status() -> None:
     status_table.add_column("Status", style="bold")
     status_table.add_column("Count", justify="right")
     for s, count in sorted(status_counts.items()):
-        style = {"indexed": "green", "failed": "red", "ingested": "yellow", "chunked": "cyan"}.get(s, "dim")
+        style = {
+            "indexed": "green", "failed": "red", "ingested": "yellow",
+            "chunked": "cyan", "aliased": "magenta",
+        }.get(s, "dim")
         status_table.add_row(f"[{style}]{s}[/{style}]", str(count))
     console.print(status_table)
 
@@ -565,15 +568,39 @@ def info() -> None:
     else:
         table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
 
+    duplicate_groups = []
     if ws.manifest_path.exists():
         from doqqy.manifest import Manifest
         m = Manifest.load(ws)
         tot = m.totals()
         table.add_row("manifest.json", f"[green]{tot['docs']} doküman, {tot['chunks']} chunk[/green]")
+
+        from doqqy.dedup import find_duplicate_groups
+        duplicate_groups = find_duplicate_groups(m)
+        dup_docs = sum(1 + len(g.aliases) for g in duplicate_groups)
+        if duplicate_groups:
+            table.add_row(
+                "duplicates",
+                f"[magenta]{len(duplicate_groups)} grup[/magenta] ({dup_docs} doküman, "
+                f"content_hash ile eşleşti)",
+            )
     else:
         table.add_row("manifest.json", "[yellow](boş — `doqqy embed` ya da `doqqy sync` çalıştır)[/yellow]")
 
     console.print(table)
+
+    if duplicate_groups:
+        dup_table = Table(title="Duplicate groups (content_hash)", box=box.ROUNDED)
+        dup_table.add_column("Canonical", style="bold green")
+        dup_table.add_column("Aliases")
+        dup_table.add_column("Tags")
+        for group in duplicate_groups:
+            dup_table.add_row(
+                group.canonical,
+                "\n".join(group.aliases),
+                ", ".join(group.tags),
+            )
+        console.print(dup_table)
 
 
 def _count_files(root: Path, suffix: str | None = None) -> int:

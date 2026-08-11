@@ -27,6 +27,9 @@ class QdrantStore(VectorStore):
     def delete_by_doc(self, doc_id: str) -> int:
         raise NotImplementedError("QdrantStore is not implemented yet (Phase 1.5).")
 
+    def get_by_doc(self, doc_id: str) -> list[ChunkRecord]:
+        raise NotImplementedError("QdrantStore is not implemented yet (Phase 1.5).")
+
     def hybrid_search(
         self, dense: np.ndarray, sparse: dict[int, float],
         *, limit: int, flt: TagFilter | None = None,
