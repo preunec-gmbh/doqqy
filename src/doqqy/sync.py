@@ -304,6 +304,25 @@ def _process_deletions(
                 if processed.exists():
                     processed.unlink()
 
+                # Deleting a canonical (issue #18) takes the group's only copy
+                # of the shared content down with it: its aliases carry
+                # chunk_count=0 of their own. Manifest.diff() re-flags them,
+                # but only on the *next* run — this run's diff classified them
+                # as unchanged back when the canonical was still in the
+                # manifest. Warn so that gap isn't silent.
+                stranded = sorted(
+                    alias_id
+                    for alias_id, entry in manifest.docs.items()
+                    if entry.alias_of == doc_id
+                )
+                if stranded:
+                    _LOG.warning(
+                        "Deleted %s was the canonical copy for %d duplicate alias(es) (%s) — "
+                        "that content is out of the index until the next run re-embeds it "
+                        "standalone. Run `doqqy sync` again.",
+                        doc_id, len(stranded), ", ".join(stranded),
+                    )
+
                 manifest.remove_entry(doc_id)
                 report.deleted += 1
             except Exception as exc:  # noqa: BLE001

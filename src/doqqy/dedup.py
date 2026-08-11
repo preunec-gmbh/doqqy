@@ -199,6 +199,17 @@ def resolve_duplicates(
         # still be carrying a tag union from members that are now gone. Shed it
         # back to the doc's own folder-derived tags. Aliases are excluded: a
         # stranded alias is Manifest.diff()'s job (it gets fully reprocessed).
+        #
+        # This rests on a corpus-wide invariant: a doc's tags come from its
+        # folder path and nowhere else (ingest.base_metadata), so any drift
+        # away from that can only be a leftover union. md_ingest deliberately
+        # namespaces a user's own frontmatter keys as original_*, so a
+        # hand-written `tags:` never reaches a manifest entry. If a second tag
+        # source is ever introduced (frontmatter tags, manual tagging, a
+        # config-level default), this pass would silently reset it on every
+        # run — and for every doc in the manifest, not just former duplicate
+        # carriers. Narrow the loop to docs known to have carried a union
+        # before adding one.
         grouped_doc_ids: set[str] = set()
         for g in groups:
             grouped_doc_ids.add(g.canonical)
