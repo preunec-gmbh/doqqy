@@ -135,6 +135,21 @@ Each hit shows the source file, section path, and score breakdown (`dense=<rank>
 
 `--context N` (`-c`) walks each hit's `prev_chunk`/`next_chunk` chain N steps in both directions and displays the neighboring chunks alongside the hit, dimmed to distinguish them from the matched chunk. Expansion happens after reranking — it's display-only and never affects which chunks were selected or their order. At a document's start/end, the missing side is simply omitted.
 
+### `doqqy serve`
+
+Starts the local resident HTTP server, keeping `bge-m3` embedding and `bge-reranker` models pre-warmed in memory so queries return in milliseconds (<1 s warm instead of ~20-60 s cold CLI load).
+
+```powershell
+doqqy serve                  # starts server on http://127.0.0.1:8000
+doqqy serve --port 8080      # custom port
+doqqy serve --host 127.0.0.1 # custom host
+```
+
+Endpoints:
+- `GET /healthz` — Liveness probe (returns `{"status": "ok"}`).
+- `GET /readyz` — Readiness probe (returns `200` once models are warmed up, `503` while loading).
+- `POST /v1/workspaces/{workspace_id}/query` — Hybrid neural search endpoint accepting `QueryRequest` JSON.
+
 ### `doqqy map`
 
 Build the relationship map `.doqqy/topics.yaml` (Pass 1 regex references + Pass 2 embedding cosine).

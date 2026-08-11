@@ -66,6 +66,11 @@ watch = [
 pdf-fallback = [
     "pymupdf4llm>=0.0.17",
 ]
+server = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic-settings>=2.2.0",
+]
 
 [project.scripts]
 doqqy = "doqqy.cli:app"
