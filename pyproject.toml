@@ -50,6 +50,9 @@ llm = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.15,<0.17",     # CI ile aynı linter sürümü; minor'a pinli ki yeni kurallar CI'ı kırmasın
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic-settings>=2.2.0",
 ]
 ocr = [
     "easyocr>=1.7.0",

@@ -1,7 +1,19 @@
 """Tests for doqqy HTTP server (create_app, healthz, readyz, query, SLOs)."""
 
+from __future__ import annotations
+
+import time
+from unittest.mock import patch
+
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("uvicorn")
+pytest.importorskip("pydantic_settings")
+
 from fastapi.testclient import TestClient
 
+from doqqy.infra.models import ModelManager
 from doqqy.infra.settings import Settings
 from doqqy.server.app import create_app
 
@@ -21,11 +33,11 @@ def test_readyz_true_after_warmup():
     """/readyz warmup sonrasında (lifespan çalıştıktan sonra) 200 true dönmeli."""
     settings = Settings(auth_mode="none")
     app = create_app(settings)
-    # with TestClient(app) şeklinde çağrıldığında lifespan tetiklenir
-    with TestClient(app) as client:
-        resp = client.get("/readyz")
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "ready", "models_loaded": True}
+    with patch.object(ModelManager, "warmup", return_value=None):
+        with TestClient(app) as client:
+            resp = client.get("/readyz")
+            assert resp.status_code == 200
+            assert resp.json() == {"status": "ready", "models_loaded": True}
 
 
 def test_query_round_trip():
@@ -33,24 +45,25 @@ def test_query_round_trip():
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
-    with TestClient(app) as client:
-        payload = {
-            "q": "test sorgusu",
-            "top_k": 5,
-            "rerank": True,
-        }
-        resp = client.post("/v1/workspaces/demo-ws/query", json=payload)
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "hits" in data
-        assert "took_ms" in data
-        assert data["workspace"] == "demo-ws"
+    with patch.object(ModelManager, "warmup", return_value=None):
+        with TestClient(app) as client:
+            payload = {
+                "q": "test sorgusu",
+                "top_k": 5,
+                "rerank": True,
+            }
+            resp = client.post("/v1/workspaces/demo-ws/query", json=payload)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "hits" in data
+            assert "took_ms" in data
+            assert data["workspace"] == "demo-ws"
 
 
 # SLO (Service Level Objectives) Testleri:
+@pytest.mark.slow
 def test_slo_readiness_duration_under_120s():
     """SLO: Modellerin açılışta yüklenme süresi (Readiness) < 120 saniye olmalı."""
-    import time
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
@@ -63,6 +76,7 @@ def test_slo_readiness_duration_under_120s():
         assert startup_duration < 120.0, f"Açılış süresi ({startup_duration:.2f}s) 120s sınırını aştı!"
 
 
+@pytest.mark.slow
 def test_slo_query_warm_with_rerank_under_800ms():
     """SLO: Modeller sıcakken rerank açık p95 arama süresi < 800 ms olmalı."""
     settings = Settings(auth_mode="none")
@@ -89,6 +103,7 @@ def test_slo_query_warm_with_rerank_under_800ms():
         assert p95_ms < 800, f"Rerank p95 süresi ({p95_ms} ms) 800 ms sınırını aştı! Tüm süreler: {latencies}"
 
 
+@pytest.mark.slow
 def test_slo_query_warm_no_rerank_under_250ms():
     """SLO: Modeller sıcakken rerank kapalı p95 arama süresi < 250 ms olmalı."""
     settings = Settings(auth_mode="none")
