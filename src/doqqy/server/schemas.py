@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QueryRequest(BaseModel):
     """Sorgu isteği için gelen veri şeması ve doğrulama kuralları."""
     q: str = Field(..., min_length=1, max_length=2000, description="Arama sorgusu metni")
     top_k: int = Field(5, ge=1, le=50, description="Getirilecek maksimum sonuç sayısı")
-    tag: str | None = Field(None, pattern=r"^[\w-]+$", description="Filtrelenecek etiket")
+    tag: str | None = Field(None, pattern=r"^[\w-]+$", description="Filtrelenecek etiket (isteğe bağlı)")
     rerank: bool = Field(True, description="Reranker modeli kullanılsın mı?")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "q": "fatura iptal ve iade süreci",
+                "top_k": 5,
+                "tag": None,
+                "rerank": True,
+            }
+        }
+    )
 
 
 class ScoreBreakdown(BaseModel):

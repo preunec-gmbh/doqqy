@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING
@@ -33,16 +34,27 @@ class StoreManager:
                 self._cache.move_to_end(key)
                 return self._cache[key]
 
-        store = make_store(ws, self._settings)
-
-        with self._lock:
+            store = make_store(ws, self._settings)
             self._cache[key] = store
             if len(self._cache) > self._max:
-                self._cache.popitem(last=False)
-        return store
+                _, evicted = self._cache.popitem(last=False)
+                with contextlib.suppress(Exception):
+                    evicted.close()
+            return store
 
     def invalidate(self, ws: Workspace) -> None:
-        """Yazma işlemi sonrasında çalışma alanının önbellekteki bağlantısını siler."""
+        """Yazma işlemi sonrasında çalışma alanının önbellekteki bağlantısını kapatır ve siler."""
         key = ws.root.resolve()
         with self._lock:
-            self._cache.pop(key, None)
+            store = self._cache.pop(key, None)
+            if store:
+                with contextlib.suppress(Exception):
+                    store.close()
+
+    def close_all(self) -> None:
+        """Tüm açık veritabanı bağlantılarını kapatır ve önbelleği boşaltır."""
+        with self._lock:
+            while self._cache:
+                _, store = self._cache.popitem()
+                with contextlib.suppress(Exception):
+                    store.close()

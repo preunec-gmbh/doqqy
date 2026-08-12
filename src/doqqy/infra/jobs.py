@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 @dataclass
 class Job:
     """Arka planda çalışan bir işin durumunu temsil eden veri sınıfı."""
-
     id: str
     kind: str  # "ingest_embed" | "map" | "reindex"
     workspace_root: str
@@ -25,7 +24,6 @@ class Job:
 
 class JobQueue(Protocol):
     """Tüm iş kuyruğu sistemlerinin uyması gereken soyut arayüz (Protocol)."""
-
     async def enqueue(self, kind: str, ws: Workspace, payload: dict) -> str:
         ...
 
@@ -34,7 +32,12 @@ class JobQueue(Protocol):
 
 
 class InProcessQueue:
-    """Yerel tek kullanıcılı çalışma (doqqy serve) için bellek içi iş kuyruğu."""
+    """Yerel tek kullanıcılı çalışma (doqqy serve) için bellek içi iş kuyruğu.
+
+    NOTE: Asenkron iş yürütücüsü (execution worker) API-ARCHITECTURE.md §2.4 uyarınca
+    Build Step 5 (Upload & Ingestion) aşamasında bağlanacaktır. Step 3 için bu sınıf
+    iş durumu takibi ve JobQueue protokol iskeletini sağlar.
+    """
 
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}

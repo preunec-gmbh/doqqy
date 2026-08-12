@@ -37,3 +37,7 @@ TODO.md
 
 # Binary installers
 *.msi
+
+# OS artifacts
+.DS_Store
+*.DS_Store

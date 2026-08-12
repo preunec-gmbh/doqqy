@@ -623,7 +623,7 @@ docling/pymupdf/pandoc process untrusted input in SaaS mode. The worker containe
 |---|---|---|
 | 1 | `workspace.py` + L1 signature refactor + tag sanitation + reranker-on-GPU; CLI green, unit tests from handover doc | the seam is real |
 | 2 | `infra/`: Settings, ModelManager, StoreManager, InProcessQueue | wiring works without HTTP |
-| 3 | `doqqy serve` — create_app, query + meta routers only, auth_mode=none, localhost (DONE) | hot path + lifespan + threadpool model under load (hit it with `hey`/`k6`) |
+| 3 | `doqqy serve` — create_app, query + meta routers only, auth_mode=none, localhost | hot path + lifespan + threadpool model under load (hit it with `hey`/`k6`) |
 | 4 | Manifest service + documents GET/DELETE + tags-from-manifest | metadata layer |
 | 5 | Upload endpoint + IngestService job body + ArqQueue + worker entrypoint + compose file | the write path, end to end |
 | 6 | Auth (API keys) + WorkspaceService tenancy + quotas + rate limits | multi-tenant |
