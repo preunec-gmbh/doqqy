@@ -383,12 +383,19 @@ def sync(
     ),
 ) -> None:
     """Incremental pipeline: only re-process changed/new/deleted documents."""
+    from doqqy.config import file_log
     from doqqy.infra.settings import Settings
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    report = run_sync(ws, settings=settings, dry_run=dry_run)
+    if dry_run:
+        # A dry run must not touch the filesystem, and file_log() creates the
+        # log file/directory as a side effect of attaching the handler.
+        report = run_sync(ws, settings=settings, dry_run=dry_run)
+    else:
+        with file_log("doqqy.sync", ws.logs_dir / "sync.log"):
+            report = run_sync(ws, settings=settings, dry_run=dry_run)
 
     # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
     prefix = r"\[dry-run] " if dry_run else ""
@@ -507,12 +514,18 @@ def watch(
         )
         raise typer.Exit(code=1) from e
 
+    from doqqy.config import file_log, get_logger
     from doqqy.infra.settings import Settings
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
     ws.ensure_dirs()
     settings = Settings(vector_backend=backend) if backend else None
+    log = get_logger("doqqy.watch")
+    # Child loggers propagate to the "doqqy" root's console StreamHandler by
+    # default; the rich line below is already the console-facing summary, so
+    # don't also dump the raw traceback there — only into watch.log.
+    log.propagate = False
 
     console.print(
         Panel(
@@ -526,17 +539,33 @@ def watch(
         # watchfiles debounces internally (milliseconds) and only yields once the
         # burst has settled — sleeping after the yield would just let edits made
         # during the sleep queue up and trigger a second, redundant sync.
-        for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
-            console.print("[dim]Change detected — syncing…[/dim]")
-            report = run_sync(ws, settings=settings)
-            if report.total_processed > 0:
-                console.print(
-                    f"  [green]+{report.added}[/green] added  "
-                    f"[yellow]~{report.modified}[/yellow] modified  "
-                    f"[red]-{report.deleted}[/red] deleted"
-                )
-            else:
-                console.print("  [dim]No actionable changes.[/dim]")
+        with (
+            file_log("doqqy.watch", ws.logs_dir / "watch.log"),
+            file_log("doqqy.sync", ws.logs_dir / "sync.log"),
+        ):
+            for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
+                console.print("[dim]Change detected — syncing…[/dim]")
+                # A batch-level failure (model load, store connection, corrupt
+                # manifest, …) must not kill the loop — log it and keep watching,
+                # same failure-isolation invariant sync() already applies per file.
+                try:
+                    report = run_sync(ws, settings=settings)
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("Batch sync failed: %s", exc)
+                    console.print(f"  [red]✗ sync failed: {type(exc).__name__}: {exc}[/red]")
+                    continue
+
+                if report.total_processed > 0:
+                    console.print(
+                        f"  [green]+{report.added}[/green] added  "
+                        f"[yellow]~{report.modified}[/yellow] modified  "
+                        f"[red]-{report.deleted}[/red] deleted"
+                        + (f"  [red]✗{len(report.failed)}[/red] failed" if report.has_failures else "")
+                    )
+                elif report.has_failures:
+                    console.print(f"  [red]✗{len(report.failed)}[/red] failed — see {ws.logs_dir / 'sync.log'}")
+                else:
+                    console.print("  [dim]No actionable changes.[/dim]")
     except KeyboardInterrupt:
         console.print("\n[dim]Watch stopped.[/dim]")
 

@@ -102,6 +102,8 @@ doqqy sync --dry-run  # preview changes without modifying vector store or manife
 
 Change detection hashes the **raw** file's bytes. Editing a file under `raw/` is picked up; re-running `sync` after only upgrading an ingester is not, because the raw bytes are unchanged — use `doqqy embed` for a full rebuild in that case.
 
+Failures don't stop the run — a summary panel lists failed files; details in `.doqqy/logs/sync.log`.
+
 Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
 
 ### `doqqy status`
@@ -122,6 +124,8 @@ pip install -e ".[watch]"
 doqqy watch
 doqqy watch --debounce 3.0  # wait 3 seconds after the last change before syncing
 ```
+
+Each debounced batch of changes triggers one `sync` run and prints a single summary line (`+added ~modified -deleted`). A bad file in a batch does not stop the loop — it's counted as `✗failed`, logged to `.doqqy/logs/sync.log`, and watching continues; the same isolation applies to batch-level failures (e.g. a transient store/model error), logged to `.doqqy/logs/watch.log`. Stop with Ctrl+C.
 
 ### `doqqy query`
 
