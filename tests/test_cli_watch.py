@@ -8,6 +8,8 @@ already isolated. Ctrl-C must still exit the loop cleanly.
 
 from __future__ import annotations
 
+import io
+import logging
 import sys
 import types
 from pathlib import Path
@@ -57,13 +59,25 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
     fake_watchfiles.watch = fake_watchfiles_watch  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "watchfiles", fake_watchfiles)
 
-    with (
-        patch.object(cli, "_workspace", return_value=temp_ws),
-        patch("doqqy.sync.sync", side_effect=fake_sync),
-    ):
-        # Must not raise -- KeyboardInterrupt on the third batch is caught
-        # internally and the command returns normally.
-        cli.watch(backend=None, debounce=0.01)
+    # Stand-in for the console StreamHandler that config._ensure_console_handler()
+    # attaches to the parent "doqqy" logger -- whatever reaches this handler is
+    # what the user would see on their terminal. capsys can't be used for that:
+    # the real handler binds the stream at import time, so its output never goes
+    # through the stream capsys patches.
+    console_sink = io.StringIO()
+    console_probe = logging.StreamHandler(console_sink)
+    logging.getLogger("doqqy").addHandler(console_probe)
+
+    try:
+        with (
+            patch.object(cli, "_workspace", return_value=temp_ws),
+            patch("doqqy.sync.sync", side_effect=fake_sync),
+        ):
+            # Must not raise -- KeyboardInterrupt on the third batch is caught
+            # internally and the command returns normally.
+            cli.watch(backend=None, debounce=0.01)
+    finally:
+        logging.getLogger("doqqy").removeHandler(console_probe)
 
     # All three batches ran: the loop survived the batch-1 crash instead of
     # dying after the first iteration.
@@ -78,6 +92,9 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
     assert watch_log.exists()
     assert "Batch sync failed" in watch_log.read_text(encoding="utf-8")
 
-    # The traceback for the batch failure must not also be dumped to stdout --
-    # only the concise rich summary line belongs there.
+    # The traceback for the batch failure must not also be dumped to the
+    # console -- only the concise rich summary line belongs there. This is what
+    # cli.watch()'s `log.propagate = False` buys: without it the record reaches
+    # the "doqqy" logger's console handler and prints the whole traceback.
+    assert "Traceback (most recent call last)" not in console_sink.getvalue()
     assert "Traceback (most recent call last)" not in out
