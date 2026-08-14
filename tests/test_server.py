@@ -80,8 +80,24 @@ def test_store_manager_lru_eviction_and_close(tmp_path):
         assert mock_close_2.called or len(mgr._cache) == 0
 
 
+def _index_size(ws: Workspace) -> int:
+    """Fixture index'indeki kayıt sayısı — SLO assert mesajlarının hangi boyutta ölçtüğünü bildirmesi için."""
+    import contextlib
+
+    from doqqy.infra.vectorstore.factory import make_store
+
+    with contextlib.closing(make_store(ws)) as store:
+        return store.count()
+
+
 def _create_fixture_workspace(root: Path) -> Workspace:
-    """Testler için gerçek doküman içeren, chunk'lanmış ve embed edilmiş fixture workspace üretir."""
+    """Testler için gerçek doküman içeren, chunk'lanmış ve embed edilmiş fixture workspace üretir.
+
+    DİKKAT: Tek dokümanlık bu fixture yalnızca ~2 kayıtlık bir index üretir; cross-encoder
+    dolayısıyla RETRIEVAL_TOP_K (50) yerine sadece 2 pair skorlar. Aşağıdaki SLO testleri
+    bu boyut için geçerlidir, docs/API-ARCHITECTURE.md §6.5'in yazıldığı ≤10k chunk için
+    DEĞİL — gerçek boyutlu corpus ölçümleri ve 800 ms hedefinin CPU'da tutmaması #62'de.
+    """
     from doqqy.chunk import chunk_directory
     from doqqy.embed import build_index
     from doqqy.ingest import ingest_file
@@ -180,8 +196,13 @@ def test_slo_readiness_duration_under_120s():
 
 @pytest.mark.slow
 def test_slo_query_warm_with_rerank_under_800ms(tmp_path):
-    """SLO: Modeller sıcakken ve dizin doluyken rerank açık p95 arama süresi < 800 ms olmalı."""
+    """SLO: Modeller sıcakken rerank açık p95 arama süresi < 800 ms olmalı — fixture boyutunda.
+
+    Bu eşik yalnızca aşağıda raporlanan kayıt sayısı için anlamlıdır. §6.5'teki hedef
+    ≤10k chunk için yazılmıştır ve CPU'da o boyutta tutmuyor (320 kayıtta p95 ≈ 7.3 s) — #62.
+    """
     ws = _create_fixture_workspace(tmp_path / "ws_slo_rerank")
+    index_size = _index_size(ws)
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
@@ -214,13 +235,21 @@ def test_slo_query_warm_with_rerank_under_800ms(tmp_path):
 
         p95_ms = float(np.percentile(latencies, 95))
 
-        assert p95_ms < 800, f"Rerank p95 süresi ({p95_ms:.1f} ms) 800 ms sınırını aştı! Tüm süreler: {latencies}"
+        assert p95_ms < 800, (
+            f"Rerank p95 süresi ({p95_ms:.1f} ms) {index_size} kayıtlık fixture index'te "
+            f"800 ms sınırını aştı! Tüm süreler: {latencies}"
+        )
 
 
 @pytest.mark.slow
 def test_slo_query_warm_no_rerank_under_250ms(tmp_path):
-    """SLO: Modeller sıcakken ve dizin doluyken rerank kapalı p95 arama süresi < 250 ms olmalı."""
+    """SLO: Modeller sıcakken rerank kapalı p95 arama süresi < 250 ms olmalı — fixture boyutunda.
+
+    Retrieval maliyeti corpus ile büyüdüğü için bu eşiğin payı dar: 320 kayıtta p95 ≈ 243 ms
+    ölçüldü, yani §6.5'in ≤10k chunk hedefine varmadan sınırı geçiyor — #62.
+    """
     ws = _create_fixture_workspace(tmp_path / "ws_slo_norerank")
+    index_size = _index_size(ws)
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
@@ -254,7 +283,10 @@ def test_slo_query_warm_no_rerank_under_250ms(tmp_path):
 
         p95_ms = float(np.percentile(latencies, 95))
 
-        assert p95_ms < 250, f"Rerank kapalı p95 süresi ({p95_ms:.1f} ms) 250 ms sınırını aştı! Tüm süreler: {latencies}"
+        assert p95_ms < 250, (
+            f"Rerank kapalı p95 süresi ({p95_ms:.1f} ms) {index_size} kayıtlık fixture index'te "
+            f"250 ms sınırını aştı! Tüm süreler: {latencies}"
+        )
 
 
 def test_slo_api_availability_healthz():
