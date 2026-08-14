@@ -40,6 +40,7 @@ dependencies = [
 
     "openpyxl>=3.1.0",
     "tabulate>=0.9.0",
+    "pydantic-settings>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,7 @@ llm = [
     "anthropic>=0.40",
 ]
 dev = [
+    "doqqy[server]",
     "pytest>=8.0",
     "ruff>=0.15,<0.17",     # CI ile aynı linter sürümü; minor'a pinli ki yeni kurallar CI'ı kırmasın
     "pytest-asyncio>=0.23.0",
@@ -71,6 +73,10 @@ mcp = [
 # varsayılan kurulumun lisans profilini kirletmesin, isteyen bilerek opt-in etsin.
 pdf-fallback = [
     "pymupdf4llm>=0.0.17",
+]
+server = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
 ]
 
 [project.scripts]

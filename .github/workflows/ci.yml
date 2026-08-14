@@ -20,6 +20,11 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.10"]
 
+    env:
+      # Hem cache adımının hem de pytest'in aynı dizini kullanması için sabitliyoruz
+      # (varsayılan ~/.cache/huggingface yolu Windows ve Linux'ta farklı).
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -30,6 +35,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
           cache-dependency-path: pyproject.toml
+
+      # tests/test_server.py'deki fixture round trip testi gerçek bge-m3 + reranker
+      # yüklüyor. Cache olmadan her koşu ~4.5 GB model indiriyor; cache ile ilk
+      # koşudan sonra CI hızlı şeritte kalıyor. Model kimlikleri config.py'de.
+      #
+      # Neden yalnızca Linux: iki modelin toplamı ~4.5 GB, matrisin iki OS'una da
+      # verilirse ~9 GB eder ve GitHub'ın repo başına 10 GB cache limitini doldurup
+      # pip cache'ini eviction'a sokar. Windows job'ı modelleri indirmeye devam eder.
+      - name: Cache Hugging Face models
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-${{ matrix.os }}-${{ hashFiles('src/doqqy/config.py') }}
+          restore-keys: |
+            hf-${{ matrix.os }}-
 
       - name: Install Dependencies
         run: |

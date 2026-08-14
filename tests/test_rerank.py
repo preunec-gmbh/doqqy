@@ -19,9 +19,10 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _clear_reranker_cache():
-    """Clear the lru_cache singleton so each test gets a fresh load."""
-    from doqqy.rerank import _load_reranker
-    _load_reranker.cache_clear()
+    """Clear the singleton manager so each test gets a fresh load."""
+    from doqqy.infra.models import ModelManager
+
+    ModelManager.reset_default()
 
 
 CANDIDATES = [

@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from doqqy.config import (
     DEFAULT_TOP_K,
-    EMBEDDING_MODEL,
     RETRIEVAL_TOP_K,
-    detect_device,
     get_logger,
 )
 from doqqy.infra.settings import Settings
 from doqqy.workspace import Workspace
 
 if TYPE_CHECKING:
+    from doqqy.infra.models import ModelManager
     from doqqy.infra.vectorstore.base import VectorStore
 
 _LOG = get_logger("doqqy.query")
@@ -48,7 +46,6 @@ class SearchHit:
 @dataclass
 class ExpandedContext:
     """A hit's content plus its neighboring chunks, walked via prev_chunk/next_chunk."""
-
     before: list[str]
     after: list[str]
     hit: str
@@ -58,17 +55,20 @@ class ExpandedContext:
         return SEP.join([*self.before, self.hit, *self.after])
 
 
-# Model korpus-bağımsız → process-global singleton kalır.
-@lru_cache(maxsize=1)
-def _model():
-    from FlagEmbedding import BGEM3FlagModel  # type: ignore
+def _model(models: ModelManager | None = None, settings: Settings | None = None):
+    from doqqy.infra.models import get_default_model_manager
 
-    device = detect_device()
-    return BGEM3FlagModel(EMBEDDING_MODEL, use_fp16=(device == "cuda"), device=device)
+    mgr = models if models is not None else get_default_model_manager(settings)
+    return mgr.get_embedder()
 
 
-def _embed_query(text: str) -> tuple[np.ndarray, dict[int, float]]:
-    out = _model().encode(
+def _embed_query(
+    text: str,
+    models: ModelManager | None = None,
+    settings: Settings | None = None,
+) -> tuple[np.ndarray, dict[int, float]]:
+    embedder = _model(models=models, settings=settings)
+    out = embedder.encode(
         [text],
         max_length=1024,
         return_dense=True,
@@ -88,16 +88,24 @@ def search(
     rerank: bool = True,
     tag: str | None = None,
     settings: Settings | None = None,
+    models: ModelManager | None = None,
+    store: VectorStore | None = None,
 ) -> list[SearchHit]:
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
-    # Validate tag early — raises InvalidTagError before loading the embedding model.
     flt = TagFilter(tags=(tag,)) if tag else None
 
-    dense_vec, sparse_vec = _embed_query(query)
-    with contextlib.closing(make_store(ws, settings)) as store:
+    if models is not None or settings is not None:
+        dense_vec, sparse_vec = _embed_query(query, models=models, settings=settings)
+    else:
+        dense_vec, sparse_vec = _embed_query(query)
+
+    if store is not None:
         fused_chunks = store.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
+    else:
+        with contextlib.closing(make_store(ws, settings)) as s:
+            fused_chunks = s.hybrid_search(dense_vec, sparse_vec, limit=RETRIEVAL_TOP_K, flt=flt)
 
     if rerank and fused_chunks:
         from doqqy.rerank import rerank as do_rerank
@@ -120,7 +128,7 @@ def search(
                 "sparse_rank": c.sparse_rank,
                 "rrf_score": c.fused_score,
             })
-        reranked = do_rerank(query, candidates, top_k=k)
+        reranked = do_rerank(query, candidates, top_k=k, models=models, settings=settings)
         hits = []
         for r in reranked:
             hits.append(SearchHit(

@@ -632,6 +632,31 @@ def info() -> None:
         console.print(dup_table)
 
 
+@app.command()
+def serve(
+    port: int = typer.Option(8000, "--port", "-p", help="Sunucunun dinleyeceği port numarası."),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Sunucunun dinleyeceği ana makine adresi."),
+) -> None:
+    """Yerel HTTP arama sunucusunu başlatır (bge-m3 + reranker modellerini bellekte warm tutar)."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[red]Hata:[/red] uvicorn yüklü değil. "
+            "Lütfen `pip install 'doqqy[server]'` veya `pip install uvicorn fastapi` çalıştırın."
+        )
+        raise typer.Exit(code=1) from None
+
+    from doqqy.infra.settings import Settings
+    from doqqy.server.app import create_app
+
+    settings = Settings(auth_mode="none")
+    server_app = create_app(settings)
+
+    console.print(f"[green]doqqy HTTP sunucusu başlatılıyor:[/green] http://{host}:{port}")
+    uvicorn.run(server_app, host=host, port=port)
+
+
 def _count_files(root: Path, suffix: str | None = None) -> int:
     if not root.exists():
         return 0
