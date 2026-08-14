@@ -106,13 +106,24 @@ class QdrantStore(VectorStore):
         _LOG.info("Qdrant collection %s created with payload indexes.", self.collection)
 
     def recreate(self, dim: int) -> None:
-        """Drop the collection if it exists and recreate it with the given dimension."""
+        """Clear points for the current tenant and ensure collection exists."""
+        from qdrant_client import models  # type: ignore
+
+        self.ensure_collection(dim)
         client = self._client
         if client.collection_exists(self.collection):
-            _LOG.info("Dropping Qdrant collection %s for recreate.", self.collection)
-            client.delete_collection(self.collection)
-        self._collection_verified = False
-        self.ensure_collection(dim)
+            tenant_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="tenant",
+                        match=models.MatchValue(value=self.tenant_key),
+                    )
+                ]
+            )
+            client.delete(
+                collection_name=self.collection,
+                points_selector=models.FilterSelector(filter=tenant_filter),
+            )
 
     @staticmethod
     def _infer_dim(records: Sequence[ChunkRecord]) -> int:
@@ -268,7 +279,36 @@ class QdrantStore(VectorStore):
         )
 
     def get_by_doc(self, doc_id: str) -> list[ChunkRecord]:
-        raise NotImplementedError("QdrantStore is not implemented yet (Phase 1.5).")
+        """Retrieve all chunk records belonging to a single document ID for the current tenant."""
+        from qdrant_client import models  # type: ignore
+
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return []
+
+        doc_filter = models.Filter(
+            must=[
+                models.FieldCondition(key="tenant", match=models.MatchValue(value=self.tenant_key)),
+                models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id)),
+            ]
+        )
+
+        all_points = []
+        offset = None
+        while True:
+            scroll_res, offset = client.scroll(
+                collection_name=self.collection,
+                scroll_filter=doc_filter,
+                with_payload=True,
+                with_vectors=["dense"],
+                limit=256,
+                offset=offset,
+            )
+            all_points.extend(scroll_res)
+            if offset is None:
+                break
+
+        return [self._to_record(p) for p in all_points]
 
     def hybrid_search(
         self, dense: np.ndarray, sparse: dict[int, float],

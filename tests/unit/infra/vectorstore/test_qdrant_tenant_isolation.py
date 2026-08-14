@@ -109,3 +109,26 @@ def test_qdrant_tenant_isolation_get_by_ids_filters_other_tenants():
     records_a = store_a.get_by_ids(["c1", "c2"])
     assert len(records_a) == 1
     assert records_a[0].chunk_id == "c1"
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_tenant_isolation_recreate_does_not_drop_collection():
+    """Verify recreate deletes only the points for the target tenant without dropping collection."""
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = True
+
+    store_a = QdrantStore("http://localhost:6333", "", "shared_col", "tenant_A")
+    store_a._client_instance = mock_client
+
+    store_a.recreate(dim=4)
+
+    # Must NOT call delete_collection
+    mock_client.delete_collection.assert_not_called()
+
+    # Must call client.delete with a FilterSelector matching tenant_A
+    mock_client.delete.assert_called_once()
+    delete_kwargs = mock_client.delete.call_args[1]
+    assert delete_kwargs["collection_name"] == "shared_col"
+    selector = delete_kwargs["points_selector"]
+    assert selector.filter.must[0].key == "tenant"
+    assert selector.filter.must[0].match.value == "tenant_A"

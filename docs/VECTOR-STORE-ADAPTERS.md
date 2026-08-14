@@ -127,6 +127,8 @@ CLI override for experimentation: `doqqy embed --backend qdrant`, `doqqy query "
 
 ## 4. The Qdrant adapter
 
+> **Status:** Core adapter implementation (payload multitenancy, server-side RRF fusion, tenant-scoped deletions) is **complete for Phase 1.5**. The migration CLI tool (§6) and eval harness (ROADMAP #7) remain open.
+
 `src/doqqy/infra/vectorstore/qdrant_store.py`. Dependency: `qdrant-client>=1.10` (Query API with server-side fusion), shipped as `pip install doqqy[qdrant]`.
 
 ### 4.1 Collection schema

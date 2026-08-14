@@ -49,7 +49,7 @@ A `.env` file at the working-directory root is loaded automatically (`python-dot
 ### Backend parity notes
 
 - **Rank breakdown:** On the Qdrant backend, `dense_rank` and `sparse_rank` individual leg ranks are not displayed because fusion is calculated server-side in Qdrant. CLI search output displays `rrf=<score>`. LanceDB displays `dense=<rank> | sparse=<rank> | rrf=<score>`.
-- **Score comparability:** Qdrant's internal RRF constant is fixed in its engine (different from doqqy's default `k=60`). Therefore, `rrf` scores on Qdrant and LanceDB are not directly comparable numbers, though rankings between backends correlate closely.
+- **Score comparability:** Qdrant's internal RRF constant is fixed in its engine (different from doqqy's default `k=60`). Therefore, `rrf` scores on Qdrant and LanceDB are not directly comparable numbers, and rankings may differ between backends. Parity will be quantitatively measured once the eval harness (ROADMAP #7) lands.
 
 ## 2. Directory model — important
 
