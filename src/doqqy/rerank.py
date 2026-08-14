@@ -30,15 +30,6 @@ def _load_reranker(
     return mgr.get_reranker()
 
 
-def _clear_cache():
-    import doqqy.infra.models as m
-    with m._DEFAULT_MANAGER_LOCK:
-        m._DEFAULT_MANAGER = None
-
-
-_load_reranker.cache_clear = _clear_cache  # type: ignore[attr-defined]
-
-
 def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x))
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -79,53 +80,81 @@ def test_store_manager_lru_eviction_and_close(tmp_path):
         assert mock_close_2.called or len(mgr._cache) == 0
 
 
-def test_query_round_trip_fixture_workspace(tmp_path):
-    """Gerçek fixture workspace üzerinde arama yapıp dönen hit içeriğini ve skorları doğrula."""
-    from doqqy.query import SearchHit
+def _create_fixture_workspace(root: Path) -> Workspace:
+    """Testler için gerçek doküman içeren, chunk'lanmış ve embed edilmiş fixture workspace üretir."""
+    from doqqy.chunk import chunk_directory
+    from doqqy.embed import build_index
+    from doqqy.ingest import ingest_file
 
-    mock_hit = SearchHit(
-        score=0.95,
-        doc_id="fatura_rehberi.md",
-        source="raw/fatura_rehberi.md",
-        section_path=["1. Fatura Rehberi", "1.1 İptal Süreci"],
-        content="Fatura iptal ve iade süreci 7 iş günüdür. İptal talebi muhasebe portalından yapılır.",
-        extra={
-            "dense_rank": 1,
-            "sparse_rank": 1,
-            "rrf_score": 0.0333,
-            "rerank_score": 0.95,
-        },
+    ws = Workspace(root)
+    ws.ensure_dirs()
+
+    raw_doc = ws.raw_dir / "fatura_ve_iade_rehberi.md"
+    raw_doc.write_text(
+        "# Kurumsal Fatura ve İptal Rehberi\n\n"
+        "## 1. Fatura İptal ve İade Süreci\n\n"
+        "Kurumsal faturalar kesildikten sonra 7 iş günü içinde iptal edilebilir. "
+        "İptal işlemi için muhasebe portalından talep oluşturulması zorunludur. "
+        "Geciken faturalar için iade faturası düzenlenmesi gerekmektedir.\n\n"
+        "## 2. İade Şartları ve Kesinti Oranları\n\n"
+        "İade edilen ürünlerde kargo ve sigorta bedelleri müşteriye aittir.",
+        encoding="utf-8",
     )
+
+    doc = ingest_file(raw_doc, ws)
+    doc.write()
+    chunk_directory(ws)
+    build_index(ws)
+    return ws
+
+
+def test_query_round_trip_fixture_workspace(tmp_path):
+    """Gerçek fixture workspace üzerinde mock'suz arama yapıp dönen hit içeriğini ve skorları doğrula."""
+    ws = _create_fixture_workspace(tmp_path / "ws_roundtrip")
 
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
-    with (
-        patch.object(ModelManager, "warmup", return_value=None),
-        patch("doqqy.query.search", return_value=[mock_hit]),
-        TestClient(app) as client,
-    ):
+    with TestClient(app) as client:
+        # Sunucu warmup tamamlanana kadar kısa süre bekle
+        for _ in range(50):
+            if client.get("/readyz").status_code == 200:
+                break
+            time.sleep(0.05)
+
         payload = {
-            "q": "fatura iptal süreci",
+            "q": "fatura iptal ve iade süreci",
             "top_k": 3,
             "rerank": True,
         }
-        resp = client.post(f"/v1/workspaces/{tmp_path}/query", json=payload)
+        resp = client.post(f"/v1/workspaces/{ws.root}/query", json=payload)
         assert resp.status_code == 200
         data = resp.json()
 
         assert "hits" in data
-        assert len(data["hits"]) > 0, "Arama sonucu boş dönmemeli (hits > 0 olmalı)!"
+        assert len(data["hits"]) > 0, "Gerçek arama sonucu boş dönmemeli (hits > 0 olmalı)!"
         hit = data["hits"][0]
-        assert hit["doc_id"] == "fatura_rehberi.md"
-        assert hit["source"] == "raw/fatura_rehberi.md"
-        assert hit["section_path"] == ["1. Fatura Rehberi", "1.1 İptal Süreci"]
-        assert "Fatura iptal" in hit["content"]
-        assert hit["scores"]["dense_rank"] == 1
-        assert hit["scores"]["sparse_rank"] == 1
-        assert hit["scores"]["rrf_score"] == pytest.approx(0.0333, rel=1e-3)
-        assert hit["scores"]["rerank_score"] == pytest.approx(0.95, rel=1e-2)
+        assert hit["source"] == "raw/fatura_ve_iade_rehberi.md"
+        assert "Fatura İptal" in hit["content"] or "7 iş günü" in hit["content"]
+        assert hit["scores"]["dense_rank"] is not None
+        assert hit["scores"]["sparse_rank"] is not None
+        assert hit["scores"]["rrf_score"] is not None and hit["scores"]["rrf_score"] > 0
+        assert hit["scores"]["rerank_score"] is not None and hit["scores"]["rerank_score"] > 0
         assert data["took_ms"] >= 0
+
+
+def test_query_nonexistent_workspace_returns_404(tmp_path):
+    """Var olmayan bir workspace_id ile yapılan sorgu 404 Not Found dönmeli."""
+    settings = Settings(auth_mode="none")
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        resp = client.post(
+            f"/v1/workspaces/{tmp_path / 'nonexistent_workspace'}/query",
+            json={"q": "fatura", "top_k": 5},
+        )
+        assert resp.status_code == 404
+        assert "not found" in resp.json().get("detail", "").lower()
 
 
 # SLO (Service Level Objectives) Testleri:
@@ -137,7 +166,6 @@ def test_slo_readiness_duration_under_120s():
 
     t0 = time.perf_counter()
     with TestClient(app) as client:
-        # Warmup arka planda tamamlanana kadar bekle (max 120s)
         ready = False
         while time.perf_counter() - t0 < 120.0:
             resp = client.get("/readyz")
@@ -152,61 +180,81 @@ def test_slo_readiness_duration_under_120s():
 
 @pytest.mark.slow
 def test_slo_query_warm_with_rerank_under_800ms(tmp_path):
-    """SLO: Modeller sıcakken rerank açık p95 arama süresi < 800 ms olmalı."""
-    ws = Workspace(tmp_path)
-    ws.ensure_dirs()
+    """SLO: Modeller sıcakken ve dizin doluyken rerank açık p95 arama süresi < 800 ms olmalı."""
+    ws = _create_fixture_workspace(tmp_path / "ws_slo_rerank")
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
     with TestClient(app) as client:
-        # 1. Warm-up ön hazırlık sorgusu
-        client.post(f"/v1/workspaces/{tmp_path}/query", json={"q": "warmup", "top_k": 5, "rerank": True})
+        # Modeller yüklenene kadar bekle
+        for _ in range(50):
+            if client.get("/readyz").status_code == 200:
+                break
+            time.sleep(0.05)
 
-        # 2. Çoklu sorgu ile p95 gecikme dağılımını ölçme (20 iterasyon)
+        # Warm-up ön hazırlık sorguları (model ve veritabanı önbelleği sıcak)
+        for _ in range(2):
+            warm_resp = client.post(f"/v1/workspaces/{ws.root}/query", json={"q": "warmup fatura", "top_k": 5, "rerank": True})
+            assert warm_resp.status_code == 200
+            assert len(warm_resp.json()["hits"]) > 0, "Warmup sorgusu sonuç bulmalı (dizin dolu olmalı)!"
+
+        # Çoklu sorgu ile p95 gecikme dağılımını ölçme (20 iterasyon)
         latencies: list[int] = []
         for i in range(20):
             resp = client.post(
-                f"/v1/workspaces/{tmp_path}/query",
+                f"/v1/workspaces/{ws.root}/query",
                 json={"q": f"fatura iptal süreci sorgu {i}", "top_k": 5, "rerank": True},
             )
             assert resp.status_code == 200
+            assert len(resp.json()["hits"]) > 0, "SLO sorgusu sonuç bulmalı!"
             latencies.append(resp.json()["took_ms"])
 
         latencies.sort()
-        p95_idx = int(len(latencies) * 0.95)
-        p95_ms = latencies[min(p95_idx, len(latencies) - 1)]
+        import numpy as np
 
-        assert p95_ms < 800, f"Rerank p95 süresi ({p95_ms} ms) 800 ms sınırını aştı! Tüm süreler: {latencies}"
+        p95_ms = float(np.percentile(latencies, 95))
+
+        assert p95_ms < 800, f"Rerank p95 süresi ({p95_ms:.1f} ms) 800 ms sınırını aştı! Tüm süreler: {latencies}"
 
 
 @pytest.mark.slow
 def test_slo_query_warm_no_rerank_under_250ms(tmp_path):
-    """SLO: Modeller sıcakken rerank kapalı p95 arama süresi < 250 ms olmalı."""
-    ws = Workspace(tmp_path)
-    ws.ensure_dirs()
+    """SLO: Modeller sıcakken ve dizin doluyken rerank kapalı p95 arama süresi < 250 ms olmalı."""
+    ws = _create_fixture_workspace(tmp_path / "ws_slo_norerank")
     settings = Settings(auth_mode="none")
     app = create_app(settings)
 
     with TestClient(app) as client:
-        client.post(
-            f"/v1/workspaces/{tmp_path}/query",
-            json={"q": "warmup", "top_k": 5, "rerank": False},
-        )
+        # Modeller yüklenene kadar bekle
+        for _ in range(50):
+            if client.get("/readyz").status_code == 200:
+                break
+            time.sleep(0.05)
+
+        for _ in range(2):
+            warm_resp = client.post(
+                f"/v1/workspaces/{ws.root}/query",
+                json={"q": "warmup fatura", "top_k": 5, "rerank": False},
+            )
+            assert warm_resp.status_code == 200
+            assert len(warm_resp.json()["hits"]) > 0, "Warmup sorgusu sonuç bulmalı!"
 
         latencies: list[int] = []
         for i in range(20):
             resp = client.post(
-                f"/v1/workspaces/{tmp_path}/query",
+                f"/v1/workspaces/{ws.root}/query",
                 json={"q": f"hızlı arama sorgu {i}", "top_k": 5, "rerank": False},
             )
             assert resp.status_code == 200
+            assert len(resp.json()["hits"]) > 0, "SLO sorgusu sonuç bulmalı!"
             latencies.append(resp.json()["took_ms"])
 
         latencies.sort()
-        p95_idx = int(len(latencies) * 0.95)
-        p95_ms = latencies[min(p95_idx, len(latencies) - 1)]
+        import numpy as np
 
-        assert p95_ms < 250, f"Rerank kapalı p95 süresi ({p95_ms} ms) 250 ms sınırını aştı! Tüm süreler: {latencies}"
+        p95_ms = float(np.percentile(latencies, 95))
+
+        assert p95_ms < 250, f"Rerank kapalı p95 süresi ({p95_ms:.1f} ms) 250 ms sınırını aştı! Tüm süreler: {latencies}"
 
 
 def test_slo_api_availability_healthz():

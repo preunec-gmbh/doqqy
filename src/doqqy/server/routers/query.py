@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
 from doqqy.config import get_logger
@@ -36,29 +36,27 @@ async def query_workspace(
             from doqqy.workspace import Workspace
 
             # Workspace yolunu çöz
+            # NOT: {workspace_id:path} ile doğrudan dosya yolu kabul edilmesi yerel/tekil mod için geçicidir;
+            # Build Step 6 (Multi-tenancy) aşamasında tenant-scoped {wid} yapısına dönüştürülecektir.
             if Path(workspace_id).exists():
                 ws = Workspace(Path(workspace_id))
             elif (settings.data_root / workspace_id).exists():
                 ws = Workspace(settings.data_root / workspace_id)
             else:
-                ws = Workspace(Path("./"))
+                raise HTTPException(status_code=404, detail=f"Workspace not found: '{workspace_id}'")
 
             store = stores.get_store(ws)
 
-            try:
-                raw_hits = search(
-                    ws,
-                    req.q,
-                    k=req.top_k,
-                    rerank=req.rerank,
-                    tag=req.tag,
-                    settings=settings,
-                    models=models,
-                    store=store,
-                )
-            except Exception as e:  # noqa: BLE001
-                _LOG.warning("Arama sırasında hata oluştu: %s", e)
-                return []
+            raw_hits = search(
+                ws,
+                req.q,
+                k=req.top_k,
+                rerank=req.rerank,
+                tag=req.tag,
+                settings=settings,
+                models=models,
+                store=store,
+            )
 
             out: list[HitOut] = []
             for h in raw_hits:

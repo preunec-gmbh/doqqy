@@ -27,6 +27,13 @@ def get_default_model_manager(settings: Settings | None = None) -> ModelManager:
 class ModelManager:
     """Tekil model yöneticisi — modelleri bir kez yükler ve süreç boyu bellekte korur."""
 
+    @classmethod
+    def reset_default(cls) -> None:
+        """Varsayılan tekil ModelManager örneğini sıfırlar (testler için)."""
+        global _DEFAULT_MANAGER
+        with _DEFAULT_MANAGER_LOCK:
+            _DEFAULT_MANAGER = None
+
     def __init__(self, settings: Settings):
         self._settings = settings
         self._lock = threading.Lock()
