@@ -383,12 +383,19 @@ def sync(
     ),
 ) -> None:
     """Incremental pipeline: only re-process changed/new/deleted documents."""
+    from doqqy.config import file_log
     from doqqy.infra.settings import Settings
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    report = run_sync(ws, settings=settings, dry_run=dry_run)
+    if dry_run:
+        # A dry run must not touch the filesystem, and file_log() creates the
+        # log file/directory as a side effect of attaching the handler.
+        report = run_sync(ws, settings=settings, dry_run=dry_run)
+    else:
+        with file_log("doqqy.sync", ws.logs_dir / "sync.log"):
+            report = run_sync(ws, settings=settings, dry_run=dry_run)
 
     # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
     prefix = r"\[dry-run] " if dry_run else ""
@@ -465,7 +472,10 @@ def status() -> None:
     status_table.add_column("Status", style="bold")
     status_table.add_column("Count", justify="right")
     for s, count in sorted(status_counts.items()):
-        style = {"indexed": "green", "failed": "red", "ingested": "yellow", "chunked": "cyan"}.get(s, "dim")
+        style = {
+            "indexed": "green", "failed": "red", "ingested": "yellow",
+            "chunked": "cyan", "aliased": "magenta",
+        }.get(s, "dim")
         status_table.add_row(f"[{style}]{s}[/{style}]", str(count))
     console.print(status_table)
 
@@ -504,12 +514,18 @@ def watch(
         )
         raise typer.Exit(code=1) from e
 
+    from doqqy.config import file_log, get_logger
     from doqqy.infra.settings import Settings
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
     ws.ensure_dirs()
     settings = Settings(vector_backend=backend) if backend else None
+    log = get_logger("doqqy.watch")
+    # Child loggers propagate to the "doqqy" root's console StreamHandler by
+    # default; the rich line below is already the console-facing summary, so
+    # don't also dump the raw traceback there — only into watch.log.
+    log.propagate = False
 
     console.print(
         Panel(
@@ -523,17 +539,33 @@ def watch(
         # watchfiles debounces internally (milliseconds) and only yields once the
         # burst has settled — sleeping after the yield would just let edits made
         # during the sleep queue up and trigger a second, redundant sync.
-        for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
-            console.print("[dim]Change detected — syncing…[/dim]")
-            report = run_sync(ws, settings=settings)
-            if report.total_processed > 0:
-                console.print(
-                    f"  [green]+{report.added}[/green] added  "
-                    f"[yellow]~{report.modified}[/yellow] modified  "
-                    f"[red]-{report.deleted}[/red] deleted"
-                )
-            else:
-                console.print("  [dim]No actionable changes.[/dim]")
+        with (
+            file_log("doqqy.watch", ws.logs_dir / "watch.log"),
+            file_log("doqqy.sync", ws.logs_dir / "sync.log"),
+        ):
+            for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
+                console.print("[dim]Change detected — syncing…[/dim]")
+                # A batch-level failure (model load, store connection, corrupt
+                # manifest, …) must not kill the loop — log it and keep watching,
+                # same failure-isolation invariant sync() already applies per file.
+                try:
+                    report = run_sync(ws, settings=settings)
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("Batch sync failed: %s", exc)
+                    console.print(f"  [red]✗ sync failed: {type(exc).__name__}: {exc}[/red]")
+                    continue
+
+                if report.total_processed > 0:
+                    console.print(
+                        f"  [green]+{report.added}[/green] added  "
+                        f"[yellow]~{report.modified}[/yellow] modified  "
+                        f"[red]-{report.deleted}[/red] deleted"
+                        + (f"  [red]✗{len(report.failed)}[/red] failed" if report.has_failures else "")
+                    )
+                elif report.has_failures:
+                    console.print(f"  [red]✗{len(report.failed)}[/red] failed — see {ws.logs_dir / 'sync.log'}")
+                else:
+                    console.print("  [dim]No actionable changes.[/dim]")
     except KeyboardInterrupt:
         console.print("\n[dim]Watch stopped.[/dim]")
 
@@ -565,15 +597,64 @@ def info() -> None:
     else:
         table.add_row("store.lance", "[yellow](boş — `doqqy embed` çalıştır)[/yellow]")
 
+    duplicate_groups = []
     if ws.manifest_path.exists():
         from doqqy.manifest import Manifest
         m = Manifest.load(ws)
         tot = m.totals()
         table.add_row("manifest.json", f"[green]{tot['docs']} doküman, {tot['chunks']} chunk[/green]")
+
+        from doqqy.dedup import find_duplicate_groups
+        duplicate_groups = find_duplicate_groups(m)
+        dup_docs = sum(1 + len(g.aliases) for g in duplicate_groups)
+        if duplicate_groups:
+            table.add_row(
+                "duplicates",
+                f"[magenta]{len(duplicate_groups)} grup[/magenta] ({dup_docs} doküman, "
+                f"content_hash ile eşleşti)",
+            )
     else:
         table.add_row("manifest.json", "[yellow](boş — `doqqy embed` ya da `doqqy sync` çalıştır)[/yellow]")
 
     console.print(table)
+
+    if duplicate_groups:
+        dup_table = Table(title="Duplicate groups (content_hash)", box=box.ROUNDED)
+        dup_table.add_column("Canonical", style="bold green")
+        dup_table.add_column("Aliases")
+        dup_table.add_column("Tags")
+        for group in duplicate_groups:
+            dup_table.add_row(
+                group.canonical,
+                "\n".join(group.aliases),
+                ", ".join(group.tags),
+            )
+        console.print(dup_table)
+
+
+@app.command()
+def serve(
+    port: int = typer.Option(8000, "--port", "-p", help="Sunucunun dinleyeceği port numarası."),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Sunucunun dinleyeceği ana makine adresi."),
+) -> None:
+    """Yerel HTTP arama sunucusunu başlatır (bge-m3 + reranker modellerini bellekte warm tutar)."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[red]Hata:[/red] uvicorn yüklü değil. "
+            "Lütfen `pip install 'doqqy[server]'` veya `pip install uvicorn fastapi` çalıştırın."
+        )
+        raise typer.Exit(code=1) from None
+
+    from doqqy.infra.settings import Settings
+    from doqqy.server.app import create_app
+
+    settings = Settings(auth_mode="none")
+    server_app = create_app(settings)
+
+    console.print(f"[green]doqqy HTTP sunucusu başlatılıyor:[/green] http://{host}:{port}")
+    uvicorn.run(server_app, host=host, port=port)
 
 
 def _count_files(root: Path, suffix: str | None = None) -> int:

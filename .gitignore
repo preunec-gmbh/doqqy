@@ -8,6 +8,10 @@ logs/
 raw/
 test_docs/
 
+# Eval fixture is committed on purpose (tracked despite the raw/ rule above)
+!tests/eval/corpus/raw/
+!tests/eval/corpus/raw/**
+
 # Secrets
 .env
 
@@ -37,3 +41,7 @@ TODO.md
 
 # Binary installers
 *.msi
+
+# OS artifacts
+.DS_Store
+*.DS_Store

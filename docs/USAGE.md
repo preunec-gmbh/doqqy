@@ -68,6 +68,8 @@ my-corpus/
 
 You can maintain any number of separate corpora — each is just a directory. Deleting `.doqqy/` + `processed/` fully resets a corpus; `raw/` is never touched.
 
+**Duplicate documents across folders** — if the exact same file is placed under two different `raw/` subfolders (e.g. `raw/erp12/policy.md` and `raw/legal/policy.md`), doqqy detects it by comparing each doc's processed-markdown `content_hash` (byte-identical bodies only — never fuzzy matching) and embeds it **once**. The alphabetically-first path becomes the canonical document; the other is recorded in the manifest as an alias with no chunks of its own. The canonical document's tags become the **union** of both folders' tags, so `--tag erp12` and `--tag legal` both find it. Run `doqqy info` to see duplicate groups.
+
 ## 3. CLI reference
 
 ### `doqqy ingest`
@@ -112,6 +114,8 @@ doqqy sync --dry-run  # preview changes without modifying vector store or manife
 
 Change detection hashes the **raw** file's bytes. Editing a file under `raw/` is picked up; re-running `sync` after only upgrading an ingester is not, because the raw bytes are unchanged — use `doqqy embed` for a full rebuild in that case.
 
+Failures don't stop the run — a summary panel lists failed files; details in `.doqqy/logs/sync.log`.
+
 Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
 
 ### `doqqy status`
@@ -133,6 +137,8 @@ doqqy watch
 doqqy watch --debounce 3.0  # wait 3 seconds after the last change before syncing
 ```
 
+Each debounced batch of changes triggers one `sync` run and prints a single summary line (`+added ~modified -deleted`). A bad file in a batch does not stop the loop — it's counted as `✗failed`, logged to `.doqqy/logs/sync.log`, and watching continues; the same isolation applies to batch-level failures (e.g. a transient store/model error), logged to `.doqqy/logs/watch.log`. Stop with Ctrl+C.
+
 ### `doqqy query`
 
 Hybrid search: dense + sparse retrieval (50 candidates each) → RRF fusion → cross-encoder rerank → top-k.
@@ -149,6 +155,23 @@ doqqy query "invoice states" --context 1         # include 1 neighboring chunk o
 Each hit shows the source file, section path, and score breakdown (`dense=<rank> | sparse=<rank> | rrf=<score> | rerank=<score>`). Exit code 1 when nothing is found.
 
 `--context N` (`-c`) walks each hit's `prev_chunk`/`next_chunk` chain N steps in both directions and displays the neighboring chunks alongside the hit, dimmed to distinguish them from the matched chunk. Expansion happens after reranking — it's display-only and never affects which chunks were selected or their order. At a document's start/end, the missing side is simply omitted.
+
+### `doqqy serve`
+
+Starts the local resident HTTP server, keeping `bge-m3` embedding and `bge-reranker` models pre-warmed in memory so queries return in milliseconds (<1 s warm instead of ~20-60 s cold CLI load).
+
+Any `.env` file present in the workspace root directory is automatically loaded to configure settings for both the CLI commands and `doqqy serve`.
+
+```powershell
+doqqy serve                  # starts server on http://127.0.0.1:8000
+doqqy serve --port 8080      # custom port
+doqqy serve --host 127.0.0.1 # custom host
+```
+
+Endpoints:
+- `GET /healthz` — Liveness probe (immediately returns `{"status": "ok"}`).
+- `GET /readyz` — Readiness probe (returns `503` while models load in the background, and `200` once ready).
+- `POST /v1/workspaces/{workspace_id}/query` — Hybrid neural search endpoint accepting `QueryRequest` JSON.
 
 ### `doqqy map`
 
@@ -191,7 +214,7 @@ doqqy tags
 
 ### `doqqy info`
 
-Pipeline state overview: file counts in `raw/` and `processed/`, chunk count, store presence.
+Pipeline state overview: file counts in `raw/` and `processed/`, chunk count, store presence, and duplicate groups detected by `content_hash` (see [Directory model](#2-directory-model--important)).
 
 ```powershell
 doqqy info

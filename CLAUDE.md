@@ -29,6 +29,7 @@ doqqy map           # → .doqqy/topics.yaml (Pass 1 regex + Pass 2 cosine; --ba
 doqqy index         # .doqqy/topics.yaml → processed/INDEX.md (Obsidian entry point)
 doqqy inject        # inject [[wikilinks]] into processed/*.md (idempotent marker blocks; --dry-run)
 doqqy query "..."   # hybrid search (--top-k, --full, --no-rerank, --tag, --backend)
+doqqy serve         # run local HTTP search server on http://127.0.0.1:8000 (--port, --host)
 doqqy tags          # list tags in the store (--backend)
 doqqy info          # pipeline state overview
 ```

@@ -86,6 +86,10 @@ class VectorStore(Protocol):
         """Delete all chunks belonging to a document ID. Returns the number of deleted records."""
         ...
 
+    def get_by_doc(self, doc_id: str) -> list[ChunkRecord]:
+        """Retrieve all chunk records belonging to a single document ID (with dense/sparse vectors)."""
+        ...
+
     def hybrid_search(
         self, dense: np.ndarray, sparse: dict[int, float],
         *, limit: int, flt: TagFilter | None = None,

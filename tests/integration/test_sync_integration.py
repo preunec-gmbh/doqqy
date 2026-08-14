@@ -90,9 +90,12 @@ def test_embed_sync_roundtrip(temp_ws: Workspace, stub_embeddings: None) -> None
     with contextlib.closing(make_store(temp_ws)) as store:
         store.full_rebuild(records, dim=EMBEDDING_DIM)
 
-    # Call _save_manifest_from_records as build_index does
-    from doqqy.embed import _save_manifest_from_records
-    _save_manifest_from_records(temp_ws, records)
+    # Call _build_manifest_from_records as build_index does
+    from doqqy.dedup import resolve_duplicates
+    from doqqy.embed import _build_manifest_from_records
+    manifest0 = _build_manifest_from_records(temp_ws, records)
+    resolve_duplicates(temp_ws, manifest0, settings=None)
+    manifest0.save(temp_ws)
 
     # Verify baseline manifest contains raw/doc1.md and raw/doc2.md
     manifest = Manifest.load(temp_ws)
