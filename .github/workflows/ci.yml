@@ -45,7 +45,7 @@ jobs:
       # pip cache'ini eviction'a sokar. Windows job'ı modelleri indirmeye devam eder.
       - name: Cache Hugging Face models
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.HF_HOME }}
           key: hf-${{ matrix.os }}-${{ hashFiles('src/doqqy/config.py') }}
