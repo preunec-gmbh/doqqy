@@ -31,6 +31,10 @@ EMBEDDING_DIM: int = 1024
 EMBEDDING_BATCH_SIZE: int = 4
 LANCE_TABLE: str = "chunks"
 
+# Qdrant tuning
+QDRANT_UPSERT_BATCH_SIZE: int = 256
+QDRANT_SPARSE_ON_DISK: bool = False  # larger corpora should set True
+
 # Query
 DEFAULT_TOP_K: int = 5
 RETRIEVAL_TOP_K: int = 50  # dense + sparse her biri bu kadar getirir, RRF sonrası reranker'a gider

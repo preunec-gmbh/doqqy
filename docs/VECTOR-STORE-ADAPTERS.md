@@ -127,6 +127,8 @@ CLI override for experimentation: `doqqy embed --backend qdrant`, `doqqy query "
 
 ## 4. The Qdrant adapter
 
+> **Status:** Core adapter implementation (payload multitenancy, server-side RRF fusion, tenant-scoped deletions) is **complete for Phase 1.5**. The migration CLI tool (§6) and eval harness (ROADMAP #7) remain open.
+
 `src/doqqy/infra/vectorstore/qdrant_store.py`. Dependency: `qdrant-client>=1.10` (Query API with server-side fusion), shipped as `pip install doqqy[qdrant]`.
 
 ### 4.1 Collection schema
@@ -234,9 +236,9 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 | `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
 | `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-**Phase 1 Status:** Completed. Decoupling port and LanceDB adapter logic relocation is fully implemented, verified via unit and parity testing.
+**Phase 1 & 1.5 Status:** Adapter + multitenancy + server-side RRF are done. The LanceDB→Qdrant migration tool (§6) and the eval-harness parity check (ROADMAP #7) are still open.
 
-Estimated remaining effort (Phase 1.5): Qdrant adapter + parity tests ~3–4 days; migration tool ~1 day.
+> **Atomicity note:** Qdrant `full_rebuild` deletes only the current tenant's points before upserting. This is NOT atomic across tenants — a crash between delete and upsert leaves the tenant empty. True atomicity (new collection + alias swap) is incompatible with the shared-collection model. LanceDB's drop-and-recreate is atomic because it operates on a single-tenant file.
 
 ## 6. Migration: LanceDB → Qdrant without re-embedding
 

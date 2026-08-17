@@ -1,0 +1,14 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: doqqy-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"    # REST API — local interface only
+      - "127.0.0.1:6334:6334"    # gRPC API — local interface only
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:
+    driver: local
