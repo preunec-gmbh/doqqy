@@ -132,3 +132,39 @@ def test_qdrant_tenant_isolation_recreate_does_not_drop_collection():
     selector = delete_kwargs["points_selector"]
     assert selector.filter.must[0].key == "tenant"
     assert selector.filter.must[0].match.value == "tenant_A"
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_iter_records_tenant_scoped():
+    """Verify iter_records uses tenant-filtered scroll and requests with_vectors=True."""
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = True
+
+    p_a = MagicMock()
+    p_a.id = "c1"
+    p_a.payload = {"tenant": "tenant_A", "doc_id": "dA", "source": "sA", "doc_type": "md", "tags": ["tag1"]}
+    p_a.vector = {
+        "dense": [0.1, 0.2, 0.3, 0.4],
+        "sparse": MagicMock(indices=[101, 102], values=[0.5, 1.2]),
+    }
+
+    mock_client.scroll.return_value = ([p_a], None)
+
+    store_a = QdrantStore("http://localhost:6333", "", "shared_col", "tenant_A")
+    store_a._client_instance = mock_client
+
+    batches = list(store_a.iter_records(batch_size=10))
+    assert len(batches) == 1
+    assert len(batches[0]) == 1
+    rec = batches[0][0]
+    assert rec.chunk_id == "c1"
+    assert rec.sparse == {101: 0.5, 102: 1.2}
+
+    mock_client.scroll.assert_called_once()
+    scroll_kwargs = mock_client.scroll.call_args[1]
+    assert scroll_kwargs["collection_name"] == "shared_col"
+    assert scroll_kwargs["with_payload"] is True
+    assert scroll_kwargs["with_vectors"] is True
+    assert scroll_kwargs["limit"] == 10
+    assert scroll_kwargs["scroll_filter"].must[0].key == "tenant"
+    assert scroll_kwargs["scroll_filter"].must[0].match.value == "tenant_A"
