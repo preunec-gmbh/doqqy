@@ -51,7 +51,7 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 - `workspace.py` — `Workspace(root)` frozen dataclass: single source for all per-corpus paths.
 - `infra/` — central infrastructure layer containing configuration/settings loading (`infra/settings.py`) and the pluggable vector store port + adapters (`infra/vectorstore/`).
 
-**Pluggable Vector Store:** Vector storage and querying are decoupled behind a `VectorStore` port interface (`infra/vectorstore/base.py`). `LanceDBStore` implements local-first daemonless search. `QdrantStore` acts as a pluggable server backend. Settings are resolved using precedence: CLI flag > Environment variable > Defaults.
+**Pluggable Vector Store:** Vector storage, querying, and streaming migration reads (`iter_records`) are decoupled behind a `VectorStore` port interface (`infra/vectorstore/base.py`). `LanceDBStore` implements local-first daemonless search. `QdrantStore` acts as a pluggable server backend. Settings are resolved using precedence: CLI flag > Environment variable > Defaults.
 **Tag filtering:** Structured query tag filtering is achieved via `TagFilter` objects passing tag structures directly to the store backend without SQL string interpolation. The LanceDB adapter maps this to LIKE conditions securely.
 
 ## Conventions (see docs/DEVELOPER-HANDOVER.md §1)

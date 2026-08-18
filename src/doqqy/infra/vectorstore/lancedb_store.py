@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Sequence
+from typing import Iterator, Sequence
 
 import numpy as np
 import pandas as pd
@@ -369,6 +369,34 @@ class LanceDBStore(VectorStore):
         ids_str = ", ".join(f"'{cid.replace(chr(39), chr(39)+chr(39))}'" for cid in chunk_ids)
         rows = table.search().where(f"chunk_id IN ({ids_str})").to_list()
         return [self._to_record(r) for r in rows]
+
+    def iter_records(self, batch_size: int = 256) -> Iterator[Sequence[ChunkRecord]]:
+        """Yield batches of ChunkRecord objects losslessly from the LanceDB table.
+
+        Memory is kept constant by streaming PyArrow table Slices batch by batch.
+        Private storage representations (sparse_vector JSON string, tags_str) are decoded
+        back to ChunkRecord fields.
+        """
+        import lancedb  # type: ignore
+
+        if not self._store_dir.exists():
+            return
+
+        db = lancedb.connect(self._store_dir)
+        if LANCE_TABLE not in db.list_tables().tables:
+            return
+
+        table = db.open_table(LANCE_TABLE)
+        total_rows = len(table)
+        if total_rows == 0:
+            return
+
+        for offset in range(0, total_rows, batch_size):
+            rows = table.search().limit(batch_size).offset(offset).to_list()
+            if not rows:
+                break
+            batch_records = [self._to_record(r) for r in rows]
+            yield batch_records
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
         """Retrieve all dense vectors and records, optionally filtered by tag."""
