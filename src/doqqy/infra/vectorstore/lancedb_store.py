@@ -387,19 +387,15 @@ class LanceDBStore(VectorStore):
             return
 
         table = db.open_table(LANCE_TABLE)
-        arrow_tbl = table.to_arrow()
-        total_rows = arrow_tbl.num_rows
+        total_rows = len(table)
         if total_rows == 0:
             return
 
         for offset in range(0, total_rows, batch_size):
-            slice_tbl = arrow_tbl.slice(offset, batch_size)
-            pydict = slice_tbl.to_pydict()
-            num_in_batch = len(pydict["chunk_id"])
-            batch_records: list[ChunkRecord] = []
-            for i in range(num_in_batch):
-                row = {k: pydict[k][i] for k in pydict}
-                batch_records.append(self._to_record(row))
+            rows = table.search().limit(batch_size).offset(offset).to_list()
+            if not rows:
+                break
+            batch_records = [self._to_record(r) for r in rows]
             yield batch_records
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
