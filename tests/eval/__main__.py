@@ -10,8 +10,9 @@ from pathlib import Path
 from rich.console import Console
 
 from doqqy.infra.settings import Settings
-from tests.eval.loader import build_eval_workspace, load_eval_queries
-from tests.eval.runner import (
+
+from .loader import build_eval_workspace, load_eval_queries
+from .runner import (
     DEFAULT_BASELINE_PATH,
     DEFAULT_TOLERANCE,
     check_regression,

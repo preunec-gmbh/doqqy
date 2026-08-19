@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tests.eval.models import AggregateMetrics, CategoryMetrics, EvalQuery, QueryEvalResult
+from .models import AggregateMetrics, CategoryMetrics, EvalQuery, QueryEvalResult
 
 if TYPE_CHECKING:
     from doqqy.query import SearchHit

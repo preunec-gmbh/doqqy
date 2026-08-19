@@ -12,7 +12,8 @@ from doqqy.embed import build_index
 from doqqy.infra.settings import Settings
 from doqqy.ingest import ingest_directory
 from doqqy.workspace import Workspace
-from tests.eval.models import EvalQuery
+
+from .models import EvalQuery
 
 DEFAULT_QUERIES_PATH = Path(__file__).parent / "queries.yaml"
 DEFAULT_CORPUS_RAW_DIR = Path(__file__).parent / "corpus" / "raw"

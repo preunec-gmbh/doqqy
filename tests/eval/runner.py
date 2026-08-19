@@ -13,12 +13,13 @@ from rich.table import Table
 from doqqy.infra.settings import Settings
 from doqqy.query import search
 from doqqy.workspace import Workspace
-from tests.eval.metrics import (
+
+from .metrics import (
     compute_aggregate_metrics,
     compute_category_breakdowns,
     evaluate_query_hits,
 )
-from tests.eval.models import EvalQuery, EvalReport, QueryEvalResult
+from .models import EvalQuery, EvalReport, QueryEvalResult
 
 DEFAULT_BASELINE_PATH = Path(__file__).parent / "baseline_lancedb.json"
 
@@ -109,7 +110,8 @@ def check_regression(
         base_exact_r5 = baseline.by_category["exact_term"].rerank_on.recall_at_5
         if curr_exact_r5 < base_exact_r5:
             violations.append(
-                f"[exact_term] Sıfır tolerans kuralı ihlal edildi: Recall@5 {base_exact_r5:.4f} seviyesinden {curr_exact_r5:.4f} seviyesine düştü"
+                f"[exact_term] Sıfır tolerans kuralı ihlal edildi: "
+                f"Recall@5 {base_exact_r5:.4f} seviyesinden {curr_exact_r5:.4f} seviyesine düştü"
             )
 
     return len(violations) > 0, violations

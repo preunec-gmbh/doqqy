@@ -5,13 +5,14 @@ from __future__ import annotations
 import pytest
 
 from doqqy.query import SearchHit
-from tests.eval.loader import build_eval_workspace, load_eval_queries
-from tests.eval.metrics import (
+
+from .loader import build_eval_workspace, load_eval_queries
+from .metrics import (
     compute_aggregate_metrics,
     is_matching_hit,
 )
-from tests.eval.models import AggregateMetrics, CategoryMetrics, EvalQuery, EvalReport, QueryEvalResult
-from tests.eval.runner import (
+from .models import AggregateMetrics, CategoryMetrics, EvalQuery, EvalReport, QueryEvalResult
+from .runner import (
     DEFAULT_BASELINE_PATH,
     DEFAULT_TOLERANCE,
     check_regression,
