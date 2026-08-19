@@ -74,6 +74,7 @@ async def query_workspace(
                         source=str(h.source),
                         section_path=h.section_path or [],
                         content=str(h.content),
+                        extra=dict(ex),
                         scores=scores,
                     )
                 )

@@ -156,6 +156,8 @@ def test_query_round_trip_fixture_workspace(tmp_path):
         assert hit["scores"]["sparse_rank"] is not None
         assert hit["scores"]["rrf_score"] is not None and hit["scores"]["rrf_score"] > 0
         assert hit["scores"]["rerank_score"] is not None and hit["scores"]["rerank_score"] > 0
+        for score_name, score_value in hit["scores"].items():
+            assert hit["extra"][score_name] == score_value
         assert data["took_ms"] >= 0
 
 
