@@ -7,6 +7,7 @@ Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
 from __future__ import annotations
 
 import contextlib
+import os
 import re
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from typer.core import TyperCommand
 
 from doqqy.config import (
     DEFAULT_TOP_K,
@@ -53,6 +55,26 @@ app = typer.Typer(
 
 def _workspace() -> Workspace:
     return Workspace(Path.cwd())
+
+
+class _OptionalRemoteURLCommand(TyperCommand):
+    """Allow `--remote` to be used without an explicit URL."""
+
+    def parse_args(self, ctx, args: list[str]) -> list[str]:
+        normalized = list(args)
+        for index, arg in enumerate(normalized):
+            if arg == "--remote" and (index + 1 == len(normalized) or normalized[index + 1].startswith("-")):
+                normalized.insert(index + 1, "")
+                break
+        return super().parse_args(ctx, normalized)
+
+
+def _resolve_server_url(remote: Optional[str]) -> Optional[str]:
+    """Resolve the server URL; an explicit CLI URL takes precedence over the environment."""
+    env_url = os.environ.get("DOQQY_SERVER_URL")
+    if remote is not None:
+        return remote or env_url or "http://127.0.0.1:8000"
+    return env_url or None
 
 
 @app.command()
@@ -145,7 +167,7 @@ def embed(
     )
 
 
-@app.command()
+@app.command(cls=_OptionalRemoteURLCommand)
 def query(
     text: str = typer.Argument(..., help="Sorgu metni."),
     k: int = typer.Option(DEFAULT_TOP_K, "--top-k", "-k", help="Kaç sonuç döndürülecek."),
@@ -154,6 +176,15 @@ def query(
     tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Sadece bu tag/klasördeki dokümanları ara."),
     context: int = typer.Option(0, "--context", "-c", help="Her sonuca komşu chunk'ları N adım ekle (prev/next zinciri)."),
     backend: Optional[str] = typer.Option(None, "--backend", help="Kullanılacak vektör veritabanı backend'i (lancedb | qdrant)."),
+    remote: Optional[str] = typer.Option(
+        None,
+        "--remote",
+        metavar="[URL]",
+        help=(
+            "Model yüklemek yerine çalışan bir `doqqy serve`'e sorgu gönder. "
+            "URL verilmezse $DOQQY_SERVER_URL, o da yoksa http://127.0.0.1:8000 kullanılır."
+        ),
+    ),
 ) -> None:
     """Hibrit arama (dense+sparse → RRF → reranker): top-k chunk + kaynak."""
     from doqqy.infra.settings import Settings
@@ -161,11 +192,22 @@ def query(
 
     ws = _workspace()
     settings = Settings(vector_backend=backend) if backend else None
-    try:
-        hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
-    except InvalidTagError as e:
-        err_console.print(f"[bold red]Hata: {e}[/bold red]")
-        raise typer.Exit(code=1) from e
+    server_url = _resolve_server_url(remote)
+
+    if server_url is not None:
+        from doqqy.remote_client import RemoteQueryError, query_remote
+
+        try:
+            hits, _took_ms = query_remote(server_url, ws, text, k=k, rerank=not no_rerank, tag=tag)
+        except RemoteQueryError as e:
+            err_console.print(f"[bold red]Hata: {e}[/bold red]")
+            raise typer.Exit(code=1) from e
+    else:
+        try:
+            hits = search(ws, text, k=k, rerank=not no_rerank, tag=tag, settings=settings)
+        except InvalidTagError as e:
+            err_console.print(f"[bold red]Hata: {e}[/bold red]")
+            raise typer.Exit(code=1) from e
 
     if not hits:
         console.print(Panel("[yellow]Sonuç bulunamadı.[/yellow]", border_style="yellow"))
