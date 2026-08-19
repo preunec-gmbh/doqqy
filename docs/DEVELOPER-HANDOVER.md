@@ -268,6 +268,33 @@ pip install -e ".[dev]"
 pytest tests/ -v -m "not slow"
 ```
 
+**Retrieval Evaluation Harness (`tests/eval/`)**:
+A quantitative benchmark evaluating retrieval performance (Recall@1, Recall@5, Recall@10, and MRR) with reranking on and off against a ground-truth corpus and query set (`tests/eval/corpus/` and `tests/eval/queries.yaml`).
+
+- **Running the standalone evaluation runner**:
+  ```bash
+  python -m tests.eval --backend lancedb
+  ```
+  Options:
+  - `--backend <name>`: Target vector store backend (`lancedb`, `qdrant`).
+  - `--check-baseline`: Checks current metrics against committed baseline JSON and exits non-zero on regression beyond tolerance.
+  - `--record-baseline`: Overwrites `tests/eval/baseline_lancedb.json` with the current run results.
+  - `--json-out <path>`: Exports the evaluation report to a JSON file.
+  - `--tolerance <float>`: Custom regression tolerance (default `0.02`).
+
+- **Tolerance Contract**:
+  - Max allowed drop on aggregate metrics (Recall@1/5/10, MRR): $\Delta \le 0.02$ (2 percentage points).
+  - Exact-term category zero-tolerance floor: Recall@5 must never regress on literal exact token lookups.
+
+- **Running via pytest**:
+  ```bash
+  # Fast unit tests (no model downloads)
+  pytest tests/eval/test_eval.py -k "not slow" -v
+
+  # Full end-to-end evaluation test
+  pytest tests/eval/test_eval.py -v
+  ```
+
 **Linter and Formatting**: We use **Ruff** as our official linter and formatter, with the ruleset configured in `pyproject.toml`. The standard line length is set to 140 characters to prevent unwanted code wraps during markdown data processing, inline queries, and dense data structures.
 
 Before committing, make sure to run the check locally to keep the codebase clean:

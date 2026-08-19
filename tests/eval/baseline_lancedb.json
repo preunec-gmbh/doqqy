@@ -1,0 +1,844 @@
+{
+  "backend": "lancedb",
+  "timestamp": "2026-08-18T11:15:01.768024+00:00",
+  "rerank_on": {
+    "recall_at_1": 0.64,
+    "recall_at_5": 1.0,
+    "recall_at_10": 1.0,
+    "mrr": 0.7913,
+    "total_queries": 25
+  },
+  "rerank_off": {
+    "recall_at_1": 0.56,
+    "recall_at_5": 0.72,
+    "recall_at_10": 0.72,
+    "mrr": 0.6233,
+    "total_queries": 25
+  },
+  "by_category": {
+    "exact_term": {
+      "category": "exact_term",
+      "total_queries": 5,
+      "rerank_on": {
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "total_queries": 5
+      },
+      "rerank_off": {
+        "recall_at_1": 0.8,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.9,
+        "total_queries": 5
+      }
+    },
+    "paraphrase": {
+      "category": "paraphrase",
+      "total_queries": 5,
+      "rerank_on": {
+        "recall_at_1": 0.6,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.8,
+        "total_queries": 5
+      },
+      "rerank_off": {
+        "recall_at_1": 0.8,
+        "recall_at_5": 0.8,
+        "recall_at_10": 0.8,
+        "mrr": 0.8,
+        "total_queries": 5
+      }
+    },
+    "hard_rerank": {
+      "category": "hard_rerank",
+      "total_queries": 5,
+      "rerank_on": {
+        "recall_at_1": 0.4,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.6167,
+        "total_queries": 5
+      },
+      "rerank_off": {
+        "recall_at_1": 0.4,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.6167,
+        "total_queries": 5
+      }
+    },
+    "tag_filtered": {
+      "category": "tag_filtered",
+      "total_queries": 4,
+      "rerank_on": {
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "total_queries": 4
+      },
+      "rerank_off": {
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 1.0,
+        "total_queries": 4
+      }
+    },
+    "cross_lingual_tr_to_en": {
+      "category": "cross_lingual_tr_to_en",
+      "total_queries": 3,
+      "rerank_on": {
+        "recall_at_1": 0.3333,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.5667,
+        "total_queries": 3
+      },
+      "rerank_off": {
+        "recall_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "recall_at_10": 0.0,
+        "mrr": 0.0,
+        "total_queries": 3
+      }
+    },
+    "cross_lingual_en_to_tr": {
+      "category": "cross_lingual_en_to_tr",
+      "total_queries": 3,
+      "rerank_on": {
+        "recall_at_1": 0.3333,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.6667,
+        "total_queries": 3
+      },
+      "rerank_off": {
+        "recall_at_1": 0.0,
+        "recall_at_5": 0.0,
+        "recall_at_10": 0.0,
+        "mrr": 0.0,
+        "total_queries": 3
+      }
+    }
+  },
+  "per_query": [
+    {
+      "query": "E-2002 hata kodu ne anlama gelir",
+      "category": "exact_term",
+      "expected_doc_id": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "expected_section": "Bağlantı Hataları",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 2,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 0.5,
+      "top_doc_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "Hata Kodları",
+        "Bağlantı Hataları",
+        "E-2002: Sertifika Süresi Dolmuş"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_no_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "Hata Kodları",
+        "Şema Doğrulama Hataları",
+        "E-1002: Geçersiz Vergi Kimlik Numarası"
+      ]
+    },
+    {
+      "query": "offline_queue_limit parametresi ne işe yarar",
+      "category": "exact_term",
+      "expected_doc_id": "raw/erp/stok/barkod-entegrasyonu-tr.md",
+      "expected_section": "Çevrimdışı Kuyruk",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/stok/barkod-entegrasyonu-tr.md",
+      "top_section_rerank": [
+        "Barkod Okuyucu Entegrasyonu",
+        "Çevrimdışı Kuyruk"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/barkod-entegrasyonu-tr.md",
+      "top_section_no_rerank": [
+        "Barkod Okuyucu Entegrasyonu",
+        "Çevrimdışı Kuyruk"
+      ]
+    },
+    {
+      "query": "RETURN reason code credit note",
+      "category": "exact_term",
+      "expected_doc_id": "raw/erp/faturalama/credit-note-process-en.md",
+      "expected_section": "Reason Code",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/faturalama/credit-note-process-en.md",
+      "top_section_rerank": [
+        "Credit Note Process",
+        "Issuing Steps",
+        "Reason Code"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/credit-note-process-en.md",
+      "top_section_no_rerank": [
+        "Credit Note Process",
+        "Issuing Steps",
+        "Reason Code"
+      ]
+    },
+    {
+      "query": "UBL-TR 1.2 format nedir",
+      "category": "exact_term",
+      "expected_doc_id": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "expected_section": "Giriş",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "Giriş"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_no_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "Giriş"
+      ]
+    },
+    {
+      "query": "NOVA2026000123 numaralı örnek fatura hangi dökümanda geçiyor",
+      "category": "exact_term",
+      "expected_doc_id": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "expected_section": "XML Şema Örneği",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "XML Şema Örneği"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/e-fatura-entegrasyon-tr.md",
+      "top_section_no_rerank": [
+        "e-Fatura GİB Entegrasyonu",
+        "XML Şema Örneği"
+      ]
+    },
+    {
+      "query": "Ne kadar süre kala izin isteğimi bildirmem lazım?",
+      "category": "paraphrase",
+      "expected_doc_id": "raw/hr/izin/izin-sureci-tr.md",
+      "expected_section": "Talep Oluşturma",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Talep Oluşturma"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Talep Oluşturma"
+      ]
+    },
+    {
+      "query": "How much notice do UK staff need to give before taking time off?",
+      "category": "paraphrase",
+      "expected_doc_id": "raw/hr/izin/leave-process-en.md",
+      "expected_section": "Submitting a Request",
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/hr/izin/mesai-politikasi-en.md",
+      "top_section_rerank": [
+        "Overtime Policy",
+        "Compensation Details",
+        "Time Off in Lieu"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/mesai-politikasi-en.md",
+      "top_section_no_rerank": [
+        "Overtime Policy",
+        "Compensation Details",
+        "Time Off in Lieu"
+      ]
+    },
+    {
+      "query": "If a customer sends products back once they've already received them, what document gets created?",
+      "category": "paraphrase",
+      "expected_doc_id": "raw/erp/faturalama/credit-note-process-en.md",
+      "expected_section": "When to Use a Credit Note",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/faturalama/credit-note-process-en.md",
+      "top_section_rerank": [
+        "Credit Note Process",
+        "When to Use a Credit Note"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/credit-note-process-en.md",
+      "top_section_no_rerank": [
+        "Credit Note Process",
+        "When to Use a Credit Note"
+      ]
+    },
+    {
+      "query": "Depoda fiziksel ürün adedini saymak için ekipler nasıl görevlendiriliyor?",
+      "category": "paraphrase",
+      "expected_doc_id": "raw/erp/stok/stok-sayim-tr.md",
+      "expected_section": "Hazırlık",
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_rerank": [
+        "Stok Sayım Süreci",
+        "Periyodik Tam Sayım",
+        "Uygulama"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_no_rerank": [
+        "Stok Sayım Süreci",
+        "Periyodik Tam Sayım",
+        "Hazırlık"
+      ]
+    },
+    {
+      "query": "Bir ürünün deposu azaldığında tedarikçiye otomatik olarak ne oluyor?",
+      "category": "paraphrase",
+      "expected_doc_id": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "expected_section": "Otomatik Sipariş Tetikleme",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Otomatik Sipariş Tetikleme"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_no_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Otomatik Sipariş Tetikleme"
+      ]
+    },
+    {
+      "query": "fatura iptal etme yetkisi kimde, tutar sınırı ne kadar",
+      "category": "hard_rerank",
+      "expected_doc_id": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "expected_section": [
+        "Yetkilendirme Matrisi",
+        "Yetkilendirme"
+      ],
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 2,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 0.5,
+      "top_doc_rerank": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "top_section_rerank": [
+        "Fatura İptal Süreci",
+        "İptal Adımları",
+        "Yetkilendirme"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Fatura İptal Süreci",
+        "Ne Zaman Fatura İptal Edilir"
+      ]
+    },
+    {
+      "query": "Depoda ürün stoğu azaldığında sistem ne yapar?",
+      "category": "hard_rerank",
+      "expected_doc_id": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "expected_section": "Otomatik Sipariş Tetikleme",
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": 3,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 0.3333333333333333,
+      "top_doc_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_rerank": [
+        "Stok Sayım Süreci",
+        "Sayım Sonrası"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_no_rerank": [
+        "Stok Sayım Süreci",
+        "Periyodik Tam Sayım"
+      ]
+    },
+    {
+      "query": "İzin günü sayısı nasıl belirlenir?",
+      "category": "hard_rerank",
+      "expected_doc_id": "raw/hr/izin/yillik-izin-hesaplama-tr.md",
+      "expected_section": "Kıdem Bazlı Hakediş Tablosu",
+      "tag_filter": null,
+      "rank_rerank": 4,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 0.25,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/hr/izin/yillik-izin-hesaplama-tr.md",
+      "top_section_rerank": [
+        "Yıllık İzin Hakedişi Hesaplama",
+        "Yarı Zamanlı Çalışanlar"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/yillik-izin-hesaplama-tr.md",
+      "top_section_no_rerank": [
+        "Yıllık İzin Hakedişi Hesaplama",
+        "Kıdem Bazlı Hakediş Tablosu"
+      ]
+    },
+    {
+      "query": "If I don't use my time off in lieu within the deadline, do I lose it or get paid instead?",
+      "category": "hard_rerank",
+      "expected_doc_id": "raw/hr/izin/mesai-politikasi-en.md",
+      "expected_section": "Time Off in Lieu",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/hr/izin/mesai-politikasi-en.md",
+      "top_section_rerank": [
+        "Overtime Policy",
+        "Compensation Details",
+        "Time Off in Lieu"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/mesai-politikasi-en.md",
+      "top_section_no_rerank": [
+        "Overtime Policy",
+        "Compensation Details",
+        "Time Off in Lieu"
+      ]
+    },
+    {
+      "query": "What's the difference between voiding an invoice early versus reversing it after it's already gone to the tax authority?",
+      "category": "hard_rerank",
+      "expected_doc_id": "raw/erp/faturalama/credit-note-process-en.md",
+      "expected_section": "Difference from Cancellation",
+      "tag_filter": null,
+      "rank_rerank": 3,
+      "rank_no_rerank": 4,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 0.3333333333333333,
+      "rr_no_rerank": 0.25,
+      "top_doc_rerank": "raw/erp/faturalama/invoice-cancellation-en.md",
+      "top_section_rerank": [
+        "Invoice Cancellation Process",
+        "Common Pitfalls"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/credit-note-process-en.md",
+      "top_section_no_rerank": [
+        "Credit Note Process"
+      ]
+    },
+    {
+      "query": "iptal süreci nasıl işler",
+      "category": "tag_filtered",
+      "expected_doc_id": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "expected_section": null,
+      "tag_filter": [
+        "erp",
+        "faturalama"
+      ],
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "top_section_rerank": [
+        "Fatura İptal Süreci",
+        "İptal Adımları",
+        "Talep Oluşturma"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Fatura İptal Süreci",
+        "İptal Adımları",
+        "Talep Oluşturma"
+      ]
+    },
+    {
+      "query": "asgari seviye ne zaman tetiklenir",
+      "category": "tag_filtered",
+      "expected_doc_id": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "expected_section": null,
+      "tag_filter": [
+        "erp",
+        "stok"
+      ],
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Seviye Güncelleme"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_no_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Mevsimsel Ürünler İstisnası"
+      ]
+    },
+    {
+      "query": "onay süresi kaç gün",
+      "category": "tag_filtered",
+      "expected_doc_id": "raw/hr/izin/izin-sureci-tr.md",
+      "expected_section": null,
+      "tag_filter": [
+        "hr",
+        "izin"
+      ],
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Onay Akışı"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Onay Akışı"
+      ]
+    },
+    {
+      "query": "Mevsimsel ürünler için başlangıç siparişi sezon başlamadan kaç gün önce oluşturuluyor?",
+      "category": "tag_filtered",
+      "expected_doc_id": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "expected_section": [
+        "Mevsimsel Ürünler İstisnası",
+        "Kategoriye Göre Varsayılan Seviyeler"
+      ],
+      "tag_filter": [
+        "erp"
+      ],
+      "rank_rerank": 1,
+      "rank_no_rerank": 1,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": true,
+      "is_hit_at_5_no_rerank": true,
+      "is_hit_at_10_no_rerank": true,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 1.0,
+      "top_doc_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Mevsimsel Ürünler İstisnası"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/minimum-stok-seviyesi-tr.md",
+      "top_section_no_rerank": [
+        "Minimum Stok Seviyesi ve Yeniden Sipariş Noktası",
+        "Mevsimsel Ürünler İstisnası"
+      ]
+    },
+    {
+      "query": "İngiltere şubesinde fatura iptali için onay limiti kaç sterlin?",
+      "category": "cross_lingual_tr_to_en",
+      "expected_doc_id": "raw/erp/faturalama/invoice-cancellation-en.md",
+      "expected_section": [
+        "Approval Matrix",
+        "Approval Routing"
+      ],
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/erp/faturalama/invoice-cancellation-en.md",
+      "top_section_rerank": [
+        "Invoice Cancellation Process",
+        "Cancellation Steps",
+        "Approval Routing"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Fatura İptal Süreci",
+        "İptal Adımları",
+        "Yetkilendirme"
+      ]
+    },
+    {
+      "query": "UK deposundaki mallar, hedef depoya varmadan satılabilir mi?",
+      "category": "cross_lingual_tr_to_en",
+      "expected_doc_id": "raw/erp/stok/warehouse-transfer-en.md",
+      "expected_section": "Receipt Confirmation",
+      "tag_filter": null,
+      "rank_rerank": 5,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 0.2,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_rerank": [
+        "Stok Sayım Süreci",
+        "Periyodik Tam Sayım"
+      ],
+      "top_doc_no_rerank": "raw/erp/stok/stok-sayim-tr.md",
+      "top_section_no_rerank": [
+        "Stok Sayım Süreci",
+        "Periyodik Tam Sayım"
+      ]
+    },
+    {
+      "query": "İngiltere ofisinde izin talebi kaç iş günü önceden yapılmalı?",
+      "category": "cross_lingual_tr_to_en",
+      "expected_doc_id": "raw/hr/izin/leave-process-en.md",
+      "expected_section": "Submitting a Request",
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Talep Oluşturma"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/izin-sureci-tr.md",
+      "top_section_no_rerank": [
+        "Yıllık İzin Talep Süreci",
+        "Talep Oluşturma"
+      ]
+    },
+    {
+      "query": "What is the approval limit in Turkish lira for cancelling an invoice at the Turkey headquarters?",
+      "category": "cross_lingual_en_to_tr",
+      "expected_doc_id": "raw/erp/faturalama/fatura-iptal-sureci-tr.md",
+      "expected_section": [
+        "Yetkilendirme Matrisi",
+        "Yetkilendirme"
+      ],
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/erp/faturalama/invoice-cancellation-en.md",
+      "top_section_rerank": [
+        "Invoice Cancellation Process",
+        "Cancellation Steps",
+        "Approval Routing"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/invoice-cancellation-en.md",
+      "top_section_no_rerank": [
+        "Invoice Cancellation Process",
+        "When Cancellation Applies"
+      ]
+    },
+    {
+      "query": "How many days in advance must a request be filed at the Turkey office before taking leave?",
+      "category": "cross_lingual_en_to_tr",
+      "expected_doc_id": "raw/hr/izin/izin-sureci-tr.md",
+      "expected_section": "Talep Oluşturma",
+      "tag_filter": null,
+      "rank_rerank": 2,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": false,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 0.5,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/hr/izin/leave-process-en.md",
+      "top_section_rerank": [
+        "Annual Leave Request Process",
+        "Submitting a Request"
+      ],
+      "top_doc_no_rerank": "raw/hr/izin/leave-process-en.md",
+      "top_section_no_rerank": [
+        "Annual Leave Request Process",
+        "Submitting a Request"
+      ]
+    },
+    {
+      "query": "What is the VAT rate applied to basic food items in the Turkish ERP system?",
+      "category": "cross_lingual_en_to_tr",
+      "expected_doc_id": "raw/erp/faturalama/kdv-hesaplama-tr.md",
+      "expected_section": "Kategori Bazlı Oranlar",
+      "tag_filter": null,
+      "rank_rerank": 1,
+      "rank_no_rerank": null,
+      "is_hit_at_1_rerank": true,
+      "is_hit_at_5_rerank": true,
+      "is_hit_at_10_rerank": true,
+      "is_hit_at_1_no_rerank": false,
+      "is_hit_at_5_no_rerank": false,
+      "is_hit_at_10_no_rerank": false,
+      "rr_rerank": 1.0,
+      "rr_no_rerank": 0.0,
+      "top_doc_rerank": "raw/erp/faturalama/kdv-hesaplama-tr.md",
+      "top_section_rerank": [
+        "KDV Hesaplama Rehberi",
+        "Kategori Bazlı Oranlar"
+      ],
+      "top_doc_no_rerank": "raw/erp/faturalama/kdv-hesaplama-tr.md",
+      "top_section_no_rerank": [
+        "KDV Hesaplama Rehberi"
+      ]
+    }
+  ]
+}

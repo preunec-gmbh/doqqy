@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
 
@@ -18,7 +18,7 @@ from doqqy.workspace import Workspace
 
 if TYPE_CHECKING:
     from doqqy.infra.models import ModelManager
-    from doqqy.infra.vectorstore.base import VectorStore
+    from doqqy.infra.vectorstore.base import TagFilter, VectorStore
 
 _LOG = get_logger("doqqy.query")
 
@@ -67,8 +67,7 @@ def _embed_query(
     models: ModelManager | None = None,
     settings: Settings | None = None,
 ) -> tuple[np.ndarray, dict[int, float]]:
-    embedder = _model(models=models, settings=settings)
-    out = embedder.encode(
+    out = _model(models=models, settings=settings).encode(
         [text],
         max_length=1024,
         return_dense=True,
@@ -87,6 +86,7 @@ def search(
     k: int = DEFAULT_TOP_K,
     rerank: bool = True,
     tag: str | None = None,
+    tag_filter: TagFilter | Sequence[str] | None = None,
     settings: Settings | None = None,
     models: ModelManager | None = None,
     store: VectorStore | None = None,
@@ -94,7 +94,15 @@ def search(
     from doqqy.infra.vectorstore.base import TagFilter
     from doqqy.infra.vectorstore.factory import make_store
 
-    flt = TagFilter(tags=(tag,)) if tag else None
+    if tag_filter is not None:
+        if isinstance(tag_filter, TagFilter):
+            flt = tag_filter
+        else:
+            flt = TagFilter(tags=tuple(tag_filter))
+    elif tag:
+        flt = TagFilter(tags=(tag,))
+    else:
+        flt = None
 
     if models is not None or settings is not None:
         dense_vec, sparse_vec = _embed_query(query, models=models, settings=settings)

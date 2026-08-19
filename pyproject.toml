@@ -105,5 +105,8 @@ ignore = [
     "PLC0415"       # Projedeki mevcut local import tercihini meşrulaştırmak için
 ]
 
+[tool.pyright]
+extraPaths = ["src", "."]
+
 [tool.setuptools.dynamic]
 version = { attr = "doqqy.__version__" }
