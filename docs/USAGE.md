@@ -171,6 +171,17 @@ Each hit shows the source file, section path, and score breakdown (`dense=<rank>
 
 `--context N` (`-c`) walks each hit's `prev_chunk`/`next_chunk` chain N steps in both directions and displays the neighboring chunks alongside the hit, dimmed to distinguish them from the matched chunk. Expansion happens after reranking — it's display-only and never affects which chunks were selected or their order. At a document's start/end, the missing side is simply omitted.
 
+**Thin client (`--remote`)** — every CLI invocation loads `bge-m3` + the reranker from scratch (~20–60 s). Start `doqqy serve` once, and point `query` at it to skip that entirely:
+
+```powershell
+doqqy serve                                       # in one terminal — keeps models warm
+doqqy query "invoice states" --remote             # in another — instant, same rich output
+doqqy query "invoice states" --remote http://127.0.0.1:8080   # custom server URL
+$env:DOQQY_SERVER_URL = "http://127.0.0.1:8000"; doqqy query "invoice states"  # env var, no --remote needed
+```
+
+Resolution order: `--remote URL` > bare `--remote` (`$DOQQY_SERVER_URL`, then `http://127.0.0.1:8000`) > `$DOQQY_SERVER_URL` without a flag. With neither flag nor env var, `query` runs in-process exactly as before. Once remote mode is engaged (flag or env var present) and the server can't be reached, the command fails with a clear error — it never silently falls back to loading models in-process, since that surprising 20–60 s stall is exactly what `--remote` exists to avoid. The workspace queried is always the current working directory, matching in-process behavior; `--context` still expands neighboring chunks from the local store. In remote mode `--backend` does not change the search itself — the server uses whichever backend it was started with — but it does still select the local store that `--context` reads those neighbors from.
+
 ### `doqqy serve`
 
 Starts the local resident HTTP server, keeping `bge-m3` embedding and `bge-reranker` models pre-warmed in memory so queries return in milliseconds (<1 s warm instead of ~20-60 s cold CLI load).
