@@ -198,7 +198,7 @@ The no-LLM query path stays. That's the differentiator: *"your documents never l
 | 4 | ✅ **Shipped** — **MCP server** (`doqqy mcp`) | S | Expose `query`/`tags`/`info` as MCP tools → any AI agent (Claude Code, IDEs) can search the corpus locally. Very cheap: wraps the same `search()` — and turns doqqy into "the local RAG backend for agents", a category with real pull right now |
 | 5 | **Context expansion at query time** | S | `prev_chunk`/`next_chunk` already stored and unused; `--context 1` flag returns neighbors |
 | 6 | **OCR fallback for scanned PDFs** | M | Today scanned PDFs fail; docling has OCR support (EasyOCR/Tesseract) behind options — currently the biggest ingest gap |
-| 7 | **Retrieval eval harness** | M | A `tests/eval/` set of (query, expected-doc) pairs + recall@k / MRR script — otherwise threshold/model changes (0.75 cosine, RRF k=60) are vibes-based. Also the backend-parity gate for LanceDB vs Qdrant |
+| 7 | ✅ **Shipped (issue #15)** — **Retrieval eval harness** | M | `tests/eval/` set of (query, expected-doc) pairs + Recall@k / MRR runner (`python -m tests.eval --backend lancedb`) with committed LanceDB baseline JSON and tolerance contract ($\Delta \le 0.02$). Replaces vibes-based tuning and gates backend parity for LanceDB vs Qdrant (#52) |
 | 8 | **Web UI** | M | Local FastAPI + single-page search UI over the API from Phase 3; also the SaaS front-end seed |
 | 9 | **Dedup by `content_hash`** | S | Same doc in two folders currently embeds twice; hash is already computed |
 | 10 | ~~**PPTX ingester**~~ | S | **Done.** `pptx_ingest.py` — docling primary, python-pptx fallback; (HTML, XLSX, CSV, XML, and PPTX ingesters are completed) |

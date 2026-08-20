@@ -92,6 +92,7 @@ where = ["src"]
 "doqqy" = ["py.typed"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src", "."]
 markers = [
     "slow: marks integration tests that are slower to run",
 ]
@@ -107,6 +108,9 @@ ignore = [
     "B008",         # Typer tasarımsal zorunluluğu için bunu kapat
     "PLC0415"       # Projedeki mevcut local import tercihini meşrulaştırmak için
 ]
+
+[tool.pyright]
+extraPaths = ["src", "."]
 
 [tool.setuptools.dynamic]
 version = { attr = "doqqy.__version__" }
