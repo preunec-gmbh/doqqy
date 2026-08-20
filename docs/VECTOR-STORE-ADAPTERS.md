@@ -247,25 +247,16 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 
 Vectors already live in the LanceDB store — a corpus can be migrated in minutes, no GPU needed:
 
-```python
-# cli.py
-@app.command()
-def migrate_store(
-    to: str = typer.Option(..., "--to", help="Hedef backend (qdrant)."),
-    batch: int = typer.Option(256, "--batch"),
-) -> None:
-    """Mevcut store'daki vektörleri yeniden embed etmeden hedef backend'e taşı."""
-    ws = Workspace(Path.cwd())
-    src = make_store(ws, settings_with(backend="lancedb"))
-    dst = make_store(ws, settings_with(backend=to))
-    dst.recreate(dim=EMBEDDING_DIM)
-    moved = 0
-    for records in src.iter_records(batch_size=batch):     # port'a eklenen iterator
-        moved += dst.upsert(records)
-    console.print(f"[green]✓[/green] {moved} chunk taşındı → {to}")
+```powershell
+# Current backend (LanceDB by default) → Qdrant
+doqqy migrate-store --to qdrant --batch 256
+
+# Reverse migration / rollback
+$env:DOQQY_VECTOR_BACKEND = "qdrant"
+doqqy migrate-store --to lancedb --batch 256
 ```
 
-Rollback is the same command in reverse. Because `doqqy embed` remains fully deterministic from `chunks.parquet`, the worst-case recovery is always "re-run embed against the other backend".
+**Status: implemented (#14).** The command uses only the `VectorStore` port: `count` for progress, `iter_records` for constant-memory reads, and `recreate` + `upsert` for destination writes. It refuses a source-equals-destination no-op. If a batch fails, the source remains untouched and the command reports that the recreated destination may be partial. Because `doqqy embed` remains fully deterministic from `chunks.parquet`, the worst-case recovery is always "re-run embed against the other backend".
 
 ## 7. Deployment addition (compose)
 
