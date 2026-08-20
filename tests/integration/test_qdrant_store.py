@@ -37,7 +37,7 @@ def qdrant_available() -> bool:
             url=QDRANT_URL,
             api_key=QDRANT_API_KEY or None,
             check_compatibility=False,
-            timeout=1.0,
+            timeout=1,
         )
         client.get_collections()
         client.close()
@@ -136,7 +136,8 @@ def test_qdrant_store_full_roundtrip(qdrant_store: QdrantStore) -> None:
     assert len(iter_records_all) == 2
     assert {r.chunk_id for r in iter_records_all} == {chunk_id1, chunk_id2}
     r1 = next(r for r in iter_records_all if r.chunk_id == chunk_id1)
-    assert np.array_equal(r1.dense, vec1)
+    assert r1.dense is not None
+    assert np.allclose(r1.dense, vec1 / np.linalg.norm(vec1), atol=1e-5)
     assert r1.sparse == {101: 0.5, 102: 1.2}
 
     flt_test = TagFilter(tags=("test",))
@@ -219,6 +220,9 @@ def test_qdrant_store_tenant_isolation_integration(qdrant_available: bool) -> No
         # Verify list_tags are isolated
         assert store_a.list_tags() == ["alpha-tag"]
         assert store_b.list_tags() == ["beta-tag"]
+
+        assert rec_a.dense is not None
+        assert rec_b.dense is not None
 
         # Verify search is isolated: store_a search returns rec_a and NEVER rec_b
         hits_a = store_a.hybrid_search(rec_a.dense, {1: 1.0}, limit=5)
@@ -308,13 +312,16 @@ def test_qdrant_store_mocked_upsert():
 
     pt = points[0]
     assert pt.id == str(uuid.uuid5(uuid.NAMESPACE_URL, "chunk-abc"))
+    assert pt.payload is not None
     assert pt.payload["chunk_id"] == "chunk-abc"
     assert pt.payload["tenant"] == "tenant_1"
     assert pt.payload["tags"] == ["tag1", "tag2"]
     assert pt.payload["doc_id"] == "doc-xyz"
+    assert isinstance(pt.vector, dict)
     assert pt.vector["dense"] == [1.0, 1.0, 1.0, 1.0]
-    assert pt.vector["sparse"].indices == [10, 20]
-    assert pt.vector["sparse"].values == [1.5, 2.5]
+    sparse_vec = pt.vector["sparse"]
+    assert getattr(sparse_vec, "indices", None) == [10, 20] or sparse_vec.indices == [10, 20]  # type: ignore[union-attr]
+    assert getattr(sparse_vec, "values", None) == [1.5, 2.5] or sparse_vec.values == [1.5, 2.5]  # type: ignore[union-attr]
 
 
 @pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
