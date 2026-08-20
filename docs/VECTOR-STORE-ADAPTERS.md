@@ -223,7 +223,10 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 
 ### 4.3 Behavior notes & parity with LanceDB mode
 
-- **RRF constant:** Qdrant's fusion uses its own internal RRF; doqqy's client-side RRF uses k=60. Rankings can differ slightly between backends — acceptable, but the retrieval **eval harness** (ROADMAP #7) should run against both backends in CI to catch real regressions. Per-leg `dense_rank`/`sparse_rank` diagnostics aren't returned by fused queries; expose them behind `--explain` (two extra prefetch-only queries) rather than always paying for them.
+- **Parity Gate Status:** Verified via evaluation harness (#52).
+  - **Rerank ON:** 100% Parity match across LanceDB and Qdrant (`Recall@1: 0.6400`, `Recall@5: 1.0000`, `Recall@10: 1.0000`, `MRR: 0.7913`).
+  - **Rerank OFF:** Qdrant's server-side RRF achieves `Recall@5: 0.9600` (vs LanceDB `0.7200`) and `MRR: 0.7793` (vs LanceDB `0.6233`). This expected difference is due to Qdrant's internal server-side RRF vs doqqy's client-side k=60 RRF algorithm.
+- **RRF constant:** Qdrant's fusion uses its own internal RRF; doqqy's client-side RRF uses k=60. Rankings can differ slightly between backends — acceptable, but the retrieval **eval harness** (#15, #52) runs against both backends in CI to catch real regressions. Per-leg `dense_rank`/`sparse_rank` diagnostics aren't returned by fused queries; expose them behind `--explain` (two extra prefetch-only queries) rather than always paying for them.
 - **`all_vectors()` for map Pass 2:** implemented with `scroll` + `with_vectors=["dense"]`, filtered by tenant. Same in-memory centroid math as today. (Later optimization: server-side `query_points` per section centroid — not needed for v1.)
 - **Incremental ops:** `delete_by_doc` = `client.delete(filter=doc_id AND tenant)`; `upsert` is idempotent by point ID. The Phase-2 incremental design works unchanged.
 - **`list_tags`:** from the workspace **manifest**, not the store (both backends) — no scans.
@@ -239,7 +242,7 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 | `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
 | `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-**Phase 1 & 1.5 Status:** Adapter + multitenancy + server-side RRF are done. The LanceDB→Qdrant migration tool (§6) and the eval-harness parity check (ROADMAP #7) are still open.
+**Phase 1 & 1.5 Status:** Adapter + multitenancy + server-side RRF are done. The LanceDB→Qdrant migration tool (#14) and the eval-harness parity check (#15, #52) are **Implemented**.
 
 > **Atomicity note:** Qdrant `full_rebuild` deletes only the current tenant's points before upserting. This is NOT atomic across tenants — a crash between delete and upsert leaves the tenant empty. True atomicity (new collection + alias swap) is incompatible with the shared-collection model. LanceDB's drop-and-recreate is atomic because it operates on a single-tenant file.
 

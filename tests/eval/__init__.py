@@ -1,6 +1,6 @@
 """doqqy arama performansı değerlendirme (retrieval evaluation) modülü."""
 
-from .loader import build_eval_workspace, load_eval_queries
+from .loader import build_eval_workspace, check_backend_available, load_eval_queries
 from .metrics import (
     compute_aggregate_metrics,
     compute_category_breakdowns,
@@ -16,9 +16,11 @@ from .models import (
 )
 from .runner import (
     DEFAULT_BASELINE_PATH,
+    DEFAULT_QDRANT_BASELINE_PATH,
     DEFAULT_TOLERANCE,
     check_regression,
     load_baseline,
+    print_parity_report,
     print_rich_report,
     run_eval,
     save_baseline,
@@ -26,6 +28,7 @@ from .runner import (
 
 __all__ = [
     "DEFAULT_BASELINE_PATH",
+    "DEFAULT_QDRANT_BASELINE_PATH",
     "DEFAULT_TOLERANCE",
     "AggregateMetrics",
     "CategoryMetrics",
@@ -33,6 +36,7 @@ __all__ = [
     "EvalReport",
     "QueryEvalResult",
     "build_eval_workspace",
+    "check_backend_available",
     "check_regression",
     "compute_aggregate_metrics",
     "compute_category_breakdowns",
@@ -40,6 +44,7 @@ __all__ = [
     "is_matching_hit",
     "load_baseline",
     "load_eval_queries",
+    "print_parity_report",
     "print_rich_report",
     "run_eval",
     "save_baseline",

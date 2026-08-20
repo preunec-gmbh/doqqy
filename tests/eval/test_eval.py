@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from doqqy.infra.settings import Settings
 from doqqy.query import SearchHit
 
-from .loader import build_eval_workspace, load_eval_queries
+from .loader import build_eval_workspace, check_backend_available, load_eval_queries
 from .metrics import (
     compute_aggregate_metrics,
     is_matching_hit,
@@ -271,3 +272,30 @@ def test_lancedb_retrieval_eval(tmp_path):
         baseline = load_baseline(DEFAULT_BASELINE_PATH)
         has_reg, violations = check_regression(report, baseline, tolerance=DEFAULT_TOLERANCE)
         assert not has_reg, f"Referansa karşı regresyon tespit edildi: {violations}"
+
+
+def test_check_backend_available_lancedb():
+    """LanceDB backend kontrolünün her zaman True döndüğünü teyit eder."""
+    is_avail, msg = check_backend_available("lancedb")
+    assert is_avail is True
+    assert "LanceDB" in msg
+
+
+@pytest.mark.slow
+def test_qdrant_retrieval_eval(tmp_path):
+    """Qdrant arama kalitesini doğrulayan uçtan uca test (sunucu erişilemezse in-memory veya atlanır)."""
+    settings = Settings(vector_backend="qdrant")
+    is_avail, msg = check_backend_available("qdrant", settings=settings)
+    if not is_avail:
+        pytest.skip(f"Qdrant sunucusu erişilebilir değil: {msg}")
+
+    if "in-memory" in msg:
+        settings = Settings(vector_backend="qdrant", qdrant_url=":memory:")
+
+    queries = load_eval_queries()
+    ws = build_eval_workspace(target_dir=tmp_path, backend="qdrant", settings=settings)
+    report = run_eval(ws, queries, backend="qdrant", settings=settings)
+
+    assert report.rerank_on.recall_at_5 >= 0.70
+    assert report.rerank_on.mrr >= 0.60
+    assert report.rerank_on.total_queries == len(queries)

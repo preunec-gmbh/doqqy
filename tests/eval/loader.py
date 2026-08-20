@@ -46,6 +46,42 @@ def load_eval_queries(yaml_path: Path | None = None) -> list[EvalQuery]:
     return queries
 
 
+def check_backend_available(backend: str, settings: Settings | None = None) -> tuple[bool, str]:
+    """Seçilen vektör deposu backend'inin kullanılabilir olup olmadığını kontrol eder."""
+    if backend == "lancedb":
+        return True, "LanceDB yerel dosyaları her zaman kullanılabilir."
+
+    if backend == "qdrant":
+        try:
+            from qdrant_client import QdrantClient  # type: ignore
+        except ImportError:
+            return False, "qdrant-client kütüphanesi kurulu değil (`pip install doqqy[qdrant]`)."
+
+        app_settings = settings or Settings(vector_backend="qdrant")
+        url = app_settings.qdrant_url
+        if url == ":memory:":
+            return True, "Qdrant bellek içi (in-memory) istemci kullanılabilir."
+
+        try:
+            client = QdrantClient(
+                url=url,
+                api_key=app_settings.qdrant_api_key or None,
+                check_compatibility=False,
+                timeout=2,
+            )
+            client.get_collections()
+            return True, f"Qdrant sunucusu erişilebilir ({url})."
+        except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
+            try:
+                mem_client = QdrantClient(":memory:")
+                mem_client.get_collections()
+                return True, f"Qdrant bellek içi (in-memory) kipinde kullanılabilir ({exc})."
+            except (OSError, ValueError, RuntimeError, Exception) as mem_exc:  # noqa: BLE001
+                return False, f"Qdrant sunucusuna ulaşılamadı ({url}): {exc} / {mem_exc}"
+
+    return False, f"Bilinmeyen backend: {backend}"
+
+
 def build_eval_workspace(
     target_dir: Path,
     corpus_raw_dir: Path | None = None,

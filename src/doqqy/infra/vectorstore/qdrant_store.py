@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
 import numpy as np
@@ -16,6 +18,17 @@ if TYPE_CHECKING:
 _LOG = get_logger("doqqy.infra.vectorstore.qdrant")
 
 
+_MEMORY_CLIENTS: dict[str, Any] = {}
+
+
+def _normalize_tenant_key(key: str) -> str:
+    if not key:
+        return ""
+    if "/" in key or "\\" in key or Path(key).is_absolute():
+        return str(Path(key).resolve())
+    return key
+
+
 class QdrantStore(VectorStore):
     """Adapter implementing server-side vector search using Qdrant."""
 
@@ -23,26 +36,35 @@ class QdrantStore(VectorStore):
         self.url = url
         self.api_key = api_key
         self.collection = collection
-        self.tenant_key = tenant_key
+        self.tenant_key = _normalize_tenant_key(tenant_key)
         self._client_instance: QdrantClient | None = None
         self._collection_verified: bool = False
 
     @property
     def _client(self) -> QdrantClient:
-        if self._client_instance is None:
-            try:
-                from qdrant_client import QdrantClient  # type: ignore
-            except ImportError as exc:
-                raise ImportError(
-                    "qdrant-client is required for the Qdrant backend. "
-                    "Install it via `pip install doqqy[qdrant]`."
-                ) from exc
-            self._client_instance = QdrantClient(
+        if self._client_instance is not None:
+            return self._client_instance
+
+        try:
+            from qdrant_client import QdrantClient  # type: ignore
+        except ImportError as exc:
+            raise ImportError(
+                "qdrant-client is required for the Qdrant backend. "
+                "Install it via `pip install doqqy[qdrant]`."
+            ) from exc
+
+        if self.url == ":memory:":
+            if self.collection not in _MEMORY_CLIENTS:
+                _MEMORY_CLIENTS[self.collection] = QdrantClient(":memory:")
+            client: QdrantClient = _MEMORY_CLIENTS[self.collection]
+        else:
+            client = QdrantClient(
                 url=self.url,
                 api_key=self.api_key or None,
                 check_compatibility=False,
             )
-        return self._client_instance
+        self._client_instance = client
+        return client
 
     def ensure_collection(self, dim: int) -> None:
         """Ensure the target collection and payload indices exist in Qdrant."""
@@ -148,6 +170,7 @@ class QdrantStore(VectorStore):
             if rec.dense is None:
                 _LOG.warning("Skipping record %s: dense vector is None", rec.chunk_id)
                 continue
+            assert rec.dense is not None
             dense_vec = rec.dense.tolist()
             if rec.sparse:
                 indices = list(rec.sparse.keys())
@@ -156,14 +179,16 @@ class QdrantStore(VectorStore):
             else:
                 sparse_vec = models.SparseVector(indices=[], values=[])
 
+            qdrant_id = str(uuid.uuid5(uuid.NAMESPACE_URL, rec.chunk_id))
             point = models.PointStruct(
-                id=rec.chunk_id,
+                id=qdrant_id,
                 vector={
                     "dense": dense_vec,
                     "sparse": sparse_vec,
                 },
                 payload={
                     "tenant": self.tenant_key,
+                    "chunk_id": rec.chunk_id,
                     "doc_id": rec.doc_id,
                     "source": rec.source,
                     "doc_type": rec.doc_type,
@@ -272,7 +297,7 @@ class QdrantStore(VectorStore):
                 dense_vec = np.asarray(point.vector, dtype=np.float32)
 
         return ChunkRecord(
-            chunk_id=str(point.id),
+            chunk_id=str(payload.get("chunk_id", point.id)),
             doc_id=str(payload.get("doc_id", "")),
             source=str(payload.get("source", "")),
             doc_type=str(payload.get("doc_type", "")),
@@ -405,9 +430,10 @@ class QdrantStore(VectorStore):
         if not client.collection_exists(self.collection):
             return []
 
+        qdrant_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, cid)) for cid in chunk_ids]
         points = client.retrieve(
             collection_name=self.collection,
-            ids=list(chunk_ids),
+            ids=qdrant_ids,
             with_payload=True,
         )
 
@@ -445,7 +471,10 @@ class QdrantStore(VectorStore):
             return np.zeros((0, EMBEDDING_DIM), dtype=np.float32), []
 
         records = [self._to_record(p) for p in all_points]
-        vecs = np.vstack([r.dense for r in records]).astype(np.float32)
+        dense_vecs = [r.dense for r in records if r.dense is not None]
+        if not dense_vecs:
+            return np.zeros((0, EMBEDDING_DIM), dtype=np.float32), records
+        vecs = np.vstack(dense_vecs).astype(np.float32)
         return vecs, records
 
     def list_tags(self) -> list[str]:
@@ -494,9 +523,9 @@ class QdrantStore(VectorStore):
     def close(self) -> None:
         """Close the underlying Qdrant client connection if initialized."""
         if self._client_instance is not None:
-            try:
-                self._client_instance.close()
-            except Exception as exc:  # noqa: BLE001
-                _LOG.warning("Error closing QdrantClient: %s", exc)
-            finally:
-                self._client_instance = None
+            if self.url != ":memory:":
+                try:
+                    self._client_instance.close()
+                except Exception as exc:  # noqa: BLE001
+                    _LOG.warning("Error closing QdrantClient: %s", exc)
+            self._client_instance = None

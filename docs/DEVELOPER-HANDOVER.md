@@ -273,12 +273,16 @@ A quantitative benchmark evaluating retrieval performance (Recall@1, Recall@5, R
 
 - **Running the standalone evaluation runner**:
   ```bash
-  python -m tests.eval --backend lancedb
+  # Evaluate LanceDB baseline
+  python -m tests.eval --backend lancedb --check-baseline
+
+  # Evaluate Qdrant backend & check backend parity (LanceDB vs Qdrant)
+  python -m tests.eval --backend qdrant --record-baseline
   ```
   Options:
   - `--backend <name>`: Target vector store backend (`lancedb`, `qdrant`).
-  - `--check-baseline`: Checks current metrics against committed baseline JSON and exits non-zero on regression beyond tolerance.
-  - `--record-baseline`: Overwrites `tests/eval/baseline_lancedb.json` with the current run results.
+  - `--check-baseline`: Checks current metrics against committed baseline JSON (`baseline_lancedb.json` or `baseline_qdrant.json`) and exits non-zero on regression beyond tolerance.
+  - `--record-baseline`: Overwrites `baseline_lancedb.json` or `baseline_qdrant.json` with the current run results.
   - `--json-out <path>`: Exports the evaluation report to a JSON file.
   - `--tolerance <float>`: Custom regression tolerance (default `0.02`).
 

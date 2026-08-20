@@ -307,7 +307,8 @@ def test_qdrant_store_mocked_upsert():
     assert len(points) == 1
 
     pt = points[0]
-    assert pt.id == "chunk-abc"
+    assert pt.id == str(uuid.uuid5(uuid.NAMESPACE_URL, "chunk-abc"))
+    assert pt.payload["chunk_id"] == "chunk-abc"
     assert pt.payload["tenant"] == "tenant_1"
     assert pt.payload["tags"] == ["tag1", "tag2"]
     assert pt.payload["doc_id"] == "doc-xyz"
