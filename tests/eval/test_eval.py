@@ -247,6 +247,13 @@ def test_check_regression_zero_tolerance_exact_term():
     assert any("Sıfır tolerans kuralı ihlal edildi" in v for v in violations)
 
 
+def test_missing_baseline_file_raises(tmp_path):
+    """Olmayan baseline dosyası yüklendiğinde FileNotFoundError fırlatıldığını doğrular."""
+    non_existent = tmp_path / "missing_baseline.json"
+    with pytest.raises(FileNotFoundError):
+        load_baseline(non_existent)
+
+
 @pytest.mark.slow
 def test_lancedb_retrieval_eval(tmp_path):
     """LanceDB arama kalitesini referans baseline'a karşı doğrulayan uçtan uca test."""

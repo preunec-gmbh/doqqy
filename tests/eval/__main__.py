@@ -120,7 +120,14 @@ def main() -> None:
         save_baseline(report, DEFAULT_BASELINE_PATH)
         console.print(f"[bold green]Yeni referans baseline kaydedildi: {DEFAULT_BASELINE_PATH}[/bold green]")
 
-    if args.check_baseline and baseline_report:
+    if args.check_baseline:
+        if baseline_report is None:
+            console.print(
+                "[bold red]HATA: --check-baseline istendi fakat referans baseline "
+                "(baseline_lancedb.json) yüklenemedi.[/bold red]"
+            )
+            sys.exit(1)
+
         is_regression, violations = check_regression(report, baseline_report, tolerance=args.tolerance)
         if is_regression:
             console.print("[bold red]PERFORMANS DÜŞÜŞÜ (REGRESYON) TESPİT EDİLDİ:[/bold red]")
