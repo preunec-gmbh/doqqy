@@ -130,6 +130,15 @@ def test_qdrant_store_full_roundtrip(qdrant_store: QdrantStore) -> None:
     assert len(fetched_doc) == 2
     assert {r.chunk_id for r in fetched_doc} == {chunk_id1, chunk_id2}
 
+    iter_batches = list(store.iter_records(batch_size=1))
+    assert len(iter_batches) == 2
+    iter_records_all = [r for batch in iter_batches for r in batch]
+    assert len(iter_records_all) == 2
+    assert {r.chunk_id for r in iter_records_all} == {chunk_id1, chunk_id2}
+    r1 = next(r for r in iter_records_all if r.chunk_id == chunk_id1)
+    assert np.array_equal(r1.dense, vec1)
+    assert r1.sparse == {101: 0.5, 102: 1.2}
+
     flt_test = TagFilter(tags=("test",))
     hits = store.hybrid_search(
         dense=vec1,

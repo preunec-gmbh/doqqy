@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Iterator, Protocol, Sequence
 
 import numpy as np
 
@@ -102,6 +102,14 @@ class VectorStore(Protocol):
 
     def get_by_ids(self, chunk_ids: Sequence[str]) -> list[ChunkRecord]:
         """Retrieve chunks by their unique IDs."""
+        ...
+
+    def iter_records(self, batch_size: int = 256) -> Iterator[Sequence[ChunkRecord]]:
+        """Yield batches of ChunkRecord objects losslessly from the store.
+
+        Each yielded ChunkRecord contains all dense/sparse vectors and payload metadata.
+        Used by migrate-store to stream records between backends without re-embedding.
+        """
         ...
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:

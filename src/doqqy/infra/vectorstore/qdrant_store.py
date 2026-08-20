@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any, Iterator, Sequence
 
 import numpy as np
 
@@ -254,12 +254,20 @@ class QdrantStore(VectorStore):
         return models.Filter(must=conditions)
 
     def _to_record(self, point: Any) -> ChunkRecord:
-        """Convert a Qdrant PointStruct/ScoredPoint to ChunkRecord."""
+        """Convert a Qdrant PointStruct/ScoredPoint/Record to ChunkRecord."""
         payload = point.payload or {}
         dense_vec = None
+        sparse_dict = None
         if hasattr(point, "vector") and point.vector:
-            if isinstance(point.vector, dict) and "dense" in point.vector:
-                dense_vec = np.asarray(point.vector["dense"], dtype=np.float32)
+            if isinstance(point.vector, dict):
+                if "dense" in point.vector and point.vector["dense"] is not None:
+                    dense_vec = np.asarray(point.vector["dense"], dtype=np.float32)
+                if "sparse" in point.vector and point.vector["sparse"] is not None:
+                    sp = point.vector["sparse"]
+                    if hasattr(sp, "indices") and hasattr(sp, "values"):
+                        sparse_dict = {int(i): float(v) for i, v in zip(sp.indices, sp.values, strict=False)}
+                    elif isinstance(sp, dict) and "indices" in sp and "values" in sp:
+                        sparse_dict = {int(i): float(v) for i, v in zip(sp["indices"], sp["values"], strict=False)}
             elif isinstance(point.vector, list):
                 dense_vec = np.asarray(point.vector, dtype=np.float32)
 
@@ -275,8 +283,38 @@ class QdrantStore(VectorStore):
             prev_chunk=payload.get("prev_chunk"),
             next_chunk=payload.get("next_chunk"),
             dense=dense_vec,
-            sparse=None,
+            sparse=sparse_dict,
         )
+
+    def iter_records(self, batch_size: int = 256) -> Iterator[Sequence[ChunkRecord]]:
+        """Yield batches of ChunkRecord objects losslessly for the current tenant.
+
+        Memory is kept constant by scrolling Qdrant points page by page.
+        """
+        client = self._client
+        if not client.collection_exists(self.collection):
+            return
+
+        qfilter = self._build_filter()
+        offset = None
+
+        while True:
+            scroll_res, offset = client.scroll(
+                collection_name=self.collection,
+                scroll_filter=qfilter,
+                with_payload=True,
+                with_vectors=True,
+                limit=batch_size,
+                offset=offset,
+            )
+            if not scroll_res:
+                break
+
+            batch_records = [self._to_record(p) for p in scroll_res]
+            yield batch_records
+
+            if offset is None:
+                break
 
     def get_by_doc(self, doc_id: str) -> list[ChunkRecord]:
         """Retrieve all chunk records belonging to a single document ID for the current tenant."""

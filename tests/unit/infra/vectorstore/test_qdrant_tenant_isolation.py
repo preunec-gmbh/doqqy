@@ -132,3 +132,164 @@ def test_qdrant_tenant_isolation_recreate_does_not_drop_collection():
     selector = delete_kwargs["points_selector"]
     assert selector.filter.must[0].key == "tenant"
     assert selector.filter.must[0].match.value == "tenant_A"
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_iter_records_tenant_scoped():
+    """Verify iter_records uses tenant-filtered scroll and requests with_vectors=True."""
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = True
+
+    p_a = MagicMock()
+    p_a.id = "c1"
+    p_a.payload = {"tenant": "tenant_A", "doc_id": "dA", "source": "sA", "doc_type": "md", "tags": ["tag1"]}
+    p_a.vector = {
+        "dense": [0.1, 0.2, 0.3, 0.4],
+        "sparse": MagicMock(indices=[101, 102], values=[0.5, 1.2]),
+    }
+
+    mock_client.scroll.return_value = ([p_a], None)
+
+    store_a = QdrantStore("http://localhost:6333", "", "shared_col", "tenant_A")
+    store_a._client_instance = mock_client
+
+    batches = list(store_a.iter_records(batch_size=10))
+    assert len(batches) == 1
+    assert len(batches[0]) == 1
+    rec = batches[0][0]
+    assert rec.chunk_id == "c1"
+    assert rec.sparse == {101: 0.5, 102: 1.2}
+
+    mock_client.scroll.assert_called_once()
+    scroll_kwargs = mock_client.scroll.call_args[1]
+    assert scroll_kwargs["collection_name"] == "shared_col"
+    assert scroll_kwargs["with_payload"] is True
+    assert scroll_kwargs["with_vectors"] is True
+    assert scroll_kwargs["limit"] == 10
+    assert scroll_kwargs["scroll_filter"].must[0].key == "tenant"
+    assert scroll_kwargs["scroll_filter"].must[0].match.value == "tenant_A"
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_iter_records_pagination():
+    """Verify iter_records iterates across multiple scroll pages using offset tokens losslessly."""
+    import numpy as np
+
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = True
+
+    p1 = MagicMock()
+    p1.id = "chunk-1"
+    p1.payload = {
+        "tenant": "tenant_A",
+        "doc_id": "doc-1",
+        "source": "raw/doc1.md",
+        "doc_type": "markdown",
+        "tags": ["python", "backend"],
+        "content": "Page 1 content",
+        "section_path": ["Root", "Intro"],
+        "char_count": 14,
+        "prev_chunk": None,
+        "next_chunk": "chunk-2",
+    }
+    p1.vector = {
+        "dense": [0.1, 0.2, 0.3, 0.4],
+        "sparse": MagicMock(indices=[101, 102], values=[0.5, 1.2]),
+    }
+
+    p2 = MagicMock()
+    p2.id = "chunk-2"
+    p2.payload = {
+        "tenant": "tenant_A",
+        "doc_id": "doc-1",
+        "source": "raw/doc1.md",
+        "doc_type": "markdown",
+        "tags": ["python"],
+        "content": "Page 2 content",
+        "section_path": ["Root", "Body"],
+        "char_count": 14,
+        "prev_chunk": "chunk-1",
+        "next_chunk": None,
+    }
+    p2.vector = {
+        "dense": [0.5, 0.6, 0.7, 0.8],
+        "sparse": MagicMock(indices=[103], values=[2.0]),
+    }
+
+    # Simulate 2-page scroll pagination loop: page 1 returns offset="next_token", page 2 returns offset=None
+    mock_client.scroll.side_effect = [
+        ([p1], "page_2_offset_token"),
+        ([p2], None),
+    ]
+
+    store = QdrantStore("http://localhost:6333", "", "shared_col", "tenant_A")
+    store._client_instance = mock_client
+
+    batches = list(store.iter_records(batch_size=1))
+    assert len(batches) == 2
+    assert len(batches[0]) == 1
+    assert len(batches[1]) == 1
+
+    # Verify 2 scroll calls made, with correct offset passed in 2nd call
+    assert mock_client.scroll.call_count == 2
+    call1_kwargs = mock_client.scroll.call_args_list[0][1]
+    call2_kwargs = mock_client.scroll.call_args_list[1][1]
+    assert call1_kwargs["offset"] is None
+    assert call2_kwargs["offset"] == "page_2_offset_token"
+
+    # Lossless field assertions for page 1 (p1)
+    rec1 = batches[0][0]
+    assert rec1.chunk_id == "chunk-1"
+    assert rec1.doc_id == "doc-1"
+    assert rec1.source == "raw/doc1.md"
+    assert rec1.doc_type == "markdown"
+    assert rec1.tags == ["python", "backend"]
+    assert rec1.content == "Page 1 content"
+    assert rec1.section_path == ["Root", "Intro"]
+    assert rec1.char_count == 14
+    assert rec1.prev_chunk is None
+    assert rec1.next_chunk == "chunk-2"
+    assert np.array_equal(rec1.dense, np.asarray([0.1, 0.2, 0.3, 0.4], dtype=np.float32))
+    assert rec1.sparse == {101: 0.5, 102: 1.2}
+
+    # Lossless field assertions for page 2 (p2)
+    rec2 = batches[1][0]
+    assert rec2.chunk_id == "chunk-2"
+    assert rec2.prev_chunk == "chunk-1"
+    assert rec2.next_chunk is None
+    assert rec2.sparse == {103: 2.0}
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_iter_records_edge_cases():
+    """Verify edge cases: non-existent collection, empty first page, batch_size larger than point count."""
+    mock_client = MagicMock()
+
+    store = QdrantStore("http://localhost:6333", "", "shared_col", "tenant_A")
+    store._client_instance = mock_client
+
+    # Edge Case 1: Collection does not exist -> yields [] immediately
+    mock_client.collection_exists.return_value = False
+    assert list(store.iter_records(batch_size=10)) == []
+
+    # Edge Case 2: Collection exists but first scroll returns empty list -> yields []
+    mock_client.collection_exists.return_value = True
+    mock_client.scroll.return_value = ([], None)
+    assert list(store.iter_records(batch_size=10)) == []
+
+    # Edge Case 3: batch_size larger than point count (N=2 points, batch_size=100) -> single batch yielded
+    p1 = MagicMock()
+    p1.id = "c1"
+    p1.payload = {"tenant": "tenant_A", "doc_id": "d1"}
+    p1.vector = {"dense": [0.1, 0.2], "sparse": {"indices": [1], "values": [0.5]}}
+
+    p2 = MagicMock()
+    p2.id = "c2"
+    p2.payload = {"tenant": "tenant_A", "doc_id": "d1"}
+    p2.vector = {"dense": [0.3, 0.4], "sparse": {"indices": [2], "values": [0.8]}}
+
+    mock_client.scroll.return_value = ([p1, p2], None)
+    batches = list(store.iter_records(batch_size=100))
+    assert len(batches) == 1
+    assert len(batches[0]) == 2
+    assert [r.chunk_id for r in batches[0]] == ["c1", "c2"]

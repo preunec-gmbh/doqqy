@@ -118,6 +118,21 @@ Failures don't stop the run — a summary panel lists failed files; details in `
 
 Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
 
+### `doqqy migrate-store`
+
+Stream every vector and its payload from the currently configured backend into another backend without loading embedding models or re-embedding the corpus. The destination is recreated before records are copied in batches; the source is never modified.
+
+```powershell
+# LanceDB (the default backend) → Qdrant
+doqqy migrate-store --to qdrant --batch 256
+
+# Roll back: make Qdrant the current source, then migrate to LanceDB
+$env:DOQQY_VECTOR_BACKEND = "qdrant"
+doqqy migrate-store --to lancedb --batch 256
+```
+
+The command refuses to run when `--to` equals `DOQQY_VECTOR_BACKEND`. If a migration fails after the destination has been recreated, its output states how many records may have been copied and reminds you that the source remains untouched. As a worst-case recovery path, `doqqy embed --backend <backend>` deterministically rebuilds either store from `.doqqy/chunks/chunks.parquet`.
+
 ### `doqqy status`
 
 Displays manifest status breakdown, total document/chunk counts, and pending disk changes.

@@ -7,6 +7,7 @@ Her komut, çalıştırıldığı dizini kök kabul eden bir Workspace kurar
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import re
 import sys
@@ -162,6 +163,91 @@ def embed(
         Panel(
             f"[green]✓[/green] {n} chunk indekslendi.",
             title="[bold green]embed tamamlandı[/bold green]",
+            border_style="green",
+        )
+    )
+
+
+@app.command("migrate-store")
+def migrate_store(
+    to: str = typer.Option(
+        ..., "--to", help="Hedef vector store backend adı (örn. qdrant)."
+    ),
+    batch: int = typer.Option(
+        256, "--batch", min=1, help="Her adımda taşınacak kayıt sayısı."
+    ),
+) -> None:
+    """Vektör store kayıtlarını yeniden embed etmeden başka bir backend'e taşı."""
+    from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
+
+    from doqqy.config import EMBEDDING_DIM
+    from doqqy.infra.settings import Settings
+    from doqqy.infra.vectorstore.factory import make_store
+
+    ws = _workspace()
+    source_settings = Settings()
+    source_backend = source_settings.vector_backend.lower()
+    target_backend = to.lower()
+
+    if target_backend == source_backend:
+        err_console.print(
+            f"[bold red]Hata:[/bold red] Kaynak ve hedef backend aynı ({source_backend}); "
+            "store kendi üzerine yeniden oluşturulamaz."
+        )
+        raise typer.Exit(code=1)
+
+    target_settings = source_settings.model_copy(update={"vector_backend": target_backend})
+    recreated = False
+    moved = 0
+
+    try:
+        with contextlib.ExitStack() as stack:
+            source = stack.enter_context(contextlib.closing(make_store(ws, source_settings)))
+            destination = stack.enter_context(contextlib.closing(make_store(ws, target_settings)))
+            total_records = source.count()
+            total_batches = math.ceil(total_records / batch)
+
+            console.print(
+                f"[bold cyan]migrate-store[/bold cyan] {source_backend} → {target_backend} "
+                f"([dim]{total_records} kayıt, batch={batch}[/dim])"
+            )
+            destination.recreate(dim=EMBEDDING_DIM)
+            recreated = True
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Kayıtlar taşınıyor", total=total_batches)
+                for records in source.iter_records(batch_size=batch):
+                    moved += destination.upsert(records)
+                    progress.advance(task)
+    except Exception as e:  # noqa: BLE001
+        err_console.print(f"[bold red]Migration başarısız:[/bold red] {e}")
+        if recreated:
+            err_console.print(
+                f"[yellow]Hedef {target_backend} yeniden oluşturuldu ve yalnızca {moved} kayıt "
+                f"taşınmış olabilir. Kaynak {source_backend} store'una dokunulmadı.[/yellow]"
+            )
+        else:
+            err_console.print(
+                f"[yellow]Kaynak {source_backend} store'una dokunulmadı; hedef yeniden oluşturulamadı.[/yellow]"
+            )
+        err_console.print(
+            f"[dim]Recovery: chunks.parquet deterministiktir; gerekirse "
+            f"doqqy embed --backend {target_backend} komutunu çalıştırın.[/dim]"
+        )
+        raise typer.Exit(code=1) from e
+
+    console.print(
+        Panel(
+            f"[green]✓[/green] {moved} chunk taşındı: {source_backend} → {target_backend}\n"
+            f"[dim]Safety: chunks.parquet deterministiktir; en kötü durumda "
+            f"doqqy embed --backend {source_backend} ile kaynak yeniden oluşturulabilir.[/dim]",
+            title="[bold green]migrate-store tamamlandı[/bold green]",
             border_style="green",
         )
     )
