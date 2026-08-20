@@ -78,6 +78,9 @@ class VectorStore(Protocol):
         ...
 
     def get_by_ids(self, chunk_ids: Sequence[str]) -> list[ChunkRecord]: ...
+    def iter_records(self, batch_size: int = 256) -> Iterator[Sequence[ChunkRecord]]:
+        """Lossless streaming read — used by migrate-store (#14) to stream records between backends."""
+        ...
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
         """map_gen Pass 2 için: (N,1024) matris + kayıtlar."""
         ...
@@ -126,6 +129,8 @@ qdrant_collection: str = "doqqy_chunks"
 CLI override for experimentation: `doqqy embed --backend qdrant`, `doqqy query "..." --backend qdrant` (flag > env > default). `StoreManager` from API-ARCHITECTURE becomes the cache in front of this factory — LRU of `VectorStore` instances keyed by `(backend, workspace)`; for Qdrant the "handle" is just a client+tenant pair, so the cache is cheap.
 
 ## 4. The Qdrant adapter
+
+> **Status:** Core adapter implementation (payload multitenancy, server-side RRF fusion, tenant-scoped deletions) is **complete for Phase 1.5**. The migration CLI tool (§6) and eval harness (ROADMAP #7) remain open.
 
 `src/doqqy/infra/vectorstore/qdrant_store.py`. Dependency: `qdrant-client>=1.10` (Query API with server-side fusion), shipped as `pip install doqqy[qdrant]`.
 
@@ -234,33 +239,24 @@ Filter objects all the way down — no string is ever interpolated, so the B3 in
 | `cli.py` | `tags` command uses `store.list_tags()`; `--backend` flag added to `embed`/`query`/`map`/`tags` | **Implemented** |
 | `services/`, `server/` | Only construct stores via the factory; no other change — the API blueprint's `StoreManager` seam was designed for exactly this | **Implemented** |
 
-**Phase 1 Status:** Completed. Decoupling port and LanceDB adapter logic relocation is fully implemented, verified via unit and parity testing.
+**Phase 1 & 1.5 Status:** Adapter + multitenancy + server-side RRF are done. The LanceDB→Qdrant migration tool (§6) and the eval-harness parity check (ROADMAP #7) are still open.
 
-Estimated remaining effort (Phase 1.5): Qdrant adapter + parity tests ~3–4 days; migration tool ~1 day.
+> **Atomicity note:** Qdrant `full_rebuild` deletes only the current tenant's points before upserting. This is NOT atomic across tenants — a crash between delete and upsert leaves the tenant empty. True atomicity (new collection + alias swap) is incompatible with the shared-collection model. LanceDB's drop-and-recreate is atomic because it operates on a single-tenant file.
 
 ## 6. Migration: LanceDB → Qdrant without re-embedding
 
 Vectors already live in the LanceDB store — a corpus can be migrated in minutes, no GPU needed:
 
-```python
-# cli.py
-@app.command()
-def migrate_store(
-    to: str = typer.Option(..., "--to", help="Hedef backend (qdrant)."),
-    batch: int = typer.Option(256, "--batch"),
-) -> None:
-    """Mevcut store'daki vektörleri yeniden embed etmeden hedef backend'e taşı."""
-    ws = Workspace(Path.cwd())
-    src = make_store(ws, settings_with(backend="lancedb"))
-    dst = make_store(ws, settings_with(backend=to))
-    dst.recreate(dim=EMBEDDING_DIM)
-    moved = 0
-    for records in src.iter_records(batch_size=batch):     # port'a eklenen iterator
-        moved += dst.upsert(records)
-    console.print(f"[green]✓[/green] {moved} chunk taşındı → {to}")
+```powershell
+# Current backend (LanceDB by default) → Qdrant
+doqqy migrate-store --to qdrant --batch 256
+
+# Reverse migration / rollback
+$env:DOQQY_VECTOR_BACKEND = "qdrant"
+doqqy migrate-store --to lancedb --batch 256
 ```
 
-Rollback is the same command in reverse. Because `doqqy embed` remains fully deterministic from `chunks.parquet`, the worst-case recovery is always "re-run embed against the other backend".
+**Status: implemented (#14).** The command uses only the `VectorStore` port: `count` for progress, `iter_records` for constant-memory reads, and `recreate` + `upsert` for destination writes. It refuses a source-equals-destination no-op. If a batch fails, the source remains untouched and the command reports that the recreated destination may be partial. Because `doqqy embed` remains fully deterministic from `chunks.parquet`, the worst-case recovery is always "re-run embed against the other backend".
 
 ## 7. Deployment addition (compose)
 

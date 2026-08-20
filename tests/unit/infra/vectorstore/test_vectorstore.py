@@ -149,3 +149,67 @@ def test_lancedb_store_lifecycle(tmp_path: Path):
     assert store.count() == 0
 
     store.close()
+
+
+def test_lancedb_iter_records_lossless_roundtrip(tmp_path: Path):
+    """Verify LanceDBStore.iter_records yields all records losslessly in configured batches."""
+    store = LanceDBStore(tmp_path / "store.lance")
+    store.recreate(dim=4)
+
+    # 1. Edge case: Empty store yields 0 records
+    empty_records = list(store.iter_records(batch_size=2))
+    assert len(empty_records) == 0
+
+    # Build 5 distinct records
+    records = []
+    for i in range(5):
+        records.append(
+            ChunkRecord(
+                chunk_id=f"chunk-{i}",
+                doc_id=f"doc-{i % 2}",
+                source=f"raw/doc{i % 2}.md",
+                doc_type="markdown",
+                tags=[f"tag-{i}", "common"],
+                content=f"Sample content for chunk {i}",
+                section_path=["Root", f"Section-{i}"],
+                char_count=25 + i,
+                prev_chunk=f"chunk-{i-1}" if i > 0 else None,
+                next_chunk=f"chunk-{i+1}" if i < 4 else None,
+                dense=np.asarray([0.1 * (i + 1), 0.2, 0.3, 0.4], dtype=np.float32),
+                sparse={100 + i: 0.5 * (i + 1)},
+            )
+        )
+
+    store.full_rebuild(records, dim=4)
+
+    # 2. Batched streaming: batch_size=2 for 5 records -> 3 batches of lengths [2, 2, 1]
+    batches = list(store.iter_records(batch_size=2))
+    assert len(batches) == 3
+    assert [len(b) for b in batches] == [2, 2, 1]
+
+    all_yielded = [rec for batch in batches for rec in batch]
+    assert len(all_yielded) == 5
+
+    # Lossless verification for every field
+    by_id = {r.chunk_id: r for r in all_yielded}
+    for orig in records:
+        yielded = by_id[orig.chunk_id]
+        assert yielded.chunk_id == orig.chunk_id
+        assert yielded.doc_id == orig.doc_id
+        assert yielded.source == orig.source
+        assert yielded.doc_type == orig.doc_type
+        assert list(yielded.tags) == list(orig.tags)
+        assert yielded.content == orig.content
+        assert list(yielded.section_path) == list(orig.section_path)
+        assert yielded.char_count == orig.char_count
+        assert yielded.prev_chunk == orig.prev_chunk
+        assert yielded.next_chunk == orig.next_chunk
+        assert np.array_equal(yielded.dense, orig.dense)
+        assert yielded.sparse == orig.sparse
+
+    # 3. Edge case: batch_size larger than store count (e.g. batch_size=100 for 5 records)
+    large_batch = list(store.iter_records(batch_size=100))
+    assert len(large_batch) == 1
+    assert len(large_batch[0]) == 5
+
+    store.close()

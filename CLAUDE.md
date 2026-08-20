@@ -34,7 +34,7 @@ doqqy tags          # list tags in the store (--backend)
 doqqy info          # pipeline state overview
 ```
 
-Tests are pytest under `tests/` (`pip install -e ".[dev]"`, then `pytest tests/ -v`): workspace/B2-isolation regression tests, chunk/RRF/tag unit tests, and per-format ingester tests in `tests/unit/ingest/`. Tests take an explicit `Workspace(tmp_path)` fixture — never `chdir` or monkeypatch config paths. To run fast unit tests (excluding slow model downloads/database integration tests): `pytest tests/ -v -m "not slow"`. To run the complete integration suite (including embedding downloads): `pytest tests/ -v`. There is **no lint config yet**.
+Tests are pytest under `tests/` (`pip install -e ".[dev]"`, then `pytest tests/ -v`): workspace/B2-isolation regression tests, chunk/RRF/tag unit tests, per-format ingester tests in `tests/unit/ingest/`, and vectorstore adapter unit/integration tests (including Qdrant tests which auto-skip when no server is running). Tests take an explicit `Workspace(tmp_path)` fixture — never `chdir` or monkeypatch config paths. To run fast unit tests: `pytest tests/ -v -m "not slow"`. To run the complete integration suite: `pytest tests/ -v`. Code linting uses ruff (`ruff check .`).
 
 **Paths come from `Workspace(root)`** (`workspace.py`, frozen dataclass) — every pipeline function takes `ws: Workspace` explicitly; nothing is resolved at import time, and one process can serve multiple corpora. The CLI builds `Workspace(Path.cwd())` per command, so doqqy still operates on whatever directory you run it from: `raw/` is input; `processed/` and all state (`.doqqy/chunks/`, `.doqqy/store.lance/`, `.doqqy/topics.yaml`, `.doqqy/logs/`) live under the root and are gitignored. Legacy `config.PROJECT_ROOT`-style constants are a `DeprecationWarning` shim — don't use them in new code. First `doqqy embed` downloads ~2 GB of models from HuggingFace (then cached). `DOQQY_DEVICE` env var overrides CPU/CUDA autodetection.
 
@@ -51,7 +51,7 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 - `workspace.py` — `Workspace(root)` frozen dataclass: single source for all per-corpus paths.
 - `infra/` — central infrastructure layer containing configuration/settings loading (`infra/settings.py`) and the pluggable vector store port + adapters (`infra/vectorstore/`).
 
-**Pluggable Vector Store:** Vector storage and querying are decoupled behind a `VectorStore` port interface (`infra/vectorstore/base.py`). `LanceDBStore` implements local-first daemonless search. `QdrantStore` acts as a pluggable server backend. Settings are resolved using precedence: CLI flag > Environment variable > Defaults.
+**Pluggable Vector Store:** Vector storage, querying, and streaming migration reads (`iter_records`) are decoupled behind a `VectorStore` port interface (`infra/vectorstore/base.py`). `LanceDBStore` implements local-first daemonless search. `QdrantStore` acts as a pluggable server backend. Settings are resolved using precedence: CLI flag > Environment variable > Defaults.
 **Tag filtering:** Structured query tag filtering is achieved via `TagFilter` objects passing tag structures directly to the store backend without SQL string interpolation. The LanceDB adapter maps this to LIKE conditions securely.
 
 ## Conventions (see docs/DEVELOPER-HANDOVER.md §1)

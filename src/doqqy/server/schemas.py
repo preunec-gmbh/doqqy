@@ -38,6 +38,7 @@ class HitOut(BaseModel):
     source: str
     section_path: list[str]
     content: str
+    extra: dict = Field(default_factory=dict)
     scores: ScoreBreakdown | None = None
 
 

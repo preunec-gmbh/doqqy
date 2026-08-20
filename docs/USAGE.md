@@ -20,6 +20,9 @@ pip install -e ".[ocr]"
 # stays permissive without it.
 pip install -e ".[pdf-fallback]"
 
+# Optional: Qdrant server vector store backend
+pip install -e ".[qdrant]"
+
 # Optional: MCP server dependencies for AI agent integration
 pip install -e ".[mcp]"
 
@@ -34,10 +37,19 @@ The first `doqqy embed` downloads ~2 GB of models (bge-m3 + reranker) from Huggi
 |---|---|
 | `DOQQY_DEVICE` | Force `cuda` or `cpu` (default: auto-detect); applies to both embedder and reranker |
 | `DOQQY_RERANKER_FP16` | Set to `1` to run the reranker in fp16 on CUDA (default: `0` — fp32 safe mode) |
+| `DOQQY_VECTOR_BACKEND` | Vector store backend selection: `lancedb` (default) or `qdrant` |
+| `DOQQY_QDRANT_URL` | Qdrant server URL (default: `http://localhost:6333`) |
+| `DOQQY_QDRANT_API_KEY` | Optional Qdrant API key |
+| `DOQQY_QDRANT_COLLECTION` | Target Qdrant collection name (default: `doqqy_chunks`) |
 | `HF_HOME` | HuggingFace model cache directory |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | **Unused by the pipeline.** Reserved in `.env.example` for optional future LLM extras (`pip install -e .[llm]`); no current code path calls them |
 
 A `.env` file at the working-directory root is loaded automatically (`python-dotenv`, no override of existing env).
+
+### Backend parity notes
+
+- **Rank breakdown:** On the Qdrant backend, `dense_rank` and `sparse_rank` individual leg ranks are not displayed because fusion is calculated server-side in Qdrant. CLI search output displays `rrf=<score>`. LanceDB displays `dense=<rank> | sparse=<rank> | rrf=<score>`.
+- **Score comparability:** Qdrant's internal RRF constant is fixed in its engine (different from doqqy's default `k=60`). Therefore, `rrf` scores on Qdrant and LanceDB are not directly comparable numbers, and rankings may differ between backends. Parity will be quantitatively measured once the eval harness (ROADMAP #7) lands.
 
 ## 2. Directory model — important
 
@@ -106,6 +118,21 @@ Failures don't stop the run — a summary panel lists failed files; details in `
 
 Deleting a raw file removes its chunks from the vector store, its `processed/*.md` file, and its manifest entry. It does **not** rewrite `.doqqy/topics.yaml`, `INDEX.md`, or already-injected `[[wikilinks]]`, which keep pointing at the removed document until you rerun `doqqy map`, `doqqy index`, and `doqqy inject`.
 
+### `doqqy migrate-store`
+
+Stream every vector and its payload from the currently configured backend into another backend without loading embedding models or re-embedding the corpus. The destination is recreated before records are copied in batches; the source is never modified.
+
+```powershell
+# LanceDB (the default backend) → Qdrant
+doqqy migrate-store --to qdrant --batch 256
+
+# Roll back: make Qdrant the current source, then migrate to LanceDB
+$env:DOQQY_VECTOR_BACKEND = "qdrant"
+doqqy migrate-store --to lancedb --batch 256
+```
+
+The command refuses to run when `--to` equals `DOQQY_VECTOR_BACKEND`. If a migration fails after the destination has been recreated, its output states how many records may have been copied and reminds you that the source remains untouched. As a worst-case recovery path, `doqqy embed --backend <backend>` deterministically rebuilds either store from `.doqqy/chunks/chunks.parquet`.
+
 ### `doqqy status`
 
 Displays manifest status breakdown, total document/chunk counts, and pending disk changes.
@@ -143,6 +170,17 @@ doqqy query "invoice states" --context 1         # include 1 neighboring chunk o
 Each hit shows the source file, section path, and score breakdown (`dense=<rank> | sparse=<rank> | rrf=<score> | rerank=<score>`). Exit code 1 when nothing is found.
 
 `--context N` (`-c`) walks each hit's `prev_chunk`/`next_chunk` chain N steps in both directions and displays the neighboring chunks alongside the hit, dimmed to distinguish them from the matched chunk. Expansion happens after reranking — it's display-only and never affects which chunks were selected or their order. At a document's start/end, the missing side is simply omitted.
+
+**Thin client (`--remote`)** — every CLI invocation loads `bge-m3` + the reranker from scratch (~20–60 s). Start `doqqy serve` once, and point `query` at it to skip that entirely:
+
+```powershell
+doqqy serve                                       # in one terminal — keeps models warm
+doqqy query "invoice states" --remote             # in another — instant, same rich output
+doqqy query "invoice states" --remote http://127.0.0.1:8080   # custom server URL
+$env:DOQQY_SERVER_URL = "http://127.0.0.1:8000"; doqqy query "invoice states"  # env var, no --remote needed
+```
+
+Resolution order: `--remote URL` > bare `--remote` (`$DOQQY_SERVER_URL`, then `http://127.0.0.1:8000`) > `$DOQQY_SERVER_URL` without a flag. With neither flag nor env var, `query` runs in-process exactly as before. Once remote mode is engaged (flag or env var present) and the server can't be reached, the command fails with a clear error — it never silently falls back to loading models in-process, since that surprising 20–60 s stall is exactly what `--remote` exists to avoid. The workspace queried is always the current working directory, matching in-process behavior; `--context` still expands neighboring chunks from the local store. In remote mode `--backend` does not change the search itself — the server uses whichever backend it was started with — but it does still select the local store that `--context` reads those neighbors from.
 
 ### `doqqy serve`
 
