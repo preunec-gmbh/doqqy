@@ -22,7 +22,7 @@ def make_store(ws: Workspace, settings: Settings | None = None) -> VectorStore:
                 url=settings.qdrant_url,
                 api_key=settings.qdrant_api_key,
                 collection=settings.qdrant_collection,
-                tenant_key=str(ws.root),
+                tenant_key=str(ws.root.resolve()),
             )
         case other:
             raise ValueError(f"Unknown vector backend: {other}")

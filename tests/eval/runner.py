@@ -22,6 +22,7 @@ from .metrics import (
 from .models import EvalQuery, EvalReport, QueryEvalResult
 
 DEFAULT_BASELINE_PATH = Path(__file__).parent / "baseline_lancedb.json"
+DEFAULT_QDRANT_BASELINE_PATH = Path(__file__).parent / "baseline_qdrant.json"
 
 # Genel metriklerde izin verilen maksimum düşüş
 DEFAULT_TOLERANCE: float = 0.02
@@ -117,9 +118,16 @@ def check_regression(
     return len(violations) > 0, violations
 
 
-def load_baseline(path: Path | None = None) -> EvalReport:
+def get_default_baseline_path(backend: str = "lancedb") -> Path:
+    """Backend için varsayılan referans baseline yolunu döndürür."""
+    if backend == "qdrant":
+        return DEFAULT_QDRANT_BASELINE_PATH
+    return DEFAULT_BASELINE_PATH
+
+
+def load_baseline(path: Path | None = None, backend: str = "lancedb") -> EvalReport:
     """Referans raporu JSON dosyasından yükler."""
-    p = path or DEFAULT_BASELINE_PATH
+    p = path or get_default_baseline_path(backend)
     if not p.exists():
         raise FileNotFoundError(f"Referans dosyası bulunamadı: {p}")
     with p.open("r", encoding="utf-8") as f:
@@ -129,7 +137,7 @@ def load_baseline(path: Path | None = None) -> EvalReport:
 
 def save_baseline(report: EvalReport, path: Path | None = None) -> None:
     """Raporu referans JSON olarak kaydeder."""
-    p = path or DEFAULT_BASELINE_PATH
+    p = path or get_default_baseline_path(report.backend)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w", encoding="utf-8") as f:
         json.dump(report.to_dict(), f, indent=2, ensure_ascii=False)
@@ -255,3 +263,53 @@ def print_rich_report(
         )
 
     c.print(query_table)
+
+
+def print_parity_report(
+    lancedb_report: EvalReport,
+    qdrant_report: EvalReport,
+    tolerance: float = DEFAULT_TOLERANCE,
+    console: Console | None = None,
+) -> None:
+    """LanceDB ve Qdrant raporlarını yan yana karşılaştıran Rich tablosu oluşturur."""
+    c = console or Console()
+    parity_table = Table(
+        title="\nBackend Eşdeğerlik (Parite) Özeti: LanceDB vs Qdrant",
+        box=ROUNDED,
+        header_style="bold yellow",
+    )
+    parity_table.add_column("Metrik", style="bold")
+    parity_table.add_column("Rerank Modu", style="cyan")
+    parity_table.add_column("LanceDB", justify="right")
+    parity_table.add_column("Qdrant", justify="right")
+    parity_table.add_column("Fark (Delta)", justify="right")
+    parity_table.add_column("Parite Durumu", justify="center")
+
+    metrics_map = [
+        ("Recall@1", "rerank_on", lancedb_report.rerank_on.recall_at_1, qdrant_report.rerank_on.recall_at_1),
+        ("Recall@5", "rerank_on", lancedb_report.rerank_on.recall_at_5, qdrant_report.rerank_on.recall_at_5),
+        ("Recall@10", "rerank_on", lancedb_report.rerank_on.recall_at_10, qdrant_report.rerank_on.recall_at_10),
+        ("MRR", "rerank_on", lancedb_report.rerank_on.mrr, qdrant_report.rerank_on.mrr),
+        ("Recall@1", "rerank_off", lancedb_report.rerank_off.recall_at_1, qdrant_report.rerank_off.recall_at_1),
+        ("Recall@5", "rerank_off", lancedb_report.rerank_off.recall_at_5, qdrant_report.rerank_off.recall_at_5),
+        ("Recall@10", "rerank_off", lancedb_report.rerank_off.recall_at_10, qdrant_report.rerank_off.recall_at_10),
+        ("MRR", "rerank_off", lancedb_report.rerank_off.mrr, qdrant_report.rerank_off.mrr),
+    ]
+
+    for metric_name, mode, l_val, q_val in metrics_map:
+        diff = q_val - l_val
+        diff_str = f"{diff:+.4f}"
+        if abs(diff) <= tolerance:
+            status = "[green]✓ Uyumlu[/green]"
+        else:
+            status = "[red]⚠ Fark Var[/red]"
+        parity_table.add_row(
+            metric_name,
+            "AÇIK" if mode == "rerank_on" else "KAPALI",
+            f"{l_val:.4f}",
+            f"{q_val:.4f}",
+            diff_str,
+            status,
+        )
+
+    c.print(parity_table)
