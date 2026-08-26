@@ -63,6 +63,40 @@ jobs:
       - name: Run Unit Tests (Exclude Slow/Model Tests)
         run: pytest -m "not slow"
 
+  qdrant-integration:
+    name: Run Qdrant Container Integration Tests
+    # GitHub Actions service containers only run on Linux-hosted runners, so this is a
+    # separate ubuntu-only job rather than an addition to the `test` matrix above — adding
+    # `services:` to a job whose matrix also includes windows-latest breaks the Windows leg.
+    runs-on: ubuntu-latest
+    env:
+      DOQQY_QDRANT_URL: http://localhost:6333
+
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.13.2
+        ports:
+          - 6333:6333
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,qdrant]"
+
+      - name: Run Qdrant Container Integration Tests
+        run: pytest -m slow tests/integration/test_qdrant_store.py -v
+
   eval:
     name: Run Retrieval Evaluation Harness
     if: github.event_name == 'workflow_dispatch'
