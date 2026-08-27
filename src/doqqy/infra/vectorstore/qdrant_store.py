@@ -66,6 +66,15 @@ class QdrantStore(VectorStore):
         self._client_instance = client
         return client
 
+    def _collection_ready(self) -> bool:
+        """Check whether target collection exists, caching True results."""
+        if self._collection_verified:
+            return True
+        if self._client.collection_exists(self.collection):
+            self._collection_verified = True
+            return True
+        return False
+
     def ensure_collection(self, dim: int) -> None:
         """Ensure the target collection and payload indices exist in Qdrant."""
         if self._collection_verified:
@@ -132,8 +141,8 @@ class QdrantStore(VectorStore):
         from qdrant_client import models  # type: ignore
 
         self.ensure_collection(dim)
-        client = self._client
-        if client.collection_exists(self.collection):
+        if self._collection_ready():
+            client = self._client
             tenant_filter = models.Filter(
                 must=[
                     models.FieldCondition(
@@ -177,6 +186,7 @@ class QdrantStore(VectorStore):
                 values = [float(v) for v in rec.sparse.values()]
                 sparse_vec = models.SparseVector(indices=indices, values=values)
             else:
+                _LOG.warning("Kayıt %s için sparse vektör boş; yalnızca dense nokta upsert ediliyor", rec.chunk_id)
                 sparse_vec = models.SparseVector(indices=[], values=[])
 
             qdrant_id = str(uuid.uuid5(uuid.NAMESPACE_URL, rec.chunk_id))
@@ -223,8 +233,8 @@ class QdrantStore(VectorStore):
         from qdrant_client import models  # type: ignore
 
         self.ensure_collection(dim)
-        client = self._client
-        if client.collection_exists(self.collection):
+        if self._collection_ready():
+            client = self._client
             tenant_filter = models.Filter(
                 must=[
                     models.FieldCondition(
@@ -244,9 +254,9 @@ class QdrantStore(VectorStore):
         """Delete all points belonging to *doc_id* for the current tenant."""
         from qdrant_client import models  # type: ignore
 
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return 0
+        client = self._client
 
         doc_filter = models.Filter(
             must=[
@@ -316,9 +326,9 @@ class QdrantStore(VectorStore):
 
         Memory is kept constant by scrolling Qdrant points page by page.
         """
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return
+        client = self._client
 
         qfilter = self._build_filter()
         offset = None
@@ -345,9 +355,9 @@ class QdrantStore(VectorStore):
         """Retrieve all chunk records belonging to a single document ID for the current tenant."""
         from qdrant_client import models  # type: ignore
 
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return []
+        client = self._client
 
         doc_filter = models.Filter(
             must=[
@@ -380,9 +390,9 @@ class QdrantStore(VectorStore):
         """Perform dense + sparse hybrid search with server-side RRF fusion."""
         from qdrant_client import models  # type: ignore
 
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return []
+        client = self._client
 
         qfilter = self._build_filter(flt)
 
@@ -426,9 +436,9 @@ class QdrantStore(VectorStore):
         if not chunk_ids:
             return []
 
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return []
+        client = self._client
 
         qdrant_ids = [str(uuid.uuid5(uuid.NAMESPACE_URL, cid)) for cid in chunk_ids]
         points = client.retrieve(
@@ -446,9 +456,9 @@ class QdrantStore(VectorStore):
 
     def all_vectors(self, flt: TagFilter | None = None) -> tuple[np.ndarray, list[ChunkRecord]]:
         """Retrieve all dense vectors as a (N, EMBEDDING_DIM) matrix along with their records."""
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return np.zeros((0, EMBEDDING_DIM), dtype=np.float32), []
+        client = self._client
 
         qfilter = self._build_filter(flt)
         all_points = []
@@ -479,9 +489,9 @@ class QdrantStore(VectorStore):
 
     def list_tags(self) -> list[str]:
         """List all unique tags present for the current tenant."""
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return []
+        client = self._client
 
         qfilter = self._build_filter()
         all_tags: set[str] = set()
@@ -508,9 +518,9 @@ class QdrantStore(VectorStore):
         """Return the count of points for the current tenant in the collection."""
         from qdrant_client import models  # type: ignore
 
-        client = self._client
-        if not client.collection_exists(self.collection):
+        if not self._collection_ready():
             return 0
+        client = self._client
 
         tenant_filter = models.Filter(
             must=[
