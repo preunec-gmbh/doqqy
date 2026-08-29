@@ -23,6 +23,8 @@ from .runner import (
     load_baseline,
     run_eval,
 )
+
+
 def test_eval_output_stream_is_reconfigured_for_unicode() -> None:
     stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1254")
 
