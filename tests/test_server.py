@@ -175,6 +175,104 @@ def test_query_nonexistent_workspace_returns_404(tmp_path):
         assert "not found" in resp.json().get("detail", "").lower()
 
 
+def test_query_unindexed_workspace_returns_409(tmp_path):
+    """Diskte var olan ama hiç indekslenmemiş bir workspace 409 dönmeli, 500 değil."""
+    ws_root = tmp_path / "ws_var_ama_indekssiz"
+    ws_root.mkdir()
+
+    settings = Settings(auth_mode="none")
+    app = create_app(settings)
+
+    # Lifespan'i tetiklemiyoruz: kontrol arama katmanından önce döndüğü için
+    # bu testin model warmup'ına ihtiyacı yok.
+    client = TestClient(app)
+    # search'u da izliyoruz: 409'u rotadaki ön kontrolün ürettiğini kanıtlamak için.
+    # Handler'in 409 metni birebir aynı olduğu için, bu olmadan kontrol tamamen
+    # silinse bile test yeşil kalırdı — sadece daha yavas.
+    with patch("doqqy.query.search") as mock_search:
+        resp = client.post(f"/v1/workspaces/{ws_root}/query", json={"q": "fatura", "top_k": 5})
+    mock_search.assert_not_called()
+
+    assert resp.status_code == 409
+    detail = resp.json().get("detail", "")
+    assert str(ws_root) in detail
+    # Kullanıcının ne çalıştıracağını mesajın kendisi söylemeli.
+    assert "doqqy embed" in detail
+
+
+def test_query_store_without_chunks_table_returns_409(tmp_path):
+    """store.lance dizini var ama chunks tablosu yoksa (RuntimeError yolu) yine 409 dönmeli."""
+    ws_root = tmp_path / "ws_bos_store"
+    ws = Workspace(ws_root)
+    ws.ensure_dirs()
+    # Boş bir store dizini: dosya sistemi kontrolünü geçer, tablo araması geçmez.
+    ws.store_dir.mkdir(parents=True, exist_ok=True)
+
+    settings = Settings(auth_mode="none")
+    app = create_app(settings)
+
+    client = TestClient(app)
+    resp = client.post(f"/v1/workspaces/{ws_root}/query", json={"q": "fatura", "top_k": 5})
+
+    assert resp.status_code == 409
+    assert "doqqy embed" in resp.json().get("detail", "")
+
+
+def test_query_workspace_state_cases_never_return_5xx(tmp_path):
+    """Üç workspace durumunun hiçbiri sunucu hatasına dönüşmemeli (404/409 ayrımı korunmalı)."""
+    missing = tmp_path / "hic_yok"
+
+    unindexed = tmp_path / "indekssiz"
+    unindexed.mkdir()
+
+    empty_store = tmp_path / "bos_store"
+    empty_ws = Workspace(empty_store)
+    empty_ws.ensure_dirs()
+    empty_ws.store_dir.mkdir(parents=True, exist_ok=True)
+
+    cases = [
+        (missing, 404),
+        (unindexed, 409),
+        (empty_store, 409),
+    ]
+
+    settings = Settings(auth_mode="none")
+    app = create_app(settings)
+    # raise_server_exceptions=False: yakalanmamış bir istisna TestClient tarafından
+    # fırlatılmak yerine 500'e çevrilsin ki aşağıdaki "5xx yok" iddiası gerçekten
+    # status kodunu ölçsün, istisnanın kaçmamasını değil.
+    client = TestClient(app, raise_server_exceptions=False)
+
+    for root, expected in cases:
+        resp = client.post(f"/v1/workspaces/{root}/query", json={"q": "fatura", "top_k": 5})
+        assert resp.status_code < 500, f"{root.name} 5xx döndü: {resp.status_code}"
+        assert resp.status_code == expected, f"{root.name}: {expected} beklenirken {resp.status_code} geldi"
+
+
+def test_store_vanishing_after_check_returns_409(tmp_path):
+    """is_indexed() geçtikten sonra store kaybolursa savunma handler'ı 500 değil 409 üretmeli."""
+    from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
+
+    ws_root = tmp_path / "ws_yaris"
+    ws_root.mkdir()
+
+    settings = Settings(auth_mode="none")
+    app = create_app(settings)
+
+    def _vanished(*args, **kwargs):
+        raise FileNotFoundError(
+            f"{ws_root / '.doqqy' / 'store.lance'} does not exist. Run `doqqy embed` first."
+        )
+
+    client = TestClient(app)
+    with patch.object(LanceDBStore, "is_indexed", return_value=True):
+        with patch("doqqy.query.search", side_effect=_vanished):
+            resp = client.post(f"/v1/workspaces/{ws_root}/query", json={"q": "fatura", "top_k": 5})
+
+    assert resp.status_code == 409
+    assert "doqqy embed" in resp.json().get("detail", "")
+
+
 # SLO (Service Level Objectives) Testleri:
 @pytest.mark.slow
 def test_slo_readiness_duration_under_120s():
