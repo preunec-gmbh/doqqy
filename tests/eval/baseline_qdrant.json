@@ -1,6 +1,6 @@
 {
   "backend": "qdrant",
-  "timestamp": "2026-08-20T15:24:17.136264+00:00",
+  "timestamp": "2026-08-31T18:39:28.926232+00:00",
   "rerank_on": {
     "recall_at_1": 0.64,
     "recall_at_5": 1.0,
