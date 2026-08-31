@@ -1,12 +1,15 @@
-"""Değerlendirme motoru için birim ve regresyon testleri."""
-
 from __future__ import annotations
+
+import uuid
+from unittest.mock import MagicMock
 
 import pytest
 
 from doqqy.infra.settings import Settings
+from doqqy.infra.vectorstore.qdrant_store import _MEMORY_CLIENTS
 from doqqy.query import SearchHit
 
+from . import __main__ as eval_main_mod
 from .loader import build_eval_workspace, check_backend_available, load_eval_queries
 from .metrics import (
     compute_aggregate_metrics,
@@ -284,18 +287,116 @@ def test_check_backend_available_lancedb():
 @pytest.mark.slow
 def test_qdrant_retrieval_eval(tmp_path):
     """Qdrant arama kalitesini doğrulayan uçtan uca test (sunucu erişilemezse in-memory veya atlanır)."""
-    settings = Settings(vector_backend="qdrant")
+    eval_collection = f"doqqy_eval_test_{uuid.uuid4().hex[:8]}"
+    settings = Settings(vector_backend="qdrant", qdrant_collection=eval_collection)
     is_avail, msg = check_backend_available("qdrant", settings=settings)
     if not is_avail:
         pytest.skip(f"Qdrant sunucusu erişilebilir değil: {msg}")
 
     if "in-memory" in msg:
-        settings = Settings(vector_backend="qdrant", qdrant_url=":memory:")
+        settings = Settings(vector_backend="qdrant", qdrant_url=":memory:", qdrant_collection=eval_collection)
 
-    queries = load_eval_queries()
-    ws = build_eval_workspace(target_dir=tmp_path, backend="qdrant", settings=settings)
-    report = run_eval(ws, queries, backend="qdrant", settings=settings)
+    try:
+        queries = load_eval_queries()
+        ws = build_eval_workspace(target_dir=tmp_path, backend="qdrant", settings=settings)
+        report = run_eval(ws, queries, backend="qdrant", settings=settings)
 
-    assert report.rerank_on.recall_at_5 >= 0.70
-    assert report.rerank_on.mrr >= 0.60
-    assert report.rerank_on.total_queries == len(queries)
+        assert report.rerank_on.recall_at_5 >= 0.70
+        assert report.rerank_on.mrr >= 0.60
+        assert report.rerank_on.total_queries == len(queries)
+    finally:
+        try:
+            if settings.qdrant_url == ":memory:":
+                _MEMORY_CLIENTS.pop(eval_collection, None)
+            else:
+                from qdrant_client import QdrantClient
+
+                client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, check_compatibility=False)
+                if client.collection_exists(eval_collection):
+                    client.delete_collection(eval_collection)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def test_eval_main_qdrant_collection_isolation_and_cleanup(monkeypatch):
+    """Verify that tests.eval main() configures an ephemeral collection and cleans it up in finally."""
+    captured_settings: list[Settings] = []
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = True
+
+    monkeypatch.setattr("sys.argv", ["tests.eval", "--backend", "qdrant"])
+    monkeypatch.setattr(
+        eval_main_mod,
+        "check_backend_available",
+        lambda backend, settings: (True, "Qdrant sunucusu erişilebilir (http://localhost:6333)."),
+    )
+    monkeypatch.setattr(eval_main_mod, "load_eval_queries", lambda path=None: [])
+
+    def mock_build_eval_workspace(target_dir, corpus_raw_dir=None, backend="qdrant", settings=None):
+        if settings is not None:
+            captured_settings.append(settings)
+        return MagicMock()
+
+    def mock_run_eval(ws, queries, backend="qdrant", settings=None, top_k=10):
+        agg = AggregateMetrics(0.8, 0.9, 1.0, 0.85, len(queries))
+        return EvalReport(
+            backend=backend,
+            timestamp="2026-01-01T00:00:00Z",
+            rerank_on=agg,
+            rerank_off=agg,
+            by_category={},
+            per_query=[],
+        )
+
+    monkeypatch.setattr(eval_main_mod, "build_eval_workspace", mock_build_eval_workspace)
+    monkeypatch.setattr(eval_main_mod, "run_eval", mock_run_eval)
+    monkeypatch.setattr(eval_main_mod, "print_rich_report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(eval_main_mod, "print_parity_report", lambda *args, **kwargs: None)
+    monkeypatch.setattr("qdrant_client.QdrantClient", lambda **kwargs: mock_client)
+
+    eval_main_mod.main()
+
+    assert len(captured_settings) == 1
+    used_settings = captured_settings[0]
+    assert used_settings.qdrant_collection.startswith("doqqy_eval_")
+    assert used_settings.qdrant_collection != "doqqy_chunks"
+
+    # Verify that delete_collection was called for the ephemeral collection and never for doqqy_chunks
+    mock_client.delete_collection.assert_called_once_with(used_settings.qdrant_collection)
+    assert mock_client.delete_collection.call_args[0][0] != "doqqy_chunks"
+
+
+def test_eval_qdrant_leaves_default_collection_untouched(monkeypatch):
+    """Verify that running eval under in-memory mode does not alter doqqy_chunks."""
+    mock_default_client = MagicMock()
+    _MEMORY_CLIENTS["doqqy_chunks"] = mock_default_client
+
+    monkeypatch.setattr("sys.argv", ["tests.eval", "--backend", "qdrant"])
+    monkeypatch.setattr(
+        eval_main_mod,
+        "check_backend_available",
+        lambda backend, settings: (True, "Qdrant bellek içi (in-memory) kipinde kullanılabilir."),
+    )
+    monkeypatch.setattr(eval_main_mod, "load_eval_queries", lambda path=None: [])
+    monkeypatch.setattr(eval_main_mod, "build_eval_workspace", lambda **kwargs: MagicMock())
+    monkeypatch.setattr(
+        eval_main_mod,
+        "run_eval",
+        lambda *args, **kwargs: EvalReport(
+            backend="qdrant",
+            timestamp="2026-01-01T00:00:00Z",
+            rerank_on=AggregateMetrics(0.8, 0.9, 1.0, 0.85, 0),
+            rerank_off=AggregateMetrics(0.8, 0.9, 1.0, 0.85, 0),
+            by_category={},
+            per_query=[],
+        ),
+    )
+    monkeypatch.setattr(eval_main_mod, "print_rich_report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(eval_main_mod, "print_parity_report", lambda *args, **kwargs: None)
+
+    eval_main_mod.main()
+
+    # doqqy_chunks must still be present in _MEMORY_CLIENTS
+    assert "doqqy_chunks" in _MEMORY_CLIENTS
+    _MEMORY_CLIENTS.pop("doqqy_chunks", None)
+
