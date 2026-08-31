@@ -124,6 +124,20 @@ class VectorStore(Protocol):
         """Count the total number of chunks in the store."""
         ...
 
+    def is_indexed(self) -> bool:
+        """Report whether this workspace has a queryable index in this backend.
+
+        A pre-flight check for callers that must tell "never indexed" (a client
+        error — the fix is to run `doqqy embed`) apart from a genuine backend
+        fault. It returns False for the un-indexed case instead of raising;
+        anything else is a real failure and must propagate.
+
+        Backends answer this with whatever marks a workspace as present in
+        their own storage model, so the check stays correct for a backend that
+        keeps nothing on the local filesystem.
+        """
+        ...
+
     def close(self) -> None:
         """Release database connections or handles."""
         ...

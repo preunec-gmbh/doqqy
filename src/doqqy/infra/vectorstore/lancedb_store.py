@@ -19,6 +19,11 @@ _LOG = get_logger("doqqy.infra.vectorstore.lancedb")
 # Maps store_dir resolved path -> lancedb Table object.
 _TABLE_CACHE: dict[Path, object] = {}
 
+# _table() tablo bulunmadiginda bu on ekle bir RuntimeError firlatir. is_indexed()
+# ayni sabite bakarak bu durumu lancedb'nin kendi RuntimeError'larindan ayirir;
+# ikisi tek yerden okundugu icin mesaj degisirse ayrim sessizce bozulmaz.
+_TABLE_NOT_FOUND_PREFIX = "Table not found"
+
 
 def invalidate_table_cache_by_path(store_dir: Path) -> None:
     """Evict a table handle from cache when its database files are modified/recreated."""
@@ -96,7 +101,7 @@ class LanceDBStore(VectorStore):
 
         db = lancedb.connect(self._store_dir)
         if LANCE_TABLE not in db.list_tables().tables:
-            raise RuntimeError(f"Table not found: {LANCE_TABLE}")
+            raise RuntimeError(f"{_TABLE_NOT_FOUND_PREFIX}: {LANCE_TABLE}")
 
         table = db.open_table(LANCE_TABLE)
         _TABLE_CACHE[key] = table
@@ -435,6 +440,34 @@ class LanceDBStore(VectorStore):
     def count(self) -> int:
         """Return the count of rows in the table."""
         return len(self._table())
+
+    def is_indexed(self) -> bool:
+        """Return True when this store's chunks table can be opened.
+
+        Note: like every other read here it goes through the process-wide table
+        cache, so a store deleted from disk after its handle was cached still
+        reads as indexed until the cache is invalidated.
+        """
+        # _table() "dizin yok" ve "tablo yok" durumlarının ikisini de zaten
+        # ayırt ediyor; sorgunun gireceği yolun aynısını yürütmek, kontrol ile
+        # aramanın farklı sonuç vermesini imkansız kılıyor.
+        #
+        # RuntimeError tipe göre değil mesaja göre yakalanıyor: lancedb, Rust
+        # çekirdeğinden gelen her arızayı (bozuk manifest, I/O hatası, iptal edilen
+        # iş) düz RuntimeError olarak yüzeye çıkarıyor — kütüphane kendi içinde de
+        # bu ayrımı mesajla yapıyor. Tipe bakmak, bozuk bir store'u "indekslenmemiş"
+        # diye raporlayıp gerçek hatayı izsiz yok ederdi. _table()'ın kasıtlı olarak
+        # ürettiği tek RuntimeError _TABLE_NOT_FOUND_PREFIX'li olan; kalan her şey
+        # gerçek arızadır ve 5xx olarak yukarı çıkmalı.
+        try:
+            self._table()
+        except FileNotFoundError:
+            return False
+        except RuntimeError as exc:
+            if _TABLE_NOT_FOUND_PREFIX not in str(exc):
+                raise
+            return False
+        return True
 
     def close(self) -> None:
         """No-op connection close for local LanceDB."""
