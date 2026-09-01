@@ -8,7 +8,14 @@ from typing import Any, Callable
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from doqqy.config import SUPPORTED_EXTENSIONS, file_log, get_logger
-from doqqy.ingest.base import Document, IngestError, IngestResult, reset_tag_log_state
+from doqqy.ingest.base import (
+    Document,
+    IngestError,
+    IngestResult,
+    drop_superseded_output,
+    reset_stem_group_cache,
+    reset_tag_log_state,
+)
 from doqqy.ingest.csv_ingest import ingest_csv
 from doqqy.ingest.docx_ingest import ingest_docx
 from doqqy.ingest.html_ingest import ingest_html
@@ -70,6 +77,15 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
     result = IngestResult()
     # Tag temizleme logları klasör başına tek satır — her çalışma kendi state'iyle başlar.
     reset_tag_log_state()
+    # Kardeş taraması önbelleği de çalışmaya özel: iki ingest arasında raw/ değişebilir.
+    reset_stem_group_cache()
+
+    # Bu çalışmada yazılan hedefler. processed_path_for() çakışmaları zaten
+    # ayrıştırıyor, ama bu invariant ondan bağımsız duruyor: yardımcıyı atlayan
+    # ya da ayrıştırma kuralını bozan gelecekteki bir ingester sessizce dosya
+    # ezmek yerine gürültüyle başarısız olsun. İki kaynağın aynı .md dosyasına
+    # yazması hiçbir koşulda doğru değil.
+    written: dict[Path, Path] = {}
     with file_log("doqqy.ingest", ws.logs_dir / "ingest.log"), Progress(
         SpinnerColumn(),
         TextColumn("[bold cyan]ingest[/bold cyan]"),
@@ -82,7 +98,34 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
             progress.update(task, description=f"[dim]{path.name}[/dim]", advance=1)
             try:
                 doc = ingest_file(path, ws, ocr=ocr)
+
+                target = doc.processed_path.resolve()
+                clash = written.get(target)
+                if clash is not None:
+                    raise IngestError(
+                        f"çıktı yolu çakıştı: {doc.processed_path} zaten {clash} tarafından yazıldı"
+                    )
+
                 doc.write()
+                written[target] = path
+
+                # Kardeş kümesi bir önceki çalışmadan beri değiştiyse bu belgenin
+                # diğer ad biçiminde bir çıktısı duruyor olabilir. Kalırsa chunk/
+                # map/inject onu ayrı bir belge sanar ve içerik indekste ikilenir —
+                # ingest tekrar çalıştırılabilir olduğu için bu her rerun'da olur.
+                removed = drop_superseded_output(
+                    ws, path, doc.processed_path, str(doc.metadata.get("source", ""))
+                )
+                if removed is not None:
+                    _LOG.info("bayat çıktı silindi: %s (yeni ad: %s).", removed.name, doc.processed_path.name)
+
+                if doc.processed_path.stem != path.stem:
+                    result.disambiguated.append(path)
+                    _LOG.warning(
+                        "%s adı bir kardeşiyle çakıştı, çıktı %s olarak yazıldı.",
+                        path, doc.processed_path.name,
+                    )
+
                 result.succeeded.append(path)
             except IngestError as exc:
                 _LOG.error("%s: %s", path, exc)
@@ -92,9 +135,10 @@ def ingest_directory(ws: Workspace, *, source_dir: Path | None = None, limit: in
                 result.failed.append((path, f"{type(exc).__name__}: {exc}"))
 
         _LOG.info(
-            "ingest bitti: %d başarılı, %d başarısız, toplam %d.",
+            "ingest bitti: %d başarılı, %d başarısız, %d ad ayrıştırıldı, toplam %d.",
             len(result.succeeded),
             len(result.failed),
+            len(result.disambiguated),
             result.total,
         )
     return result

@@ -14,7 +14,8 @@ Schema (.doqqy/manifest.json):
           "tags":         ["erp12"],
           "chunk_count":  34,
           "status":       "indexed",
-          "indexed_at":   "2026-07-03T10:00:00Z"
+          "indexed_at":   "2026-07-03T10:00:00Z",
+          "processed_path": "processed/erp12/api.md"
         }
       },
       "totals": {"docs": 128, "chunks": 4102}
@@ -68,6 +69,12 @@ class ManifestEntry:
     # doc_id of the canonical document this one is a content-identical alias
     # of (issue #18). None for canonical/non-duplicate documents.
     alias_of: str | None = None
+    # Where under processed/ this document was actually written, relative to the
+    # workspace root. Recomputing it from the source is not safe once the source
+    # is gone: processed_path_for() names a document after the *set* of same-stem
+    # siblings around it (issue #76), so a deleted source yields a different name
+    # than the one on disk. Empty on entries written before this field existed.
+    processed_path: str = ""
 
 
 @dataclass
@@ -153,6 +160,7 @@ class Manifest:
                 indexed_at=entry_dict.get("indexed_at"),
                 body_hash=entry_dict.get("body_hash", ""),
                 alias_of=entry_dict.get("alias_of"),
+                processed_path=entry_dict.get("processed_path", ""),
             )
 
         _LOG.debug("Manifest loaded: %d docs from %s", len(manifest._docs), path)
@@ -209,6 +217,13 @@ class Manifest:
         Such entries are reported as modified so sync re-embeds them (as a
         standalone doc, or re-aliased if still a duplicate — resolve_duplicates
         is idempotent either way).
+
+        The same applies to a document whose processed/ target name moved
+        without its bytes changing (issue #76): dropping a ``rapor.docx`` next
+        to an already-indexed ``rapor.pdf`` renames the pdf's output from
+        ``rapor.md`` to ``rapor-pdf.md``. Nothing about rapor.pdf itself
+        changed, so only this check keeps an incremental sync converging on the
+        same file set a full ``doqqy ingest`` would produce.
         """
         result = DiffResult()
 
@@ -232,6 +247,8 @@ class Manifest:
                 result.modified.append(source_path)
             elif self._is_stale_alias(existing):
                 result.modified.append(source_path)
+            elif self._needs_reprocessed_rename(existing, source_path, ws):
+                result.modified.append(source_path)
             else:
                 result.unchanged.append(doc_id)
 
@@ -241,6 +258,33 @@ class Manifest:
                 result.deleted.append(doc_id)
 
         return result
+
+    def _needs_reprocessed_rename(self, entry: ManifestEntry, source_path: Path, ws: Workspace) -> bool:
+        """True if *entry*'s processed/ output no longer sits at the name it would get today.
+
+        Only ever True for entries that recorded a processed_path. A manifest
+        written before that field existed carries no name to compare against, so
+        those documents are left alone until something else touches them — see the
+        upgrade note in docs/USAGE.md for the one-time step such a corpus needs.
+        """
+        # Geç import: ingest katmanı manifest'i değil, manifest ingest'i tanır.
+        from doqqy.ingest.base import IngestError, processed_id, processed_path_for
+
+        try:
+            current_path = processed_path_for(source_path, ws)
+            current = processed_id(current_path, ws)
+        except IngestError as exc:
+            # Kaynağın klasörü taranamadı, dolayısıyla bugünkü adının ne olacağını
+            # bilmiyoruz. Bilmemek "değişti" demek değil: yanlış bir modified
+            # işareti belgeyi yeni bir adla yazdırıp doğru olan eski çıktısını
+            # sildirirdi. Temkinli taraf, dokunmamak.
+            _LOG.warning("%s için hedef ad hesaplanamadı, değişmemiş sayılıyor: %s", entry.source, exc)
+            return False
+
+        if not entry.processed_path:
+            return False
+
+        return current != entry.processed_path
 
     def _is_stale_alias(self, entry: ManifestEntry) -> bool:
         """True if *entry* claims to be a duplicate alias whose canonical no longer backs it up.
