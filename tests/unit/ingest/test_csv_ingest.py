@@ -67,6 +67,24 @@ def test_csv_ingest_row_blocking(tmp_path: Path, ws: Workspace) -> None:
     assert doc.content.count("|---") >= 2
 
 
+def test_csv_row_blocks_get_own_headings(tmp_path: Path, ws: Workspace) -> None:
+    """Her satır bloğu, hangi satırları kapsadığını gösteren kendi ## başlığına sahip olmalı."""
+
+    csv_large = tmp_path / "raw" / "test_headings.csv"
+
+    df = pd.DataFrame({"id": list(range(1, 91)),
+                       "val": [f"Row{i}" for i in range(1, 91)]})
+
+    df.to_csv(csv_large, index=False, sep=",")
+
+    doc = ingest_csv(csv_large, ws)
+
+    # 90 satır -> 3 blok (40, 40, 10), her biri kendi ## başlığında satır aralığını belirtmeli
+    assert "## test_headings (rows 1-40)" in doc.content
+    assert "## test_headings (rows 41-80)" in doc.content
+    assert "## test_headings (rows 81-90)" in doc.content
+
+
 def test_csv_cp1254_fallback(tmp_path: Path, ws: Workspace) -> None:
     """cp1254 kodlamalı CSV dosyalarının başarıyla okunabildiğini doğrular."""
 

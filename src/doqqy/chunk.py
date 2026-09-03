@@ -43,10 +43,13 @@ _HEADERS_TO_SPLIT = [
 # Fenced code block — başlangıçtan kapanışa kadar.
 _CODE_BLOCK_RE = re.compile(r"```.*?\n.*?```", re.DOTALL)
 # GitHub-flavored markdown tablo bloğu (başlık satırı + ayraç satırı + en az 1 veri satırı).
+# Satır sonlarında yalnızca yatay boşluk ([^\S\n]) tüketilir — \s kullanılırsa boş satır
+# yutulur ve iki ayrı tablo tek atomik bloğa birleşir (bkz. issue #77).
 _TABLE_BLOCK_RE = re.compile(
-    r"(?:^\|.+\|\s*\n)(?:^\|[\s:|-]+\|\s*\n)(?:^\|.+\|\s*\n?)+",
+    r"(?:^\|.+\|[^\S\n]*\n)(?:^\|[ \t:|-]+\|[^\S\n]*\n)(?:^\|.+\|[^\S\n]*\n?)+",
     re.MULTILINE,
 )
+_TABLE_SEP_LINE_RE = re.compile(r"^\|[ \t:|-]+\|$")
 # Tek satırda tamamen bold olan ifadeler: __Başlık__ veya **Başlık**
 _BOLD_HEADING_RE = re.compile(r"^(?:\*\*|__)(.+?)(?:\*\*|__)$", re.MULTILINE)
 
@@ -93,18 +96,53 @@ def _atomic_blocks(text: str) -> list[str]:
     return blocks
 
 
+def _looks_like_table(block: str) -> bool:
+    """Blok, başlık + ayraç satırıyla başlayan bir GFM tablosu mu?"""
+    lines = block.split("\n", 2)
+    if len(lines) < 2:
+        return False
+    header, sep = lines[0].strip(), lines[1].strip()
+    return header.startswith("|") and bool(_TABLE_SEP_LINE_RE.match(sep))
+
+
+def _split_table_block(block: str, max_chars: int) -> list[str]:
+    """max_chars'ı aşan tek bir GFM tablosunu satır sınırlarında parçalara böl.
+
+    Her parça, geçerli bir tablo kalması için başlık ve ayraç satırlarını tekrarlar.
+    """
+    header, sep, *rows = block.split("\n")
+    prefix = f"{header}\n{sep}\n"
+
+    parts: list[str] = []
+    buf: list[str] = []
+    buf_len = len(prefix)
+    for row in rows:
+        row_len = len(row) + 1
+        if buf and buf_len + row_len > max_chars:
+            parts.append(prefix + "\n".join(buf))
+            buf, buf_len = [], len(prefix)
+        buf.append(row)
+        buf_len += row_len
+    if buf:
+        parts.append(prefix + "\n".join(buf))
+    return parts or [block]
+
+
 def _pack_blocks(blocks: list[str], max_chars: int) -> list[str]:
     """Greedy packing: ardışık blokları max_chars sınırına kadar topla."""
     chunks: list[str] = []
     buf: list[str] = []
     buf_len = 0
     for block in blocks:
-        # Tek başına çok büyük blok (örn. dev kod bloğu): kendi chunk'ı olur.
+        # Tek başına çok büyük blok (örn. dev kod bloğu ya da geniş bir tablo): kendi chunk'ı olur.
         if len(block) > max_chars:
             if buf:
                 chunks.append("\n\n".join(buf))
                 buf, buf_len = [], 0
-            chunks.append(block)
+            if _looks_like_table(block):
+                chunks.extend(_split_table_block(block, max_chars))
+            else:
+                chunks.append(block)
             continue
         add_len = len(block) + (2 if buf else 0)
         if buf_len + add_len > max_chars:
