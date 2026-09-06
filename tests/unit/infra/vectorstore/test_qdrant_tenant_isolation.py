@@ -293,3 +293,23 @@ def test_qdrant_iter_records_edge_cases():
     assert len(batches) == 1
     assert len(batches[0]) == 2
     assert [r.chunk_id for r in batches[0]] == ["c1", "c2"]
+
+
+@pytest.mark.skipif(not HAS_QDRANT_CLIENT, reason="qdrant-client package is not installed")
+def test_qdrant_ensure_collection_configures_tenant_hnsw_subgraphs():
+    """Verify ensure_collection configures HNSW with m=0 and payload_m=16 for tenant-isolated subgraphs."""
+    mock_client = MagicMock()
+    mock_client.collection_exists.return_value = False
+
+    store = QdrantStore("http://localhost:6333", "", "test_collection", "tenant_A")
+    store._client_instance = mock_client
+
+    store.ensure_collection(dim=1024)
+
+    mock_client.create_collection.assert_called_once()
+    create_kwargs = mock_client.create_collection.call_args[1]
+    assert create_kwargs["collection_name"] == "test_collection"
+    assert "hnsw_config" in create_kwargs
+    hnsw_config = create_kwargs["hnsw_config"]
+    assert hnsw_config.m == 0
+    assert hnsw_config.payload_m == 16

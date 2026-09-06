@@ -113,6 +113,7 @@ class QdrantStore(VectorStore):
                     modifier=models.Modifier.IDF,
                 ),
             },
+            hnsw_config=models.HnswConfigDiff(m=0, payload_m=16),
         )
 
         client.create_payload_index(
