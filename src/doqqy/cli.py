@@ -644,7 +644,9 @@ def watch(
         None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
     ),
     debounce: float = typer.Option(
-        2.0, "--debounce", help="Seconds to wait after last change before syncing."
+        2.0,
+        "--debounce",
+        help="Maximum seconds to batch changes, measured from the first change in a burst.",
     ),
 ) -> None:
     """Watch raw/ for changes and auto-sync (requires the `watch` extra)."""
@@ -659,6 +661,7 @@ def watch(
 
     from doqqy.config import file_log, get_logger
     from doqqy.infra.settings import Settings
+    from doqqy.manifest import Manifest
     from doqqy.sync import sync as run_sync
 
     ws = _workspace()
@@ -669,6 +672,7 @@ def watch(
     # default; the rich line below is already the console-facing summary, so
     # don't also dump the raw traceback there — only into watch.log.
     log.propagate = False
+    log.setLevel("DEBUG")
 
     console.print(
         Panel(
@@ -679,19 +683,28 @@ def watch(
     )
 
     try:
-        # watchfiles debounces internally (milliseconds) and only yields once the
-        # burst has settled — sleeping after the yield would just let edits made
-        # during the sleep queue up and trigger a second, redundant sync.
+        # watchfiles batches internally in milliseconds. Its debounce value is
+        # the maximum window from the first event, so a long burst may yield
+        # more than once without dropping changes.
         with (
             file_log("doqqy.watch", ws.logs_dir / "watch.log"),
             file_log("doqqy.sync", ws.logs_dir / "sync.log"),
         ):
-            for _changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
-                console.print("[dim]Change detected — syncing…[/dim]")
+            for changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
+                formatted_changes = ", ".join(
+                    f"{getattr(kind, 'name', kind)}: {path}" for kind, path in sorted(changes, key=lambda item: str(item[1]))
+                )
+                log.debug("Filesystem changes received: %s", formatted_changes)
+
                 # A batch-level failure (model load, store connection, corrupt
                 # manifest, …) must not kill the loop — log it and keep watching,
                 # same failure-isolation invariant sync() already applies per file.
                 try:
+                    if not Manifest.load(ws).diff(ws).has_changes:
+                        log.debug("Skipping filesystem event batch with no manifest changes.")
+                        continue
+
+                    console.print("[dim]Change detected — syncing…[/dim]")
                     report = run_sync(ws, settings=settings)
                 except Exception as exc:  # noqa: BLE001
                     log.exception("Batch sync failed: %s", exc)

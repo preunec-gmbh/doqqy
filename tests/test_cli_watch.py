@@ -16,8 +16,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
 
 import doqqy.cli as cli
+from doqqy.manifest import DiffResult
 from doqqy.sync import SyncReport
 from doqqy.workspace import Workspace
 
@@ -72,7 +74,9 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
         with (
             patch.object(cli, "_workspace", return_value=temp_ws),
             patch("doqqy.sync.sync", side_effect=fake_sync),
+            patch("doqqy.manifest.Manifest.load") as load_manifest,
         ):
+            load_manifest.return_value.diff.return_value = DiffResult(added=[temp_ws.raw_dir / "x.md"])
             # Must not raise -- KeyboardInterrupt on the third batch is caught
             # internally and the command returns normally.
             cli.watch(backend=None, debounce=0.01)
@@ -98,3 +102,53 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
     # the "doqqy" logger's console handler and prints the whole traceback.
     assert "Traceback (most recent call last)" not in console_sink.getvalue()
     assert "Traceback (most recent call last)" not in out
+
+
+def test_watch_skips_noop_batch_without_dropping_later_changes(
+    temp_ws: Workspace, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first_path = temp_ws.raw_dir / "first.md"
+    second_path = temp_ws.raw_dir / "second.md"
+
+    def fake_watchfiles_watch(path, debounce=0):
+        yield {("added", str(first_path))}
+        yield {("modified", str(first_path))}
+        yield {("modified", str(first_path))}
+        yield {("added", str(second_path))}
+        raise KeyboardInterrupt
+
+    fake_watchfiles = types.ModuleType("watchfiles")
+    fake_watchfiles.watch = fake_watchfiles_watch  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "watchfiles", fake_watchfiles)
+
+    with (
+        patch.object(cli, "_workspace", return_value=temp_ws),
+        patch("doqqy.sync.sync", side_effect=[SyncReport(added=1), SyncReport(added=1)]) as run_sync,
+        patch("doqqy.manifest.Manifest.load") as load_manifest,
+    ):
+        load_manifest.return_value.diff.side_effect = [
+            DiffResult(added=[first_path]),
+            DiffResult(unchanged=["first"]),
+            RuntimeError("manifest unavailable"),
+            DiffResult(added=[second_path]),
+        ]
+        cli.watch(backend=None, debounce=0.01)
+
+    assert run_sync.call_count == 2
+    output = capsys.readouterr().out
+    assert output.count("Change detected") == 2
+    assert "sync failed: RuntimeError: manifest unavailable" in output
+
+    log_text = (temp_ws.logs_dir / "watch.log").read_text(encoding="utf-8")
+    assert str(first_path) in log_text
+    assert str(second_path) in log_text
+    assert "Skipping filesystem event batch with no manifest changes" in log_text
+
+
+def test_watch_help_describes_maximum_batch_window() -> None:
+    result = CliRunner().invoke(cli.app, ["watch", "--help"])
+    normalized_output = " ".join(result.output.split())
+
+    assert result.exit_code == 0
+    assert "Maximum seconds to batch changes" in normalized_output
+    assert "measured from the first change" in normalized_output
