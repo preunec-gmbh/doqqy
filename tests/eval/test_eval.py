@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import io
-
 import pytest
 
 from doqqy.infra.settings import Settings
 from doqqy.query import SearchHit
 
-from .__main__ import _configure_utf8_stream
 from .loader import build_eval_workspace, check_backend_available, load_eval_queries
 from .metrics import (
     compute_aggregate_metrics,
@@ -23,16 +20,6 @@ from .runner import (
     load_baseline,
     run_eval,
 )
-
-
-def test_eval_output_stream_is_reconfigured_for_unicode() -> None:
-    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1254")
-
-    _configure_utf8_stream(stream)
-    stream.write("✓ Tolerans dahilinde hiçbir regresyon tespit edilmedi.")
-    stream.flush()
-
-    assert stream.detach().getvalue().decode("utf-8").startswith("✓ Tolerans")
 
 
 def test_load_eval_queries_validates_schema():

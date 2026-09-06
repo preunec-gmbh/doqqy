@@ -2,6 +2,8 @@
 
 Ground-truth corpus and query set for the doqqy retrieval eval harness (#15). This directory contains no harness code — only the fixture data it consumes:
 
+The evaluation CLI configures stdout and stderr as UTF-8 with replacement before creating its Rich console. This keeps a passing run from failing after output on legacy Windows consoles with a non-UTF-8 code page; wrapped streams without `reconfigure` are left unchanged.
+
 ```
 tests/eval/
 ├── corpus/raw/    # eval-only doqqy input tree (fed to `doqqy ingest`)
