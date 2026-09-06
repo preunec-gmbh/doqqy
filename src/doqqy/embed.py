@@ -26,6 +26,9 @@ from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.embed")
 
+# model.encode(..., max_length=...) burada da kullanılır — tek yerden değiştirilsin.
+_MAX_TOKEN_LENGTH = 1024
+
 
 def _load_chunks(ws: Workspace) -> pd.DataFrame:
     if not ws.chunks_parquet.exists():
@@ -49,6 +52,26 @@ def _batched(seq: list[str], n: int) -> Iterator[list[str]]:
         yield seq[i : i + n]
 
 
+def _warn_on_truncation(model, df: pd.DataFrame, texts: list[str], max_length: int) -> None:
+    """max_length token sınırını aşan chunk'ları logla — aksi halde sessizce kesilip aranamaz olurlar."""
+    tokenizer = getattr(model, "tokenizer", None)
+    if tokenizer is None:
+        return
+    for i, text in enumerate(texts):
+        n_tokens = len(tokenizer.encode(text, add_special_tokens=True))
+        if n_tokens > max_length:
+            row = df.iloc[i]
+            _LOG.warning(
+                "chunk %s (source=%s) %d token ile max_length=%d sınırını aşıyor — "
+                "embed sırasında kesilecek ve son kısmı aranabilir olmayacak (char_count=%d).",
+                row.get("chunk_id"),
+                row.get("source"),
+                n_tokens,
+                max_length,
+                len(text),
+            )
+
+
 def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
     """Dense vektörler + sparse vektörler (JSON string listesi) döner."""
     dense_list: list[np.ndarray] = []
@@ -67,7 +90,7 @@ def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
             out = model.encode(
                 batch,
                 batch_size=len(batch),
-                max_length=1024,
+                max_length=_MAX_TOKEN_LENGTH,
                 return_dense=True,
                 return_sparse=True,
                 return_colbert_vecs=False,
@@ -91,6 +114,7 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 
     texts = df["content"].tolist()
     model = _load_model()
+    _warn_on_truncation(model, df, texts, _MAX_TOKEN_LENGTH)
     dense_vecs, sparse_jsons = _embed_texts(model, texts)
 
     if dense_vecs.shape[0] != len(df):
@@ -175,7 +199,11 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "Manifest":
     from datetime import datetime, timezone
 
+    from doqqy.ingest.base import IngestError, processed_id, processed_path_for, reset_stem_group_cache
     from doqqy.manifest import Manifest, ManifestEntry, read_body_hash, read_content_hash
+
+    # Kardeş taraması önbelleği bu çalışmaya ait; raw/ iki embed arasında değişmiş olabilir.
+    reset_stem_group_cache()
 
     manifest = Manifest()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -185,10 +213,28 @@ def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "
         doc_groups.setdefault(r.doc_id, []).append(r)
 
     for doc_id, recs in doc_groups.items():
-        source_path = ws.root / doc_id if (ws.root / doc_id).exists() else ws.raw_dir / doc_id
+        # doc_id zaten "raw/..." ile başlıyor; ws.raw_dir'e eklemek "raw/raw/..."
+        # üretirdi ve o yol hiçbir zaman var olmaz.
+        source_path = ws.root / doc_id
         chash = read_content_hash(source_path) or ""
-        from doqqy.ingest.base import processed_path_for
-        body_hash = read_body_hash(processed_path_for(source_path, ws)) or ""
+
+        # Tek seferde çözülüp iki yere veriliyor: gövde hash'i bu dosyadan okunuyor,
+        # yolun kendisi de manifest'e yazılıyor ki kaynak silindiğinde hangi .md'nin
+        # ona ait olduğu bilinsin (issue #76).
+        #
+        # Kaynak chunk ile embed arasında silinmiş olabilir; processed_path_for o
+        # zaman klasörü tarayamayıp hata verir. Bunu yukarı bırakmak tek bir belge
+        # yüzünden tüm komutu düşürürdü — üstelik store bu noktada yeniden yazılmış
+        # oluyor ve manifest hiç kaydedilmiyor, yani kullanıcı store ile manifest'i
+        # ayrışmış halde bulurdu (§1.4 failure isolation).
+        try:
+            processed = processed_path_for(source_path, ws)
+            processed_rel = processed_id(processed, ws)
+            body_hash = read_body_hash(processed) or ""
+        except IngestError as exc:
+            _LOG.warning("%s için processed yolu çözülemedi: %s", doc_id, exc)
+            processed_rel = ""
+            body_hash = ""
         manifest.update_entry(
             doc_id,
             ManifestEntry(
@@ -199,6 +245,7 @@ def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "
                 status="indexed",
                 indexed_at=now,
                 body_hash=body_hash,
+                processed_path=processed_rel,
             ),
         )
     return manifest

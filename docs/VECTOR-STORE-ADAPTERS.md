@@ -155,6 +155,7 @@ def ensure_collection(client: QdrantClient, name: str, dim: int) -> None:
                 modifier=models.Modifier.IDF,        # bge-m3 lexical ağırlıklarıyla iyi çalışır
             ),
         },
+        hnsw_config=models.HnswConfigDiff(m=0, payload_m=16),  # tenant-isolated HNSW subgraphs
     )
     # tenant partition anahtarı — Qdrant depolamayı tenant'a göre ko-lokalize eder
     client.create_payload_index(name, "tenant", models.KeywordIndexParams(
@@ -163,6 +164,8 @@ def ensure_collection(client: QdrantClient, name: str, dim: int) -> None:
     client.create_payload_index(name, "tags", models.PayloadSchemaType.KEYWORD)
     client.create_payload_index(name, "doc_id", models.PayloadSchemaType.KEYWORD)
 ```
+
+> **Note on HNSW Multitenancy:** Setting `m=0, payload_m=16` in `hnsw_config` pairs with `is_tenant=True` to build tenant-isolated HNSW subgraphs instead of traversing a single shared global graph across all workspaces. This applies to newly created collections; an existing `doqqy_chunks` collection must be dropped and recreated to apply this index structure.
 
 Point layout — `chunk_id` (UUID) is the point ID directly; everything else is payload:
 

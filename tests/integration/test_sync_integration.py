@@ -197,3 +197,207 @@ def test_sync_dry_run_creates_no_directories(tmp_path: Path) -> None:
     assert report.added == 1
     assert not ws.state_dir.exists()
     assert not ws.processed_dir.exists()
+
+
+
+# ---------------------------------------------------------------------------
+# Same-stem collisions (issue #76): an incremental sync must land on exactly the
+# file set a full `doqqy ingest` would produce, in both directions.
+# ---------------------------------------------------------------------------
+
+
+def _write_doc(ws: Workspace, folder: str, name: str) -> Path:
+    directory = ws.raw_dir / folder
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    path.write_text(f"# Belge {name}\n\n{name} icin govde metni.\n", encoding="utf-8")
+    return path
+
+
+def _outputs(ws: Workspace) -> list[str]:
+    return sorted(
+        str(p.relative_to(ws.processed_dir)).replace("\\", "/")
+        for p in ws.processed_dir.rglob("*.md")
+    )
+
+
+def _full_ingest_outputs(tmp_path: Path, names: list[str]) -> list[str]:
+    """The file set a from-scratch `doqqy ingest` produces for *names* — the convergence target."""
+    from doqqy.ingest.router import ingest_directory
+
+    # Test workspace'inin dışında: ws.root altına kurulsaydı ileride ws.root'u
+    # gezen herhangi bir yardımcı ikinci bir korpus görürdü.
+    reference = Workspace(tmp_path.parent / f"{tmp_path.name}-reference")
+    reference.ensure_dirs()
+    for name in names:
+        _write_doc(reference, "x", name)
+    ingest_directory(reference)
+    return _outputs(reference)
+
+
+def test_sync_converges_with_full_ingest_when_a_colliding_sibling_appears(
+    temp_ws: Workspace, stub_embeddings: None, tmp_path: Path
+) -> None:
+    """Dropping a same-stem sibling next to an indexed document renames both outputs."""
+    _write_doc(temp_ws, "x", "rapor.md")
+    sync(temp_ws)
+    assert _outputs(temp_ws) == ["x/rapor.md"]
+
+    _write_doc(temp_ws, "x", "rapor.txt")
+    report = sync(temp_ws)
+
+    # rapor.md'nin baytlari degismedi, ama hedef adi degisti — sync onu yine de
+    # yeniden islemezse artimli yol tam ingest'ten ayrisirdi.
+    assert report.modified == 1, f"adi degisen belge modified sayilmali: {report}"
+    assert not report.failed
+    assert _outputs(temp_ws) == _full_ingest_outputs(tmp_path, ["rapor.md", "rapor.txt"])
+
+    # Iki belge de store'da kendi doc_id'siyle duruyor. Issue'nun sikayeti tam
+    # olarak buydu: cakisan kaynaklardan yalnizca biri indekse ulasiyordu.
+    with contextlib.closing(make_store(temp_ws)) as store:
+        assert store.get_by_doc("raw/x/rapor.md"), "rapor.md indekste yok"
+        assert store.get_by_doc("raw/x/rapor.txt"), "rapor.txt indekste yok"
+
+
+def test_sync_removes_the_output_of_a_deleted_colliding_sibling(
+    temp_ws: Workspace, stub_embeddings: None, tmp_path: Path
+) -> None:
+    """Deleting one of a colliding pair leaves no orphan behind in processed/.
+
+    The regression this guards: the deletion path used to re-derive the output
+    name from the source, which by then is gone — so it computed a name that was
+    never written, unlinked nothing, and left the real file for chunk/map/inject
+    to keep feeding deleted content back into the index.
+    """
+    _write_doc(temp_ws, "x", "rapor.md")
+    _write_doc(temp_ws, "x", "rapor.txt")
+    sync(temp_ws)
+    assert _outputs(temp_ws) == ["x/rapor-md.md", "x/rapor-txt.md"]
+
+    (temp_ws.raw_dir / "x" / "rapor.txt").unlink()
+    report = sync(temp_ws)
+
+    assert report.deleted == 1
+    assert not report.failed
+    assert _outputs(temp_ws) == _full_ingest_outputs(tmp_path, ["rapor.md"])
+
+    # Silinen belge indekste iz birakmamali — oksuz bir .md kalsaydi chunk_directory
+    # onu processed/*.md taramasinda bulup geri getirirdi.
+    with contextlib.closing(make_store(temp_ws)) as store:
+        assert store.get_by_doc("raw/x/rapor.txt") == []
+
+
+def test_sync_fails_a_document_whose_output_path_is_already_taken(
+    temp_ws: Workspace, stub_embeddings: None
+) -> None:
+    """Sync holds the same invariant as ingest: two documents may not share one .md file.
+
+    Disambiguation resolves most collisions but not all — `a.txt` becomes
+    `a-txt.md` while a source genuinely named `a-txt.csv` is a singleton and
+    keeps that name. Without a guard here the incremental path would silently
+    overwrite one of them and report success, which is the bug this whole change
+    exists to remove.
+    """
+    _write_doc(temp_ws, "x", "a.md")
+    _write_doc(temp_ws, "x", "a.txt")
+    _write_doc(temp_ws, "x", "a-txt.csv")
+
+    report = sync(temp_ws)
+
+    assert len(report.failed) == 1, f"cakisan belge hata olarak raporlanmali: {report}"
+    doc_id, message = report.failed[0]
+    assert "çıktı yolu çakıştı" in message
+    # Kaybeden taraf belirli olmali: sirali gezildigi icin ('-' < '.') gercek
+    # a-txt.csv once yazilir, ayristirma sonucu ayni ada dusen a.txt reddedilir.
+    assert doc_id == "raw/x/a.txt"
+    # Hicbir belge sessizce kaybolmadi: kalan ikisi kendi dosyalarinda ve
+    # a-txt.md gercekten a-txt.csv'nin icerigini tasiyor.
+    assert _outputs(temp_ws) == ["x/a-md.md", "x/a-txt.md"]
+    body = (temp_ws.processed_dir / "x" / "a-txt.md").read_text(encoding="utf-8")
+    assert "source: raw/x/a-txt.csv" in body
+
+
+def test_sync_keeps_the_output_a_replacement_document_just_wrote(
+    temp_ws: Workspace, stub_embeddings: None
+) -> None:
+    """Replacing a source with a same-stem sibling in one run must not delete the new output.
+
+    `_process_changed` runs before `_process_deletions`, so the new document has
+    already written `rapor.md` by the time the removed one is processed. Trusting
+    the recorded path blindly would unlink the live file and leave `processed/`
+    empty, with nothing in any later run to put it back.
+    """
+    _write_doc(temp_ws, "x", "rapor.md")
+    sync(temp_ws)
+    assert _outputs(temp_ws) == ["x/rapor.md"]
+
+    (temp_ws.raw_dir / "x" / "rapor.md").unlink()
+    _write_doc(temp_ws, "x", "rapor.txt")
+    report = sync(temp_ws)
+
+    assert not report.failed
+    assert _outputs(temp_ws) == ["x/rapor.md"], "yeni belgenin ciktisi silinmis"
+
+    with contextlib.closing(make_store(temp_ws)) as store:
+        assert store.get_by_doc("raw/x/rapor.txt"), "yeni belge indekste yok"
+        assert store.get_by_doc("raw/x/rapor.md") == [], "silinen belge indekte kalmis"
+
+
+def test_sync_does_not_steal_the_output_of_an_untouched_document(
+    temp_ws: Workspace, stub_embeddings: None
+) -> None:
+    """A document sync is not even processing this run still owns its output file.
+
+    Sync only touches the delta, so a guard fed solely from this run's documents
+    is blind to the rest of the corpus: a newly disambiguated name can land on an
+    untouched document's file and overwrite it with zero failures reported, and
+    the diff never re-flags the victim because nothing about it changed.
+    """
+    _write_doc(temp_ws, "x", "a.md")
+    _write_doc(temp_ws, "x", "a-md.md")
+    sync(temp_ws)
+    assert _outputs(temp_ws) == ["x/a-md.md", "x/a.md"]
+
+    # a.txt gelince a.md'nin hedefi a-md.md olur — ama orasi a-md.md'nin.
+    _write_doc(temp_ws, "x", "a.txt")
+    report = sync(temp_ws)
+
+    assert len(report.failed) == 1, f"cakisma raporlanmali: {report}"
+    assert report.failed[0][0] == "raw/x/a.md"
+
+    body = (temp_ws.processed_dir / "x" / "a-md.md").read_text(encoding="utf-8")
+    assert "source: raw/x/a-md.md" in body, "dokunulmamis belgenin ciktisi ezilmis"
+
+    # Manifest'te iki doc_id tek dosyayi gostermemeli.
+    manifest = Manifest.load(temp_ws)
+    recorded = [e.processed_path for e in manifest.docs.values() if e.processed_path]
+    assert len(recorded) == len(set(recorded)), f"cift sahiplik: {recorded}"
+
+
+def test_sync_guard_repeats_its_rejection_when_nothing_changes(
+    temp_ws: Workspace, stub_embeddings: None
+) -> None:
+    """A rejected document stays rejected on the next run instead of winning it.
+
+    Rejection records `content_hash=""`, which makes the rejected document the
+    only changed source next time. A run-scoped guard would be empty then and let
+    it overwrite the document that won — turning a loud failure into silent data
+    loss one command later, with nothing on disk having changed.
+    """
+    _write_doc(temp_ws, "x", "a.md")
+    _write_doc(temp_ws, "x", "a.txt")
+    _write_doc(temp_ws, "x", "a-md.md")
+
+    first = sync(temp_ws)
+    assert len(first.failed) == 1
+    winner = (temp_ws.processed_dir / "x" / "a-md.md").read_text(encoding="utf-8")
+    assert "source: raw/x/a-md.md" in winner
+
+    # Diskte hicbir sey degismedi.
+    second = sync(temp_ws)
+    assert len(second.failed) == 1, f"red tekrar etmeli: {second}"
+    assert (temp_ws.processed_dir / "x" / "a-md.md").read_text(encoding="utf-8") == winner
+
+    third = sync(temp_ws)
+    assert len(third.failed) == 1
+    assert (temp_ws.processed_dir / "x" / "a-md.md").read_text(encoding="utf-8") == winner

@@ -283,7 +283,7 @@ class QueryService:
         self._models, self._stores, self._s = models, stores, settings
 
     def query(self, ws: Workspace, q: str, *, k: int, tag: str | None, rerank: bool) -> list[SearchHit]:
-        if not ws.store_dir.exists():
+        if not self._stores.get_store(ws).is_indexed():
             raise WorkspaceNotIndexed(ws.root.name)          # → 409 at L3
         return search(ws, q, k=k, tag=tag, rerank=rerank,
                       models=self._models, stores=self._stores)
@@ -440,6 +440,16 @@ class JobOut(BaseModel):
     error: str | None = None
     detail: dict = {}
 ```
+
+`POST /v1/workspaces/{wid}/query` distinguishes three workspace states, and none of them is a server fault:
+
+| Status | Meaning | Client action |
+|---|---|---|
+| `200` | workspace resolved and indexed | — |
+| `404` | the workspace id resolves to nothing on disk | fix the id |
+| `409` | the workspace exists but was never indexed | run `doqqy embed` (or `POST /v1/workspaces/{wid}/documents`) |
+
+The 404/409 split is deliberate: a 404 tells a client "this id is wrong", which is misleading when the id is right and the fix is to run a command. The router asks the store port (`VectorStore.is_indexed()`) rather than testing `ws.store_dir` — under the Qdrant backend that directory never exists, so a filesystem check would reject every indexed Qdrant workspace. A `FileNotFoundError` handler in `create_app` backs the check up, mapping any store-layer miss that reaches the route to the same 409 rather than a 500.
 
 Errors: RFC 7807 `application/problem+json`, one handler per service exception:
 

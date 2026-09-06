@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 from rich.console import Console
@@ -87,7 +88,13 @@ def main() -> None:
     _configure_utf8_stream(sys.stderr)
     console = Console()
 
-    settings = Settings(vector_backend=args.backend)
+    eval_collection: str | None = None
+    if args.backend == "qdrant":
+        eval_collection = f"doqqy_eval_{uuid.uuid4().hex[:8]}"
+        settings = Settings(vector_backend="qdrant", qdrant_collection=eval_collection)
+    else:
+        settings = Settings(vector_backend=args.backend)
+
     is_avail, avail_msg = check_backend_available(args.backend, settings=settings)
     if not is_avail:
         console.print(f"[bold yellow]UYARI: '{args.backend}' backend'i kullanılabilir değil:[/bold yellow]")
@@ -101,31 +108,49 @@ def main() -> None:
         sys.exit(0)
 
     if args.backend == "qdrant" and "in-memory" in avail_msg:
-        settings = Settings(vector_backend="qdrant", qdrant_url=":memory:")
+        settings = Settings(vector_backend="qdrant", qdrant_url=":memory:", qdrant_collection=eval_collection)
         console.print("[yellow]Sunucu kapalı olduğu için Qdrant bellek içi (in-memory) modda çalıştırılıyor.[/yellow]")
 
     console.print("[bold cyan]Değerlendirme sorguları yükleniyor...[/bold cyan]")
     queries = load_eval_queries(args.queries)
     console.print(f"[bold]{len(queries)}[/bold] adet referans sorgu yüklendi.")
 
-    with tempfile.TemporaryDirectory(prefix="doqqy_eval_") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        console.print(f"[bold cyan]'{args.backend}' backend'i ile geçici çalışma alanı oluşturuluyor: {tmp_path}...[/bold cyan]")
-        ws = build_eval_workspace(
-            target_dir=tmp_path,
-            corpus_raw_dir=args.corpus,
-            backend=args.backend,
-            settings=settings,
-        )
+    try:
+        with tempfile.TemporaryDirectory(prefix="doqqy_eval_") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            console.print(f"[bold cyan]'{args.backend}' backend'i ile geçici çalışma alanı oluşturuluyor: {tmp_path}...[/bold cyan]")
+            ws = build_eval_workspace(
+                target_dir=tmp_path,
+                corpus_raw_dir=args.corpus,
+                backend=args.backend,
+                settings=settings,
+            )
 
-        console.print("[bold cyan]Arama performansı değerlendirmesi çalıştırılıyor...[/bold cyan]")
-        report = run_eval(
-            ws,
-            queries,
-            backend=args.backend,
-            settings=settings,
-            top_k=args.top_k,
-        )
+            console.print("[bold cyan]Arama performansı değerlendirmesi çalıştırılıyor...[/bold cyan]")
+            report = run_eval(
+                ws,
+                queries,
+                backend=args.backend,
+                settings=settings,
+                top_k=args.top_k,
+            )
+    finally:
+        if eval_collection and args.backend == "qdrant":
+            try:
+                if settings.qdrant_url == ":memory:":
+                    from doqqy.infra.vectorstore.qdrant_store import _MEMORY_CLIENTS
+                    _MEMORY_CLIENTS.pop(eval_collection, None)
+                else:
+                    from qdrant_client import QdrantClient
+                    client = QdrantClient(
+                        url=settings.qdrant_url,
+                        api_key=settings.qdrant_api_key or None,
+                        check_compatibility=False,
+                    )
+                    if client.collection_exists(eval_collection):
+                        client.delete_collection(eval_collection)
+            except Exception as exc:  # noqa: BLE001
+                console.print(f"[yellow]Uyarı: Geçici eval koleksiyonu ({eval_collection}) temizlenemedi: {exc}[/yellow]")
 
     # Backend'e özel referans (Baseline) karşılaştırması
     target_baseline_path = DEFAULT_QDRANT_BASELINE_PATH if args.backend == "qdrant" else DEFAULT_BASELINE_PATH

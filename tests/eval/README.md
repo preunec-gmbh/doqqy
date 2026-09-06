@@ -57,3 +57,9 @@ Each entry is a `(query, expected_doc_id[, expected_section])` pair plus an opti
 5. **Removing a document**: delete every query in `queries.yaml` that references it as `expected_doc_id`.
 
 Keep the corpus small and dense rather than large — the value of this fixture is that every expected answer was reasoned about by hand, not that it has coverage at scale.
+
+## Backend Isolation Invariant
+
+- **LanceDB**: The store is isolated inside the temporary workspace directory created for the eval run.
+- **Qdrant**: Each eval run generates a dedicated ephemeral collection (`doqqy_eval_<uuid>`) and passes it via `Settings(qdrant_collection=...)`. The harness drops this collection in a `finally` block upon completion or crash. The eval harness must **never** write into or delete from the user's primary `doqqy_chunks` collection.
+

@@ -60,7 +60,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 | `.xml` | `xml.etree.ElementTree` | — | Pretty-printed XML inside a fenced block, extracts leaf nodes text to a content summary section |
 | `.html`, `.htm` | `BeautifulSoup` + `markdownify` | Encoding auto-detected from BOM / `<meta charset>` (UnicodeDammit) | Drops boilerplate (`<script>`, `<style>`, `<nav>`, `<aside>`, `<form>`, `<iframe>`, `<noscript>`, `<svg>`, comments); `<header>`/`<footer>` removed only outside `<article>`/`<section>`/`<main>`; `<title>` → frontmatter `title` and fallback H1 when body has none; ATX headers |
 | `.xlsx` | `pandas` + `openpyxl` | – | Reads sheets, renders as GFM tables, and splits sheets into blocks of ≤40 rows with repeated headers |
-| `.csv` | `pandas` | Encoding fallback (`cp1254`, `latin-1`) | Supports different delimiters, converts tabular data into GFM tables, and splits rows into blocks with repeated headers |
+| `.csv` | `pandas` | Encoding fallback (`cp1254`, `latin-1`) | Supports different delimiters, converts tabular data into GFM tables, and splits rows into ≤40-row blocks, each under its own `## <stem> (rows i-j)` heading so `section_path` identifies which rows a hit came from |
 
 **Failure isolation:** one bad file never stops the run. `ingest_directory()` catches per-file exceptions, logs to `.doqqy/logs/ingest.log`, collects `(path, error)` pairs in `IngestResult.failed`, and the CLI prints a summary panel.
 
@@ -90,9 +90,9 @@ Algorithm per file (`chunk_file`):
 2. **Bold-heading normalization**: lines that are entirely bold (`**A224. Meeting**` / `__Title__`) are rewritten to `## Title` — Word documents often use bold instead of Heading styles, and this recovers section structure from them.
 3. `MarkdownHeaderTextSplitter` (langchain) splits on H1–H4, `strip_headers=False` so heading text stays inside the chunk for embedding context. A headerless document becomes one section.
 4. Sections longer than `_MAX_CHARS` (= `CHUNK_MAX_TOKENS * 4` = 3200 chars, ~800 tokens at ~4 chars/token) are sub-split with **atomic blocks**:
-   - Fenced code blocks (```` ``` … ``` ````) and GFM tables (regex-detected) are **never split** — a half SQL query is worthless.
+   - Fenced code blocks (```` ``` … ``` ````) and GFM tables (regex-detected; a blank line always ends a table block, so adjacent tables never merge into one) are kept atomic **only up to `_MAX_CHARS`** — a half SQL query is worthless, so an oversized code block still becomes its own (unsplit) chunk, but an oversized table is split on row boundaries instead, repeating the header and separator row on every part so each piece stays a valid GFM table.
    - Remaining prose is split on blank lines (`\n{2,}`).
-   - Blocks are **greedy-packed** back together up to `_MAX_CHARS`; an oversized single block (giant code block) becomes its own chunk.
+   - Blocks are **greedy-packed** back together up to `_MAX_CHARS`; an oversized single non-table block (giant code block) becomes its own chunk.
 5. Chunks within a document are linked via `prev_chunk` / `next_chunk` UUIDs (context-expansion hook, currently unused by query).
 
 ```python
@@ -115,7 +115,7 @@ class Chunk:
 `chunks.parquet` → pluggable `VectorStore` adapter (defaulting to LanceDB table `chunks` in `.doqqy/store.lance/`).
 
 1. `BAAI/bge-m3` is loaded through `FlagEmbedding.BGEM3FlagModel`. Device auto-detected (`detect_device()`: `DOQQY_DEVICE` env override → `torch.cuda.is_available()` → CPU). fp16 on CUDA.
-2. Each batch (`EMBEDDING_BATCH_SIZE = 4`, `max_length=1024` — deliberate RAM constraints for consumer machines) is encoded with `return_dense=True, return_sparse=True`.
+2. Each batch (`EMBEDDING_BATCH_SIZE = 4`, `max_length=1024` — deliberate RAM constraints for consumer machines) is encoded with `return_dense=True, return_sparse=True`. Before encoding, every chunk is tokenized once to check whether it exceeds `max_length`; a chunk that does logs a `WARNING` (chunk id, source, token count) since its tail would otherwise be silently truncated and unsearchable.
 3. Dense vectors: `float32[1024]`. Sparse vectors: token-id → weight dicts, normalized to `dict[int, float]` at the port level.
 4. Table is atomically rebuilt from scratch via `store.full_rebuild(records, dim=1024)`. Using LanceDB's single `create_table(mode="overwrite")` operation preserves the previous table until the new write is complete, eliminating any crash window. (`store.recreate + store.upsert` is reserved for incremental indexing / `doqqy sync`).
 
