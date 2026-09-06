@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+from doqqy.chunk import chunk_file
 from doqqy.ingest.base import IngestError
-from doqqy.ingest.pptx_ingest import ingest_pptx
+from doqqy.ingest.pptx_ingest import (
+    _parse_with_docling,
+    _parse_with_python_pptx,
+    ingest_pptx,
+)
 from doqqy.workspace import Workspace
 
 
@@ -43,6 +49,49 @@ def test_pptx_ingest_docling_success(tmp_path):
         assert doc.content == "## Slide 1\n\nContent"
         assert doc.metadata["parser"] == "docling"
         assert doc.metadata["type"] == "pptx"
+
+
+def test_pptx_parsers_share_deck_and_slide_heading_hierarchy(tmp_path):
+    source = _real_pptx_with_title_and_body(tmp_path, "My Slide Title", "First bullet point")
+    exported = "# My Slide Title\n\nFirst bullet point\n\n#### Detail"
+    document = SimpleNamespace(export_to_markdown=lambda: exported)
+    converter = SimpleNamespace(convert=lambda _source: SimpleNamespace(document=document))
+
+    with patch("doqqy.ingest.pptx_ingest._get_docling_converter", return_value=converter):
+        docling_markdown = _parse_with_docling(source)
+    fallback_markdown = _parse_with_python_pptx(source)
+
+    assert docling_markdown.startswith("# deck\n\n## My Slide Title")
+    assert "\n#### Detail" in docling_markdown
+    assert fallback_markdown.startswith("# deck\n\n## My Slide Title")
+
+
+def test_pptx_docling_keeps_fenced_code_headings_unchanged(tmp_path):
+    source = _fake_pptx(tmp_path)
+    exported = "# Slide\n\n```markdown\n# Example\n```"
+    document = SimpleNamespace(export_to_markdown=lambda: exported)
+    converter = SimpleNamespace(convert=lambda _source: SimpleNamespace(document=document))
+
+    with patch("doqqy.ingest.pptx_ingest._get_docling_converter", return_value=converter):
+        markdown = _parse_with_docling(source)
+
+    assert markdown == "# deck\n\n## Slide\n\n```markdown\n# Example\n```"
+
+
+def test_pptx_heading_hierarchy_becomes_chunk_section_path(tmp_path):
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+    source = _real_pptx_with_title_and_body(tmp_path, "My Slide Title", "First bullet point")
+    processed = ws.processed_dir / "deck.md"
+    processed.write_text(
+        "---\nsource: raw/deck.pptx\ntype: pptx\n---\n"
+        + _parse_with_python_pptx(source),
+        encoding="utf-8",
+    )
+
+    chunks = chunk_file(processed, ws)
+
+    assert chunks[0].section_path == ["deck", "My Slide Title"]
 
 
 def test_pptx_ingest_fallback_slide_titles_become_headings(tmp_path):

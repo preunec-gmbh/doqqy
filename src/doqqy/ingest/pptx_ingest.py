@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from doqqy.ingest.base import Document, IngestError, base_metadata, content_hash
 from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.ingest.pptx")
+_ATX_HEADING_RE = re.compile(r"^([ \t]{0,3})(#{1,4})([ \t]+)")
+_FENCE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 
 
 @lru_cache(maxsize=1)
@@ -24,7 +27,42 @@ def _get_docling_converter():
 def _parse_with_docling(source: Path) -> str:
     converter = _get_docling_converter()
     result = converter.convert(str(source))
-    return result.document.export_to_markdown()
+    markdown = result.document.export_to_markdown()
+    return _with_deck_heading(source, _demote_headings(markdown))
+
+
+def _demote_headings(markdown: str) -> str:
+    """ATX başlıklarını bir seviye indir; H4 ve fenced code içeriğini koru."""
+    lines: list[str] = []
+    fence: tuple[str, int] | None = None
+
+    for line in markdown.splitlines(keepends=True):
+        fence_match = _FENCE_RE.match(line)
+        if fence_match:
+            marker = fence_match.group(1)
+            if fence is None:
+                fence = marker[0], len(marker)
+            elif marker[0] == fence[0] and len(marker) >= fence[1]:
+                fence = None
+        elif fence is None:
+            line = _ATX_HEADING_RE.sub(
+                lambda match: (
+                    match.group(1)
+                    + "#" * min(len(match.group(2)) + 1, 4)
+                    + match.group(3)
+                ),
+                line,
+            )
+        lines.append(line)
+
+    return "".join(lines)
+
+
+def _with_deck_heading(source: Path, markdown: str) -> str:
+    """Sunum adını tek H1 kökü olarak ekle."""
+    if not markdown.strip():
+        return markdown
+    return f"# {source.stem}\n\n{markdown.lstrip()}"
 
 
 def _parse_with_python_pptx(source: Path) -> str:
@@ -54,7 +92,7 @@ def _parse_with_python_pptx(source: Path) -> str:
             section += "\n\n" + "\n\n".join(body_paragraphs)
         sections.append(section)
 
-    return "\n\n".join(sections)
+    return _with_deck_heading(source, "\n\n".join(sections))
 
 
 def ingest_pptx(source: Path, ws: Workspace, **_kwargs: Any) -> Document:

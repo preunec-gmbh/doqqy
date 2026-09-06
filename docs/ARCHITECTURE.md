@@ -56,7 +56,7 @@ Converts every supported file under `raw/` into canonical markdown under `proces
 | `.txt` | UTF-8 read, body wrapped in a fenced code block | latin-1 on `UnicodeDecodeError` | Filename becomes the H1 title |
 | `.pdf` | **docling** (layout-aware) | **docling-ocr** (when `--ocr` enabled) → **pymupdf4llm** (optional extra `.[pdf-fallback]`; skipped when not installed) | Empty output without `--ocr` triggers `IngestError` ("scanned PDF?") |
 | `.docx` | **pandoc** via pypandoc (GFM output, `--wrap=none`) | **mammoth** (pure Python) | Missing pandoc binary triggers `pypandoc.download_pandoc()` auto-install; if that fails, mammoth |
-| `.pptx` | **docling** (layout-aware; slide titles → headings) | **python-pptx** (slide title → `##`, body text as paragraphs) | Empty deck triggers `IngestError` ("boş içerik") |
+| `.pptx` | **docling** (layout-aware) | **python-pptx** | Both parsers emit a deck-level `#` with slide titles at `##`; empty decks trigger `IngestError` ("boş içerik") |
 | `.xml` | `xml.etree.ElementTree` | — | Pretty-printed XML inside a fenced block, extracts leaf nodes text to a content summary section |
 | `.html`, `.htm` | `BeautifulSoup` + `markdownify` | Encoding auto-detected from BOM / `<meta charset>` (UnicodeDammit) | Drops boilerplate (`<script>`, `<style>`, `<nav>`, `<aside>`, `<form>`, `<iframe>`, `<noscript>`, `<svg>`, comments); `<header>`/`<footer>` removed only outside `<article>`/`<section>`/`<main>`; `<title>` → frontmatter `title` and fallback H1 when body has none; ATX headers |
 | `.xlsx` | `pandas` + `openpyxl` | – | Reads sheets, renders as GFM tables, and splits sheets into blocks of ≤40 rows with repeated headers |
