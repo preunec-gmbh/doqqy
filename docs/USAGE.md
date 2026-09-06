@@ -258,6 +258,10 @@ Start the stdio Model Context Protocol (MCP) server to expose search and corpus 
 doqqy mcp [--root C:/path/to/my-corpus]
 ```
 
+Stdio mode suppresses model-download progress and routine INFO logs so clients
+that do not consume stderr cannot stall the server. Warnings and errors remain
+on stderr; detailed pipeline logs remain available under `.doqqy/logs/`.
+
 ## 4. Typical workflows
 
 ### Fresh corpus, end to end
