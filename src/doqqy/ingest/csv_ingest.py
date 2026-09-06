@@ -72,7 +72,17 @@ def ingest_csv(source: Path, ws: Workspace, **_kwargs: Any) -> Document:
     if not md_tables:
         raise IngestError("Boş tablo içeriği.")
 
-    full_content = (f"# {source.stem}\n\n" + "\n\n".join(md_tables))
+    # Her satır bloğuna kendi ## başlığını ver ki section_path arama sonucunda
+    # hangi satırların eşleştiğini göstersin — bkz. issue #77.
+    sections = []
+    row_cursor = 1
+    for table in md_tables:
+        n_rows = max(len(table.splitlines()) - 2, 0)
+        row_end = row_cursor + n_rows - 1
+        sections.append(f"## {source.stem} (rows {row_cursor}-{row_end})\n\n{table}")
+        row_cursor = row_end + 1
+
+    full_content = (f"# {source.stem}\n\n" + "\n\n".join(sections))
 
     meta = base_metadata(source, ws.root, kind="csv")
     meta["parser"] = "pandas"

@@ -57,3 +57,37 @@ def test_integration_pipeline_flow(tmp_path):
     # Kaynak dökümanın adını doğrula
     assert Path(hit.source).name == "test_doc.md"
 
+
+@pytest.mark.slow
+def test_large_csv_last_rows_are_searchable(tmp_path):
+    """issue #77: büyük bir CSV'nin son satırlarındaki bir değer aramada bulunabilmeli."""
+    import pandas as pd
+
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+
+    df = pd.DataFrame(
+        {
+            "id": list(range(1, 892)),
+            "val": [f"Row{i}" for i in range(1, 892)],
+        }
+    )
+    df.loc[len(df) - 1, "val"] = "MoradaEjderha2026"
+    df.to_csv(raw_dir / "large.csv", index=False)
+
+    ws = Workspace(tmp_path)
+    ws.ensure_dirs()
+
+    ingest_result = ingest_directory(ws)
+    assert len(ingest_result.failed) == 0
+
+    chunks = chunk_directory(ws)
+    assert len(chunks) > 0
+
+    embedded_count = build_index(ws)
+    assert embedded_count > 0
+
+    search_hits = search(ws, "MoradaEjderha2026", k=1, rerank=True)
+    assert len(search_hits) > 0
+    assert "MoradaEjderha2026" in search_hits[0].content
+

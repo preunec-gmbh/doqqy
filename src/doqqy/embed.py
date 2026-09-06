@@ -26,6 +26,9 @@ from doqqy.workspace import Workspace
 
 _LOG = get_logger("doqqy.embed")
 
+# model.encode(..., max_length=...) burada da kullanılır — tek yerden değiştirilsin.
+_MAX_TOKEN_LENGTH = 1024
+
 
 def _load_chunks(ws: Workspace) -> pd.DataFrame:
     if not ws.chunks_parquet.exists():
@@ -49,6 +52,26 @@ def _batched(seq: list[str], n: int) -> Iterator[list[str]]:
         yield seq[i : i + n]
 
 
+def _warn_on_truncation(model, df: pd.DataFrame, texts: list[str], max_length: int) -> None:
+    """max_length token sınırını aşan chunk'ları logla — aksi halde sessizce kesilip aranamaz olurlar."""
+    tokenizer = getattr(model, "tokenizer", None)
+    if tokenizer is None:
+        return
+    for i, text in enumerate(texts):
+        n_tokens = len(tokenizer.encode(text, add_special_tokens=True))
+        if n_tokens > max_length:
+            row = df.iloc[i]
+            _LOG.warning(
+                "chunk %s (source=%s) %d token ile max_length=%d sınırını aşıyor — "
+                "embed sırasında kesilecek ve son kısmı aranabilir olmayacak (char_count=%d).",
+                row.get("chunk_id"),
+                row.get("source"),
+                n_tokens,
+                max_length,
+                len(text),
+            )
+
+
 def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
     """Dense vektörler + sparse vektörler (JSON string listesi) döner."""
     dense_list: list[np.ndarray] = []
@@ -67,7 +90,7 @@ def _embed_texts(model, texts: list[str]) -> tuple[np.ndarray, list[str]]:
             out = model.encode(
                 batch,
                 batch_size=len(batch),
-                max_length=1024,
+                max_length=_MAX_TOKEN_LENGTH,
                 return_dense=True,
                 return_sparse=True,
                 return_colbert_vecs=False,
@@ -91,6 +114,7 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 
     texts = df["content"].tolist()
     model = _load_model()
+    _warn_on_truncation(model, df, texts, _MAX_TOKEN_LENGTH)
     dense_vecs, sparse_jsons = _embed_texts(model, texts)
 
     if dense_vecs.shape[0] != len(df):
