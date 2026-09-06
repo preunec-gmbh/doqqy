@@ -47,6 +47,22 @@ async def query_workspace(
 
             store = stores.get_store(ws)
 
+            # Klasör var ama hiç indekslenmemiş: yanlış klasör verilmiş ya da
+            # `doqqy embed` henüz çalıştırılmamış. İkisi de istemci hatası —
+            # arama katmanının FileNotFoundError'ıyla 500'e dönüşmesine izin
+            # verilmiyor. Kontrol store port'u üzerinden yapılıyor: Qdrant
+            # backend'inde ws.store_dir hiç oluşmadığı için dosya sistemine
+            # bakan bir kontrol indekslenmiş her Qdrant workspace'ini de
+            # reddederdi.
+            if not store.is_indexed():
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Workspace is not indexed: '{workspace_id}'. "
+                        "Run `doqqy embed` first."
+                    ),
+                )
+
             raw_hits = search(
                 ws,
                 req.q,

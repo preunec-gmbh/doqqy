@@ -530,6 +530,16 @@ class QdrantStore(VectorStore):
         res = client.count(collection_name=self.collection, count_filter=tenant_filter)
         return res.count
 
+    def is_indexed(self) -> bool:
+        """Return True when the collection exists and this tenant has points in it."""
+        # Koleksiyon tüm tenant'lar arasında paylaşıldığı için "bu workspace
+        # indekslendi mi" sorusunun tek işareti tenant'ın point sayısı: LanceDB'de
+        # olduğu gibi workspace'e ait ayrı bir dizin ya da tablo yok. Bu yüzden
+        # LanceDB boş bir tabloyu indekslenmiş sayarken burada nokta yoksa
+        # indekslenmemiş sayılıyor — backend'lerin depolama modelinden gelen,
+        # kaçınılmaz bir fark.
+        return self.count() > 0
+
     def close(self) -> None:
         """Close the underlying Qdrant client connection if initialized."""
         if self._client_instance is not None:

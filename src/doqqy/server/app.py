@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -83,6 +83,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"status": "not_ready", "models_loaded": False},
+        )
+
+    # Store katmanı, indekslenmemiş bir workspace için FileNotFoundError fırlatır
+    # (bkz. LanceDBStore._table()). Rotadaki is_indexed() kontrolü bunu normalde
+    # daha erken yakalar; bu handler, kontrolü atlatan her yolu 500 yerine yine
+    # 409'a bağlayan bir son savunma. Ortaya çıkan durum her hâlükârda
+    # "indekslenmemiş workspace" olduğu için sunucu arızası olarak raporlanmamalı.
+    #
+    # Kapsamı hakkında dürüst olmak gerekirse: kontrol geçtikten sonra store
+    # diskten silinirse bu handler devreye girmez — LanceDB tablo tutamacı süreç
+    # genelinde önbelleklendiği için arama, silinmiş dizinden bellekteki manifest
+    # ile servis etmeye devam eder ve boş sonuçla 200 döner. Önbellek tazeliği
+    # ayrı bir sorun; burası onu çözmüyor.
+    @app.exception_handler(FileNotFoundError)
+    async def store_not_indexed_handler(request: Request, exc: FileNotFoundError) -> JSONResponse:
+        """Store dosyaları bulunamadığında 500 yerine 409 döndürür."""
+        workspace_id = str(request.path_params.get("workspace_id", ""))
+        _LOG.warning("Store bulunamadı (%s): %s", request.url.path, exc)
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": (
+                    f"Workspace is not indexed: '{workspace_id}'. "
+                    "Run `doqqy embed` first."
+                )
+            },
         )
 
     # Rotaları (Routers) bağlama

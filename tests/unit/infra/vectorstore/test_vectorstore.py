@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from doqqy.infra.vectorstore.base import ChunkRecord, TagFilter
-from doqqy.infra.vectorstore.lancedb_store import LanceDBStore
+from doqqy.infra.vectorstore.lancedb_store import LanceDBStore, invalidate_table_cache_by_path
 
 
 def test_tag_filter_exact_match_and_escaping(tmp_path: Path):
@@ -80,9 +80,16 @@ def test_lancedb_store_lifecycle(tmp_path: Path):
     # Initial state should raise if database files are not initialized
     with pytest.raises(FileNotFoundError):
         store.count()
+    assert store.is_indexed() is False
 
     store.recreate(dim=1024)
     assert store.count() == 0
+    # An existing but empty table is still indexed — the workspace was embedded,
+    # it just has no chunks. Callers must not report it as "run embed first".
+    # The cache is dropped first, otherwise count() above has already stored the
+    # handle and is_indexed() would answer from it without opening anything.
+    invalidate_table_cache_by_path(store._store_dir)
+    assert store.is_indexed() is True
 
     # Build dummy records
     dense_vector1 = np.ones(1024, dtype=np.float32) * 0.1
@@ -213,3 +220,28 @@ def test_lancedb_iter_records_lossless_roundtrip(tmp_path: Path):
     assert len(large_batch[0]) == 5
 
     store.close()
+
+
+def test_lancedb_is_indexed_does_not_swallow_backend_faults(tmp_path: Path, monkeypatch):
+    """A corrupt store must surface as a fault, not as a quiet "not indexed"."""
+    store = LanceDBStore(tmp_path / "store.lance")
+    store.recreate(dim=8)
+    invalidate_table_cache_by_path(store._store_dir)
+
+    # lancedb raises every Rust-core failure as a bare RuntimeError, so is_indexed()
+    # discriminates on the message. A corrupt manifest must propagate (→ 5xx) rather
+    # than being reported as an un-indexed workspace (→ 409), which would tell the
+    # operator to run `doqqy embed` and destroy the only trace of the real error.
+    def _corrupt():
+        raise RuntimeError('lance error: LanceError(IO): does not have sufficient data')
+
+    monkeypatch.setattr(store, "_table", _corrupt)
+    with pytest.raises(RuntimeError, match="LanceError"):
+        store.is_indexed()
+
+    # The one RuntimeError _table() raises on purpose still means "not indexed".
+    def _no_table():
+        raise RuntimeError("Table not found: chunks")
+
+    monkeypatch.setattr(store, "_table", _no_table)
+    assert store.is_indexed() is False
