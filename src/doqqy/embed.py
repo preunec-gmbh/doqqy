@@ -175,7 +175,11 @@ def build_index(ws: Workspace, *, batch_size: int | None = None, settings: Setti
 def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "Manifest":
     from datetime import datetime, timezone
 
+    from doqqy.ingest.base import IngestError, processed_id, processed_path_for, reset_stem_group_cache
     from doqqy.manifest import Manifest, ManifestEntry, read_body_hash, read_content_hash
+
+    # Kardeş taraması önbelleği bu çalışmaya ait; raw/ iki embed arasında değişmiş olabilir.
+    reset_stem_group_cache()
 
     manifest = Manifest()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -185,10 +189,28 @@ def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "
         doc_groups.setdefault(r.doc_id, []).append(r)
 
     for doc_id, recs in doc_groups.items():
-        source_path = ws.root / doc_id if (ws.root / doc_id).exists() else ws.raw_dir / doc_id
+        # doc_id zaten "raw/..." ile başlıyor; ws.raw_dir'e eklemek "raw/raw/..."
+        # üretirdi ve o yol hiçbir zaman var olmaz.
+        source_path = ws.root / doc_id
         chash = read_content_hash(source_path) or ""
-        from doqqy.ingest.base import processed_path_for
-        body_hash = read_body_hash(processed_path_for(source_path, ws)) or ""
+
+        # Tek seferde çözülüp iki yere veriliyor: gövde hash'i bu dosyadan okunuyor,
+        # yolun kendisi de manifest'e yazılıyor ki kaynak silindiğinde hangi .md'nin
+        # ona ait olduğu bilinsin (issue #76).
+        #
+        # Kaynak chunk ile embed arasında silinmiş olabilir; processed_path_for o
+        # zaman klasörü tarayamayıp hata verir. Bunu yukarı bırakmak tek bir belge
+        # yüzünden tüm komutu düşürürdü — üstelik store bu noktada yeniden yazılmış
+        # oluyor ve manifest hiç kaydedilmiyor, yani kullanıcı store ile manifest'i
+        # ayrışmış halde bulurdu (§1.4 failure isolation).
+        try:
+            processed = processed_path_for(source_path, ws)
+            processed_rel = processed_id(processed, ws)
+            body_hash = read_body_hash(processed) or ""
+        except IngestError as exc:
+            _LOG.warning("%s için processed yolu çözülemedi: %s", doc_id, exc)
+            processed_rel = ""
+            body_hash = ""
         manifest.update_entry(
             doc_id,
             ManifestEntry(
@@ -199,6 +221,7 @@ def _build_manifest_from_records(ws: Workspace, records: list[ChunkRecord]) -> "
                 status="indexed",
                 indexed_at=now,
                 body_hash=body_hash,
+                processed_path=processed_rel,
             ),
         )
     return manifest

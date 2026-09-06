@@ -99,6 +99,14 @@ def ingest(
     console.print(f"[bold cyan]ingest[/bold cyan] kaynak: [dim]{src}[/dim]")
     result = ingest_directory(ws, source_dir=source_dir, limit=limit, ocr=ocr)
 
+    # Yeniden adlandırma sessiz kalmamalı: kullanıcı processed/ altında beklediği
+    # adı bulamadığında nedenini buradan görsün (issue #76).
+    if result.disambiguated:
+        console.print(
+            f"[yellow]{len(result.disambiguated)} çıktı adı ayrıştırıldı[/yellow] "
+            "[dim](aynı gövde adlı kaynaklar; ayrıntı: .doqqy/logs/ingest.log)[/dim]"
+        )
+
     if result.failed:
         console.print(
             Panel(
@@ -527,6 +535,13 @@ def sync(
 
     # Escaped: rich would otherwise parse "[dry-run]" as a markup tag and drop it.
     prefix = r"\[dry-run] " if dry_run else ""
+    # Sync de ingest gibi çıktı adlarını yeniden adlandırabiliyor; sessiz kalırsa
+    # kullanıcı processed/ altında beklediği adı bulamaz (issue #76).
+    if report.disambiguated:
+        console.print(
+            f"[yellow]{report.disambiguated} belge ayrıştırılmış adla yazıldı[/yellow] "
+            "[dim](aynı gövde adlı kaynaklar; ayrıntı: .doqqy/logs/sync.log)[/dim]"
+        )
     if report.has_failures:
         console.print(
             Panel(
@@ -688,6 +703,7 @@ def watch(
                         f"  [green]+{report.added}[/green] added  "
                         f"[yellow]~{report.modified}[/yellow] modified  "
                         f"[red]-{report.deleted}[/red] deleted"
+                        + (f"  [yellow]⇄{report.disambiguated}[/yellow] disambiguated" if report.disambiguated else "")
                         + (f"  [red]✗{len(report.failed)}[/red] failed" if report.has_failures else "")
                     )
                 elif report.has_failures:

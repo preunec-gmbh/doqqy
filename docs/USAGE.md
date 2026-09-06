@@ -85,6 +85,10 @@ doqqy ingest --limit 5           # first 5 files only (smoke test)
 
 Failures don't stop the run — a summary panel lists failed files; details in `.doqqy/logs/ingest.log`. Re-running overwrites `processed/` outputs (idempotent).
 
+Output names normally mirror the source (`raw/x/rapor.pdf` -> `processed/x/rapor.md`). When several sources in one folder share a stem, every member of that group carries its extension instead (`rapor.pdf` + `rapor.docx` -> `rapor-pdf.md` + `rapor-docx.md`) so they cannot overwrite each other; the run summary says how many names were disambiguated. Remove the colliding sibling and the plain `rapor.md` name comes back on the next run. Stems are compared case-insensitively, so `Rapor.md` and `rapor.txt` count as one group — on Windows and macOS they would otherwise resolve to the same output file.
+
+> **Upgrading an existing corpus.** A workspace indexed before this behaviour existed holds a single output for a whole group of same-stem sources, and its manifest records no output path to reconcile against, so `doqqy sync` leaves those documents alone. Once — after upgrading — delete `processed/` and run the pipeline from `doqqy ingest`; the group is then written under the new names and every later run is incremental as usual. Corpora with no same-stem collisions need nothing.
+
 ### `doqqy chunk`
 
 Header-aware split of `processed/**/*.md` into `.doqqy/chunks/chunks.parquet`.
