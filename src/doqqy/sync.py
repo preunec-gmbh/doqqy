@@ -139,8 +139,21 @@ def sync(
         _process_changed(ws, manifest, changed_sources, diff, report, settings, written_this_run)
 
     # Process deletions.
+    stranded_aliases: list[str] = []
     if diff.deleted:
-        _process_deletions(ws, manifest, diff.deleted, report, settings, written_this_run)
+        stranded_aliases = _process_deletions(ws, manifest, diff.deleted, report, settings, written_this_run)
+
+    # Self-heal stranded aliases in the same run (issue #79):
+    # When canonical doc(s) are deleted, their surviving duplicate alias(es) have chunk_count=0.
+    # Re-run diff to pick them up via Manifest._is_stale_alias() and re-embed them before resolving duplicates.
+    changed_sources2: list[Path] = []
+    if stranded_aliases:
+        diff2 = manifest.diff(ws)
+        changed_sources2 = diff2.added + diff2.modified
+        if changed_sources2:
+            touched2 = {_doc_id(path, ws) for path in changed_sources2}
+            written_this_run = {k: v for k, v in written_this_run.items() if v not in touched2}
+            _process_changed(ws, manifest, changed_sources2, diff2, report, settings, written_this_run)
 
     # Detect content_hash duplicates across doc_ids (issue #18): a doc synced just
     # now may duplicate one embedded in an earlier run, or two changed docs in this
@@ -150,6 +163,24 @@ def sync(
     # here instead of aborting the run (§1.4 failure isolation).
     from doqqy.dedup import resolve_duplicates
     resolve_duplicates(ws, manifest, settings, failures=report.failed)
+
+    # Guard against loops: check if any stranded aliases still remain unresolved.
+    remaining_stranded = [
+        alias_id
+        for alias_id, entry in manifest.docs.items()
+        if entry.alias_of is not None and entry.alias_of not in manifest.docs
+    ]
+    if remaining_stranded:
+        _LOG.error(
+            "Sync completed with %d stranded duplicate alias(es) (%s) whose canonical was deleted but could not be recovered.",
+            len(remaining_stranded), ", ".join(sorted(remaining_stranded)),
+        )
+
+    # Adjust unchanged count: docs that were modified in pass 2 were originally counted
+    # in diff.unchanged, so exclude them to reflect the actual untouched document count.
+    if changed_sources2:
+        reprocessed_doc_ids = {_doc_id(p, ws) for p in changed_sources2}
+        report.unchanged = len([d for d in diff.unchanged if d not in reprocessed_doc_ids])
 
     # Persist the updated manifest atomically.
     manifest.save(ws)
@@ -218,7 +249,7 @@ def _process_changed(
                 # edilemez — dosya reddedilip rapora hata olarak düşer.
                 target = doc.processed_path.resolve()
                 clash = written_this_run.get(target)
-                if clash is not None:
+                if clash is not None and clash != doc_id:
                     raise IngestError(
                         f"çıktı yolu çakıştı: {doc.processed_path} zaten {clash} tarafından yazıldı"
                     )
@@ -366,9 +397,11 @@ def _process_deletions(
     report: SyncReport,
     settings: Settings | None,
     written_this_run: dict[Path, str],
-) -> None:
+) -> list[str]:
     """Remove deleted documents from the store, processed files, and manifest."""
     from doqqy.infra.vectorstore.factory import make_store
+
+    all_stranded: list[str] = []
 
     with contextlib.closing(make_store(ws, settings)) as store:
         for doc_id in deleted_doc_ids:
@@ -403,22 +436,20 @@ def _process_deletions(
 
                 # Deleting a canonical (issue #18) takes the group's only copy
                 # of the shared content down with it: its aliases carry
-                # chunk_count=0 of their own. Manifest.diff() re-flags them,
-                # but only on the *next* run — this run's diff classified them
-                # as unchanged back when the canonical was still in the
-                # manifest. Warn so that gap isn't silent.
+                # chunk_count=0 of their own. Detect stranded aliases so sync()
+                # can re-embed them in the same run (issue #79).
                 stranded = sorted(
                     alias_id
                     for alias_id, entry in manifest.docs.items()
                     if entry.alias_of == doc_id
                 )
                 if stranded:
-                    _LOG.warning(
+                    _LOG.info(
                         "Deleted %s was the canonical copy for %d duplicate alias(es) (%s) — "
-                        "that content is out of the index until the next run re-embeds it "
-                        "standalone. Run `doqqy sync` again.",
+                        "re-indexing in this run.",
                         doc_id, len(stranded), ", ".join(stranded),
                     )
+                    all_stranded.extend(stranded)
 
                 manifest.remove_entry(doc_id)
                 report.deleted += 1
@@ -427,6 +458,7 @@ def _process_deletions(
                 report.failed.append((doc_id, f"{type(exc).__name__}: {exc}"))
 
     _update_chunks_parquet(ws, new_records=[], removed_doc_ids=set(deleted_doc_ids))
+    return all_stranded
 
 
 def _recorded_processed_path(ws: Workspace, entry: ManifestEntry | None, doc_id: str) -> Path | None:

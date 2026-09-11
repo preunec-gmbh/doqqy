@@ -401,3 +401,51 @@ def test_sync_guard_repeats_its_rejection_when_nothing_changes(
     third = sync(temp_ws)
     assert len(third.failed) == 1
     assert (temp_ws.processed_dir / "x" / "a-md.md").read_text(encoding="utf-8") == winner
+
+
+def test_sync_duplicate_canonical_deleted_single_run_restores_alias_queryable(
+    temp_ws: Workspace, stub_embeddings: None
+) -> None:
+    """Issue #79: Deleting canonical copy restores alias content into vector store in one sync."""
+    content = "# Invoice Rules\n\nIdentical policy across billing and inventory departments."
+    f1 = temp_ws.raw_dir / "erp" / "billing" / "invoice.md"
+    f2 = temp_ws.raw_dir / "erp" / "stok" / "invoice.md"
+    f1.parent.mkdir(parents=True, exist_ok=True)
+    f2.parent.mkdir(parents=True, exist_ok=True)
+    f1.write_text(content, encoding="utf-8")
+    f2.write_text(content, encoding="utf-8")
+
+    # Initial sync: raw/erp/billing/invoice.md is canonical, raw/erp/stok/invoice.md is alias
+    report1 = sync(temp_ws)
+    assert report1.added == 2
+    assert not report1.has_failures
+
+    with contextlib.closing(make_store(temp_ws, None)) as store:
+        assert len(store.get_by_doc("raw/erp/billing/invoice.md")) > 0
+        assert len(store.get_by_doc("raw/erp/stok/invoice.md")) == 0
+
+    # Delete canonical copy
+    f1.unlink()
+
+    # Single sync run
+    report2 = sync(temp_ws)
+    assert report2.deleted == 1
+    assert report2.modified == 1
+    assert not report2.has_failures
+
+    # Verify vector store immediately has chunks for the surviving alias
+    with contextlib.closing(make_store(temp_ws, None)) as store:
+        assert len(store.get_by_doc("raw/erp/billing/invoice.md")) == 0
+        alias_records = store.get_by_doc("raw/erp/stok/invoice.md")
+        assert len(alias_records) > 0
+        assert "Invoice Rules" in alias_records[0].content
+
+    # Verify manifest reflects the standalone indexed doc
+    manifest = Manifest.load(temp_ws)
+    assert manifest.get("raw/erp/billing/invoice.md") is None
+    entry = manifest.get("raw/erp/stok/invoice.md")
+    assert entry is not None
+    assert entry.alias_of is None
+    assert entry.status == "indexed"
+    assert entry.chunk_count == len(alias_records)
+    assert entry.tags == ["erp", "stok"]

@@ -264,34 +264,166 @@ def test_sync_self_heals_alias_after_canonical_deleted(
         manifest = Manifest.load(temp_ws)
         assert manifest.get("raw/b/x.md").alias_of == "raw/a/x.md"
 
-        # Delete the canonical, then sync (run 2): this is the run that processes
-        # the deletion itself — diff() still sees raw/a/x.md's entry (it hasn't
-        # been removed yet when diff() runs), so raw/b is not touched this round.
+        # Delete the canonical, then sync (run 2): issue #79 self-heals in the same
+        # run — deletion drops the canonical and immediately re-indexes the stranded alias.
         (temp_ws.raw_dir / "a" / "x.md").unlink()
         report2 = sync(temp_ws)
         assert report2.deleted == 1
+        assert report2.modified == 1
+        assert report2.added == 0
+        assert report2.unchanged == 0
+        assert not report2.has_failures
 
         manifest2 = Manifest.load(temp_ws)
         assert manifest2.get("raw/a/x.md") is None
-        stranded = manifest2.get("raw/b/x.md")
-        assert stranded is not None
-        assert stranded.alias_of == "raw/a/x.md"  # still points at a doc_id that's now gone
-        assert stranded.chunk_count == 0
+        healed = manifest2.get("raw/b/x.md")
+        assert healed is not None
+        assert healed.alias_of is None
+        assert healed.status == "indexed"
+        assert healed.chunk_count == 1
+        # Tags shed back to its own folder's tag — the stale ["a", "b"] union is gone.
+        assert healed.tags == ["b"]
 
-        # Run 3, no further disk changes: diff() must now flag raw/b/x.md as
-        # modified (its alias_of target is gone) and re-embed it standalone.
+        # Run 3, no further disk changes: nothing left to sync.
         report3 = sync(temp_ws)
-        assert report3.modified == 1
+        assert report3.modified == 0
         assert report3.added == 0
+        assert report3.deleted == 0
+        assert report3.unchanged == 1
+        assert not report3.has_failures
 
-    manifest3 = Manifest.load(temp_ws)
-    healed = manifest3.get("raw/b/x.md")
-    assert healed is not None
-    assert healed.alias_of is None
-    assert healed.status == "indexed"
-    assert healed.chunk_count == 1
-    # Tags shed back to its own folder's tag — the stale ["a", "b"] union is gone.
-    assert healed.tags == ["b"]
+
+@patch("doqqy.sync._load_embed_model")
+@patch("doqqy.sync._embed_texts")
+def test_sync_recovers_multi_alias_group_in_single_run(
+    mock_embed_texts: MagicMock,
+    mock_load_model: MagicMock,
+    temp_ws: Workspace,
+) -> None:
+    """Issue #79: a group with several aliases recovers all of them in the same run.
+
+    When canonical raw/a is deleted from group (a, b, c, d), the next alphabetically-first
+    survivor (raw/b) becomes canonical, and raw/c and raw/d become its aliases — all in one sync.
+    """
+    mock_load_model.return_value = MagicMock()
+    mock_embed_texts.side_effect = lambda _model, texts: (
+        np.zeros((len(texts), 1024), dtype=np.float32),
+        ['{"1": 0.5}'] * len(texts),
+    )
+
+    content = "# Global Protocol\n\nIdentical protocol in four regional offices."
+    for folder in ("a", "b", "c", "d"):
+        (temp_ws.raw_dir / folder).mkdir(parents=True, exist_ok=True)
+        (temp_ws.raw_dir / folder / "doc.md").write_text(content, encoding="utf-8")
+
+    from doqqy.infra.vectorstore.base import ChunkRecord
+
+    with patch("doqqy.infra.vectorstore.factory.make_store") as mock_make_store:
+        mock_store = MagicMock()
+        mock_store.get_by_doc.return_value = [
+            ChunkRecord(
+                chunk_id="c1", doc_id="raw/a/doc.md", source="raw/a/doc.md", doc_type="md",
+                tags=["a"], content=content, section_path=[], char_count=len(content),
+                prev_chunk=None, next_chunk=None,
+                dense=np.zeros(1024, dtype=np.float32), sparse={1: 0.5},
+            )
+        ]
+        mock_make_store.return_value = mock_store
+
+        # Run 1: raw/a canonical (tags [a, b, c, d]), b, c, d aliased.
+        sync(temp_ws)
+        manifest1 = Manifest.load(temp_ws)
+        assert manifest1.get("raw/a/doc.md").alias_of is None
+        assert manifest1.get("raw/b/doc.md").alias_of == "raw/a/doc.md"
+        assert manifest1.get("raw/c/doc.md").alias_of == "raw/a/doc.md"
+        assert manifest1.get("raw/d/doc.md").alias_of == "raw/a/doc.md"
+
+        # Delete canonical raw/a and sync once (Run 2).
+        (temp_ws.raw_dir / "a" / "doc.md").unlink()
+        report2 = sync(temp_ws)
+
+        assert report2.deleted == 1
+        assert report2.modified == 3
+        assert not report2.has_failures
+
+        manifest2 = Manifest.load(temp_ws)
+        assert manifest2.get("raw/a/doc.md") is None
+
+        # raw/b is now promoted to canonical for the surviving group.
+        new_canonical = manifest2.get("raw/b/doc.md")
+        assert new_canonical is not None
+        assert new_canonical.alias_of is None
+        assert new_canonical.status == "indexed"
+        assert new_canonical.chunk_count == 1
+        assert new_canonical.tags == ["b", "c", "d"]
+
+        # raw/c and raw/d are aliased to raw/b.
+        for alias_id in ("raw/c/doc.md", "raw/d/doc.md"):
+            entry = manifest2.get(alias_id)
+            assert entry is not None
+            assert entry.alias_of == "raw/b/doc.md"
+            assert entry.status == "aliased"
+            assert entry.chunk_count == 0
+
+        # Run 3: everything is stable, 0 changes.
+        report3 = sync(temp_ws)
+        assert report3.modified == 0
+        assert report3.added == 0
+        assert report3.deleted == 0
+        assert report3.unchanged == 3
+
+
+@patch("doqqy.sync._load_embed_model")
+@patch("doqqy.sync._embed_texts")
+def test_sync_stranded_alias_corrupt_file_failure_isolation(
+    mock_embed_texts: MagicMock,
+    mock_load_model: MagicMock,
+    temp_ws: Workspace,
+) -> None:
+    """Issue #79: sync() terminates cleanly when an alias cannot be re-embedded (corrupt source).
+
+    Executes at most one extra pass, logs ERROR, records failure in report.failed, and does not loop.
+    """
+    mock_load_model.return_value = MagicMock()
+    mock_embed_texts.side_effect = lambda _model, texts: (
+        np.zeros((len(texts), 1024), dtype=np.float32),
+        ['{"1": 0.5}'] * len(texts),
+    )
+
+    content = "# Shared Policy\n\nIdentical content."
+    (temp_ws.raw_dir / "a").mkdir(parents=True, exist_ok=True)
+    (temp_ws.raw_dir / "b").mkdir(parents=True, exist_ok=True)
+    (temp_ws.raw_dir / "a" / "x.md").write_text(content, encoding="utf-8")
+    (temp_ws.raw_dir / "b" / "x.md").write_text(content, encoding="utf-8")
+
+    from doqqy.infra.vectorstore.base import ChunkRecord
+
+    with patch("doqqy.infra.vectorstore.factory.make_store") as mock_make_store:
+        mock_store = MagicMock()
+        mock_store.get_by_doc.return_value = [
+            ChunkRecord(
+                chunk_id="c1", doc_id="raw/a/x.md", source="raw/a/x.md", doc_type="md",
+                tags=["a"], content=content, section_path=[], char_count=len(content),
+                prev_chunk=None, next_chunk=None,
+                dense=np.zeros(1024, dtype=np.float32), sparse={1: 0.5},
+            )
+        ]
+        mock_make_store.return_value = mock_store
+
+        # Initial sync: raw/a canonical, raw/b alias.
+        sync(temp_ws)
+
+        # Delete canonical raw/a.
+        (temp_ws.raw_dir / "a" / "x.md").unlink()
+
+        # Simulate corrupt source for raw/b during chunking/ingest in re-index pass.
+        with patch("doqqy.chunk.chunk_file", side_effect=RuntimeError("Corrupt disk block on raw/b")):
+            report = sync(temp_ws)
+
+        # Must terminate without infinite loop, report failure cleanly.
+        assert report.deleted == 1
+        assert report.has_failures
+        assert any(f[0] == "raw/b/x.md" for f in report.failed)
 
 
 @patch("doqqy.sync._load_embed_model")
