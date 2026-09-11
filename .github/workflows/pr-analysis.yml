@@ -4,14 +4,32 @@
 # and a reviewer checklist. It also auto-labels the PR (size/*, area/*) so you
 # can filter the PR list.
 #
-# Note: this uses the `pull_request` event, which has a read-only token for PRs
-# opened from FORKS. Contributors pushing branches to this repo work fine. If you
-# later accept fork PRs and want comments on them, switch to a separate
-# `pull_request_target` workflow (and review its security implications first).
+# Trigger: `pull_request_target`, NOT `pull_request`. Under `pull_request` the
+# GITHUB_TOKEN is read-only for PRs opened from a FORK, so every write below —
+# addLabels, createComment, updateComment — fails with
+# `403 Resource not accessible by integration`. The job then goes red on a PR
+# whose code is fine, and the fork PR never gets its analysis comment or its
+# size/*, area/* labels. `pull_request_target` runs in the base-repo context with
+# a writable token, so fork PRs get analysed exactly like same-repo ones.
+#
+# SECURITY INVARIANT — never add `actions/checkout` to this workflow.
+# `pull_request_target` hands out a writable token; checking out the PR head and
+# running its code under that token is the "pwn request" vulnerability. This job
+# is safe precisely because it never materialises fork code: it only reads PR
+# metadata through the API, from a script that always comes from the BASE branch.
+# A fork cannot alter that script by editing this file in its own PR.
+#
+# Consequence of the same rule: edits to this workflow only take effect once they
+# land on the base branch — a PR that changes this file still runs the base
+# branch's version, so verify changes after merge.
+#
+# Rejected: keeping `pull_request` and marking the step `continue-on-error`.
+# That only repaints the check green — fork PRs would still silently get no
+# labels and no analysis comment, which is the entire point of the job.
 name: PR Analysis
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
 concurrency:
