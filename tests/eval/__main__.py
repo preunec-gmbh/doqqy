@@ -26,6 +26,12 @@ from .runner import (
 )
 
 
+def _configure_utf8_stream(stream: object) -> None:
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="doqqy arama performansı değerlendirme motoru"
@@ -78,6 +84,8 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    _configure_utf8_stream(sys.stdout)
+    _configure_utf8_stream(sys.stderr)
     console = Console()
 
     eval_collection: str | None = None
