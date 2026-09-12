@@ -3,6 +3,8 @@ Yapay zeka ajanları için stdio taşıyıcısı üzerinden sorgu, etiket ve bil
 """
 
 import contextlib
+import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,11 +13,11 @@ from mcp.server.fastmcp import FastMCP
 from doqqy.workspace import Workspace
 
 
-def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
+def create_mcp_server(root_dir: Path | None = None) -> "FastMCP":
     """Belirtilen çalışma alanı için FastMCP sunucu örneğini oluşturur ve yapılandırır."""
     ws = Workspace(root_dir or Path.cwd())
 
-    mcp_instance = FastMCP("doqqy")
+    mcp_instance = FastMCP("doqqy", log_level="WARNING")
 
     @mcp_instance.tool()
     def doqqy_query(
@@ -130,8 +132,20 @@ def create_mcp_server(root_dir: Path | None = None) -> FastMCP:
 
 def run_mcp_server(root_dir: Path | None = None) -> None:
     """MCP sunucusunu standart G/Ç (stdio) taşıyıcısı üzerinden çalıştırır."""
+    # MCP clients are not required to drain the server's stderr pipe. Disable
+    # unbounded third-party progress before importing model libraries so a cold
+    # model load cannot fill that pipe and deadlock the stdio transport.
+    os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+    os.environ["TQDM_DISABLE"] = "1"
+
+    from doqqy.config import set_console_log_level
+
+    set_console_log_level(logging.WARNING)
+
     import FlagEmbedding  # noqa: F401
-    import transformers  # noqa: F401
+    import transformers
+
+    transformers.utils.logging.disable_progress_bar()
 
     import doqqy.query  # noqa: F401
     import doqqy.rerank  # noqa: F401

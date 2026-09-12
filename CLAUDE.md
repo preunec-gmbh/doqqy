@@ -61,6 +61,7 @@ Pipeline stages map 1:1 to modules in `src/doqqy/`:
 - **Failure isolation:** one bad file must not stop a pipeline run — log to `.doqqy/logs/`, continue, report failures in the summary table.
 - Use `pathlib.Path` (no `os.path.join`) and always explicit `encoding="utf-8"`.
 - CLI commands use typer + rich (panels, progress bars) — match that UX in new commands.
+- MCP stdio must keep stderr bounded: configure progress suppression before model imports, emit only WARNING-or-higher console logs, and preserve INFO detail in `.doqqy/logs/` file handlers.
 
 ## graphify
 

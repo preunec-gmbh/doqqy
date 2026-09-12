@@ -117,6 +117,7 @@ def ensure_dirs() -> None:
 # ---------------------------------------------------------------------------
 
 _FORMATTER = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_CONSOLE_HANDLER_MARKER = "_doqqy_console_handler"
 
 
 def _ensure_console_handler() -> None:
@@ -127,8 +128,18 @@ def _ensure_console_handler() -> None:
     root.setLevel(logging.INFO)
     stream = logging.StreamHandler()
     stream.setFormatter(_FORMATTER)
+    setattr(stream, _CONSOLE_HANDLER_MARKER, True)
     root.addHandler(stream)
     root.propagate = False
+
+
+def set_console_log_level(level: int) -> None:
+    """Set the doqqy-owned console threshold without affecting file handlers."""
+    _ensure_console_handler()
+    root = logging.getLogger("doqqy")
+    for handler in root.handlers:
+        if getattr(handler, _CONSOLE_HANDLER_MARKER, False):
+            handler.setLevel(level)
 
 
 def get_logger(name: str) -> logging.Logger:
