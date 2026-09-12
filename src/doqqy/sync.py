@@ -63,6 +63,7 @@ def sync(
     *,
     settings: Settings | None = None,
     dry_run: bool = False,
+    diff: DiffResult | None = None,
 ) -> SyncReport:
     """Run the incremental pipeline: ingest → chunk → embed for changed docs only.
 
@@ -74,6 +75,10 @@ def sync(
         Optional Settings override (vector backend selection).
     dry_run:
         If True, compute the diff and return the report without modifying anything.
+
+    diff:
+        Optional precomputed change set for this workspace; watch reuses its
+        immediately computed diff to avoid hashing the corpus twice.
 
     Returns
     -------
@@ -90,7 +95,8 @@ def sync(
     reset_stem_group_cache()
 
     manifest = Manifest.load(ws)
-    diff = manifest.diff(ws)
+    if diff is None:
+        diff = manifest.diff(ws)
 
     report = SyncReport(unchanged=len(diff.unchanged))
 

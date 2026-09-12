@@ -159,7 +159,9 @@ doqqy watch --debounce 3.0  # batch for at most 3 seconds from the first change
 The debounce window starts with the first change. A burst that lasts longer than the configured
 window can therefore be split across multiple syncs. Each batch with manifest changes triggers one
 `sync` run and prints a single summary line (`+added ~modified -deleted`); filesystem notifications
-that do not represent a content change are recorded in `watch.log` and skipped. A bad file in a batch
+that do not represent a content change are skipped. Pass `--verbose` to record
+received change sets in `watch.log`; ordinary sessions keep INFO logging. The
+watcher passes its computed diff to sync, so each cycle hashes the corpus once. A bad file in a batch
 does not stop the loop — it's counted as `✗failed`, logged to `.doqqy/logs/sync.log`, and watching
 continues; the same isolation applies to batch-level failures (e.g. a transient store/model error),
 logged to `.doqqy/logs/watch.log`. Stop with Ctrl+C.

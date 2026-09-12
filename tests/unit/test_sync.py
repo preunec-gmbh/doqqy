@@ -42,6 +42,15 @@ def test_sync_dry_run(temp_ws: Workspace) -> None:
     assert not temp_ws.manifest_path.exists()
 
 
+def test_sync_reuses_supplied_diff_without_another_corpus_scan(temp_ws: Workspace) -> None:
+    raw_file = temp_ws.raw_dir / "doc.md"
+    raw_file.write_text("# Already scanned\nContent", encoding="utf-8")
+    diff = Manifest.load(temp_ws).diff(temp_ws)
+    with patch.object(Manifest, "diff", side_effect=AssertionError("corpus scanned twice")):
+        report = sync(temp_ws, dry_run=True, diff=diff)
+    assert report.added == 1
+
+
 def test_sync_no_changes(temp_ws: Workspace) -> None:
     manifest = Manifest()
     manifest.save(temp_ws)

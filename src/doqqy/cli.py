@@ -643,6 +643,7 @@ def watch(
     backend: Optional[str] = typer.Option(
         None, "--backend", help="Vector store backend to use (lancedb | qdrant)."
     ),
+    verbose: bool = typer.Option(False, "--verbose", help="Log received filesystem change sets."),
     debounce: float = typer.Option(
         2.0,
         "--debounce",
@@ -672,7 +673,7 @@ def watch(
     # default; the rich line below is already the console-facing summary, so
     # don't also dump the raw traceback there — only into watch.log.
     log.propagate = False
-    log.setLevel("DEBUG")
+    log.setLevel("DEBUG" if verbose else "INFO")
 
     console.print(
         Panel(
@@ -691,21 +692,24 @@ def watch(
             file_log("doqqy.sync", ws.logs_dir / "sync.log"),
         ):
             for changes in watchfiles_watch(ws.raw_dir, debounce=int(debounce * 1000)):
-                formatted_changes = ", ".join(
-                    f"{getattr(kind, 'name', kind)}: {path}" for kind, path in sorted(changes, key=lambda item: str(item[1]))
-                )
-                log.debug("Filesystem changes received: %s", formatted_changes)
+                if verbose:
+                    formatted_changes = ", ".join(
+                        f"{getattr(kind, 'name', kind)}: {path}"
+                        for kind, path in sorted(changes, key=lambda item: str(item[1]))
+                    )
+                    log.debug("Filesystem changes received: %s", formatted_changes)
 
                 # A batch-level failure (model load, store connection, corrupt
                 # manifest, …) must not kill the loop — log it and keep watching,
                 # same failure-isolation invariant sync() already applies per file.
                 try:
-                    if not Manifest.load(ws).diff(ws).has_changes:
+                    diff = Manifest.load(ws).diff(ws)
+                    if not diff.has_changes:
                         log.debug("Skipping filesystem event batch with no manifest changes.")
                         continue
 
                     console.print("[dim]Change detected — syncing…[/dim]")
-                    report = run_sync(ws, settings=settings)
+                    report = run_sync(ws, settings=settings, diff=diff)
                 except Exception as exc:  # noqa: BLE001
                     log.exception("Batch sync failed: %s", exc)
                     console.print(f"  [red]✗ sync failed: {type(exc).__name__}: {exc}[/red]")

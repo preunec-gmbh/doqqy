@@ -36,7 +36,7 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
 ) -> None:
     calls = {"n": 0}
 
-    def fake_sync(ws, *, settings=None, dry_run=False):
+    def fake_sync(ws, *, settings=None, dry_run=False, diff=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("boom: simulated batch failure")
@@ -79,7 +79,7 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
             load_manifest.return_value.diff.return_value = DiffResult(added=[temp_ws.raw_dir / "x.md"])
             # Must not raise -- KeyboardInterrupt on the third batch is caught
             # internally and the command returns normally.
-            cli.watch(backend=None, debounce=0.01)
+            cli.watch(backend=None, debounce=0.01, verbose=True)
     finally:
         logging.getLogger("doqqy").removeHandler(console_probe)
 
@@ -104,8 +104,9 @@ def test_watch_survives_batch_failure_and_exits_on_ctrl_c(
     assert "Traceback (most recent call last)" not in out
 
 
+@pytest.mark.parametrize("verbose", [False, True])
 def test_watch_skips_noop_batch_without_dropping_later_changes(
-    temp_ws: Workspace, capsys, monkeypatch: pytest.MonkeyPatch
+    temp_ws: Workspace, capsys, monkeypatch: pytest.MonkeyPatch, verbose: bool
 ) -> None:
     first_path = temp_ws.raw_dir / "first.md"
     second_path = temp_ws.raw_dir / "second.md"
@@ -132,17 +133,19 @@ def test_watch_skips_noop_batch_without_dropping_later_changes(
             RuntimeError("manifest unavailable"),
             DiffResult(added=[second_path]),
         ]
-        cli.watch(backend=None, debounce=0.01)
+        cli.watch(backend=None, debounce=0.01, verbose=verbose)
 
     assert run_sync.call_count == 2
+    assert run_sync.call_args_list[0].kwargs["diff"].added == [first_path]
+    assert run_sync.call_args_list[1].kwargs["diff"].added == [second_path]
     output = capsys.readouterr().out
     assert output.count("Change detected") == 2
     assert "sync failed: RuntimeError: manifest unavailable" in output
 
     log_text = (temp_ws.logs_dir / "watch.log").read_text(encoding="utf-8")
-    assert str(first_path) in log_text
-    assert str(second_path) in log_text
-    assert "Skipping filesystem event batch with no manifest changes" in log_text
+    assert (str(first_path) in log_text) is verbose
+    assert (str(second_path) in log_text) is verbose
+    assert ("Skipping filesystem event batch with no manifest changes" in log_text) is verbose
 
 
 def test_watch_help_describes_maximum_batch_window() -> None:
