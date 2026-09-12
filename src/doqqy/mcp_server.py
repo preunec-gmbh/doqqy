@@ -6,21 +6,18 @@ import contextlib
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from mcp.server.fastmcp import FastMCP
 
 from doqqy.workspace import Workspace
-
-if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
 
 
 def create_mcp_server(root_dir: Path | None = None) -> "FastMCP":
     """Belirtilen çalışma alanı için FastMCP sunucu örneğini oluşturur ve yapılandırır."""
-    from mcp.server.fastmcp import FastMCP
-
     ws = Workspace(root_dir or Path.cwd())
 
-    mcp_instance = FastMCP("doqqy")
+    mcp_instance = FastMCP("doqqy", log_level="WARNING")
 
     @mcp_instance.tool()
     def doqqy_query(

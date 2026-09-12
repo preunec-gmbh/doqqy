@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import builtins
+import importlib.util
 import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
+
+import pytest
+
+pytest.importorskip("mcp.server.fastmcp")
 
 from doqqy import config, mcp_server
 
@@ -74,3 +79,20 @@ def test_console_level_change_preserves_file_log_detail(tmp_path, capsys) -> Non
         root.handlers[:] = original_handlers
         root.setLevel(original_level)
         root.propagate = original_propagate
+
+
+def test_missing_mcp_extra_fails_before_model_imports(monkeypatch) -> None:
+    """The CLI can catch an absent optional extra without loading models."""
+    real_import = builtins.__import__
+
+    def import_without_mcp(name, *args, **kwargs):
+        if name == "mcp.server.fastmcp":
+            raise ModuleNotFoundError("MCP extra is missing", name="mcp")
+        assert name not in {"FlagEmbedding", "transformers"}
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_mcp)
+    spec = importlib.util.spec_from_file_location("startup_probe", mcp_server.__file__)
+    module = importlib.util.module_from_spec(spec)
+    with pytest.raises(ModuleNotFoundError, match="MCP extra is missing"):
+        spec.loader.exec_module(module)

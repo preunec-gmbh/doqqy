@@ -261,6 +261,8 @@ doqqy mcp [--root C:/path/to/my-corpus]
 Stdio mode suppresses model-download progress and routine INFO logs so clients
 that do not consume stderr cannot stall the server. Warnings and errors remain
 on stderr; detailed pipeline logs remain available under `.doqqy/logs/`.
+The MCP extra uses the v1 FastMCP API (`mcp<2`). A missing MCP dependency is
+reported before model imports or downloads.
 
 ## 4. Typical workflows
 

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
+import queue
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -111,3 +116,58 @@ async def test_mcp_stdio_handshake_and_query_roundtrip(fixture_workspace: Path):
             assert info_data.get("vector_store_exists") is True
             assert info_data.get("indexed_documents_count") == 1
             assert info_data.get("indexed_chunks_count") == 1
+
+
+@pytest.mark.slow
+def test_mcp_roundtrip_does_not_require_stderr_reader(fixture_workspace: Path):
+    """A real cold-process query must complete without draining its stderr pipe."""
+    from mcp.types import LATEST_PROTOCOL_VERSION
+
+    process = subprocess.Popen(
+        [sys.executable, "-m", "doqqy.mcp_server"],
+        cwd=fixture_workspace,
+        env={**os.environ, "PYTHONPATH": SRC_DIR},
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    replies = queue.Queue()
+
+    def read_stdout():
+        for line in process.stdout:
+            replies.put(json.loads(line))
+
+    threading.Thread(target=read_stdout, daemon=True).start()
+
+    def send(payload):
+        process.stdin.write((json.dumps(payload) + "\n").encode())
+        process.stdin.flush()
+
+    def response(request_id):
+        deadline = time.monotonic() + 120
+        while True:
+            reply = replies.get(timeout=max(0, deadline - time.monotonic()))
+            if reply.get("id") == request_id:
+                assert "error" not in reply, reply
+                return reply["result"]
+
+    try:
+        send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "protocolVersion": LATEST_PROTOCOL_VERSION, "capabilities": {},
+            "clientInfo": {"name": "stderr-regression", "version": "1"},
+        }})
+        assert response(1)["serverInfo"]["name"] == "doqqy"
+        send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        send({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+            "name": "doqqy_query", "arguments": {"q": "JWT refresh token", "top_k": 2},
+        }})
+        result = response(2)
+        assert not result.get("isError", False), result
+        assert result.get("structuredContent", {}).get("result"), result
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=15)
+    stderr = process.stderr.read()
+    assert len(stderr) < 8192, stderr.decode(errors="replace")
