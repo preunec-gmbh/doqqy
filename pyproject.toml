@@ -65,7 +65,7 @@ watch = [
 ]
 mcp = [
     # FastMCP uses the v1 API; mcp 2 moves it to MCPServer.
-    "mcp>=1.29.0,<2",
+    "mcp>=1.29.0,<3",
 ]
 
 # PDF fallback parser'ı. Ana parser docling (MIT) ve PyMuPDF'e ihtiyaç duymuyor;
